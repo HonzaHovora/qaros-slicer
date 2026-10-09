@@ -18,6 +18,7 @@ Instalace Python pluginů nevyžaduje `pip install vtk` do Sliceru ani ParaView.
 V běžném PowerShellu (cesty uprav podle svého disku):
 
 ```powershell
+New-Item -ItemType Directory -Force C:\dev | Out-Null
 cd C:\dev
 git clone https://github.com/HonzaHovora/QAROS_VTK.git
 cd QAROS_VTK
@@ -33,6 +34,8 @@ Vzniknou:
 - `package/QAROS-VTK-plugins.zip` — přenositelný archiv obou složek.
 
 Archiv je pro ruční rozbalení. **Není to balíček pro Slicer Extensions Manager.** Pro standardní sestavení extension je už připravený `integrations/slicer/CMakeLists.txt`; ten vyžaduje vývojový build Sliceru. Na první instalaci není potřeba.
+
+Hotový ZIP je také mezi artefakty úspěšného workflow **Build and test**, pod názvem `QAROS-VTK-python-plugins` (uchování 30 dní). Příkaz výše ho kdykoli vytvoří z aktuálního checkoutu.
 
 ## 3. Sestavit backend na Windows
 
