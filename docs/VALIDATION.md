@@ -12,13 +12,17 @@
 | Modern SDK sender | PASS: Linux compile/link and `--sdk-info`, no runtime loaded |
 | Legacy 2540 SDK sender | PASS: Linux C++ syntax check against actual package header; no link/runtime claim |
 | Surface interchange | PASS: real VTK round-trip, baked world transform, triangulation, input unchanged, invalid export preserves previous file |
-| ParaView host smoke | CI configured; check current `paraview-bridge` result |
-| Windows native VTK/sender | CI configured; check current `Windows native build` result |
-| Slicer host UI/segmentation smoke | Not run here; script provided for actual Slicer |
+| ParaView host smoke | PASS in ParaView 5.11.2 on Ubuntu: export, display transform and original active source |
+| Windows native VTK/sender | Native build started; result is tracked separately below (not an end-to-end runtime test) |
+| Slicer host UI/segmentation smoke | PASS in Slicer 5.12.4 on Ubuntu: model, segment, world transform and widget creation |
 | Hub / encoder / headset | Not run: no matching live runtime and supported NVIDIA device in this environment |
 
 The first complete renderer test is [run 37949911874](https://github.com/HonzaHovora/QAROS_VTK/actions/runs/37949911874).
 The sender/interchange Linux build is [run 37951256265](https://github.com/HonzaHovora/QAROS_VTK/actions/runs/37951256265).
+The ParaView test is [run 37952481684](https://github.com/HonzaHovora/QAROS_VTK/actions/runs/37952481684).
+The Slicer test is [run 37952928419](https://github.com/HonzaHovora/QAROS_VTK/actions/runs/37952928419).
+The full Windows build is [run 37952481497](https://github.com/HonzaHovora/QAROS_VTK/actions/runs/37952481497);
+its dependency compilation was still running when this record was written.
 See [all runs](https://github.com/HonzaHovora/QAROS_VTK/actions) for the current commit;
 these historic passes must not be read as proof for later untested changes.
 

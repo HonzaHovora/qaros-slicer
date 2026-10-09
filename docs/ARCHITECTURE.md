@@ -68,8 +68,8 @@ adapter, but it is not ABI-safe across unrelated VTK builds.
 ## Next integration stages
 
 1. Validate end-to-end WGL → QAROS → viewer with known cube dimensions/depth.
-2. Verify the two host exports in their actual applications; automate their
-   smoke scripts in the supported host environments.
+2. Repeat the Linux-validated ParaView/Slicer host smoke scripts on the target
+   Windows installations and verify the resulting stream in the viewer.
 3. Add a scene abstraction for actors, colors, transforms and volumes.
 4. Build a native ParaView view plugin against a pinned ParaView version, using
    render requests and host pipeline updates instead of VTP snapshots.

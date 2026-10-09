@@ -55,7 +55,8 @@ representation to the segmentation node. Coordinates in the file remain world RA
 millimetres; the sender performs the conversion once.
 
 The widget is a scripted module, not a packaged Extension Manager release.
-Its actual Slicer UI and segmentation APIs still need the host smoke run below.
+Model/segment export, world transforms and widget creation passed the host smoke
+test in Slicer 5.12.4 on Linux. Repeat it on the target Windows installation.
 
 ## Slicer Python console
 
