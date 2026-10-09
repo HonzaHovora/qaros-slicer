@@ -50,8 +50,8 @@ python scripts/run_sender.py --exe build-windows/Release/qarvtk-sender.exe --sdk
 
 After editing the model or segment, press Export again. For a segmentation the
 closed-surface representation is created if necessary. All parent MRML transforms
-are baked, including nonlinear transforms supported by VTK. The original nodes
-and their transforms are not changed. Coordinates in the file remain world RAS
+are baked, including nonlinear transforms supported by VTK. Source geometry and transforms are preserved. Slicer may add a closed-surface
+representation to the segmentation node. Coordinates in the file remain world RAS
 millimetres; the sender performs the conversion once.
 
 The widget is a scripted module, not a packaged Extension Manager release.

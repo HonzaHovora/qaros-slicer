@@ -5,9 +5,11 @@ import tempfile
 import traceback
 import vtk
 import slicer
+import qt
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "integrations" / "slicer"))
 from qarvtk_slicer import export_node
+from QarosVTK import QarosVTKWidget
 
 
 def run():
@@ -23,6 +25,14 @@ def run():
     segmentation = slicer.mrmlScene.AddNewNodeByClass("vtkMRMLSegmentationNode")
     sid = segmentation.AddSegmentFromClosedSurfaceRepresentation(cube.GetOutput(), "Cube", [0, 1, 0])
     segmentation.SetAndObserveTransformNodeID(transform.GetID())
+    parent = slicer.qMRMLWidget()
+    parent.setLayout(qt.QVBoxLayout())
+    parent.setMRMLScene(slicer.mrmlScene)
+    widget = QarosVTKWidget(parent)
+    widget.setup()
+    widget.node.setCurrentNode(segmentation)
+    assert widget.segment.count == 1
+    assert widget.segment.itemData(0) == sid
     with tempfile.TemporaryDirectory() as directory:
         for node, segment in ((model, None), (segmentation, sid)):
             path = Path(directory) / "surface.vtp"
@@ -33,7 +43,8 @@ def run():
             assert node.GetTransformNodeID() == transform.GetID()
     for node in (model, segmentation, transform):
         slicer.mrmlScene.RemoveNode(node)
-    print("PASS: Slicer model and segmentation exported with world RAS transform")
+    parent.deleteLater()
+    print("PASS: Slicer model and segmentation exported with world RAS transform; widget created")
 
 
 try:

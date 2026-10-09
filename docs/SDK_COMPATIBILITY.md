@@ -40,7 +40,9 @@ Modern callback state is mutex-protected and outlives cancellation and SDK
 shutdown. Callbacks only copy the first target peer ID and destroy the request;
 they never call VTK/OpenGL. Frame info uses RAII. A frame failure terminates and
 destroys the sender instead of inventing an unsupported abort-frame call.
-Synchronous SDK operations and periods without frames have timeouts. First-run
+Onboarding/rejoin, target invitations and sender creation use cancellation
+timeouts, as do periods without frames. Runtime initialization and the legacy
+create/join calls expose no cancellation token in the inspected API. First-run
 human pairing input can wait until the user enters a code or closes stdin.
 
 Modern volumes use a unique per-run common name, so shutdown closes only the
