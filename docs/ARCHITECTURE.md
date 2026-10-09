@@ -2,8 +2,12 @@
 
 ## Data and frame paths
 
-Host snapshot path: ParaView active surface or Slicer model/segment → world
-transform → triangulated `.vtp` written atomically → standalone VTK scene.
+Host path: a Slicer scripted module or a ParaView Python pipeline plugin controls
+one child sender through `integrations/qarvtk_runtime.py`. The plugins and backend
+are separate installable components from the start.
+
+Scene path: Slicer model/segment with baked MRML world transforms, or a ParaView
+pipeline surface → triangulated `.vtp` written atomically → standalone VTK scene.
 This is a CPU/file geometry transfer only on export or reload, not on every video
 frame. Host appearance and volume rendering are not transferred.
 
@@ -28,9 +32,11 @@ blit is optional and not part of the stream.
 - Slicer: export world RAS mm, then `(x,y,z) → 0.001 × (x,z,−y)` in the renderer.
   This is a proper axis rotation preserving handedness. Parent MRML transforms
   are baked before unit/axis conversion.
-- ParaView: preserve world coordinates; choose `--meters-per-unit` explicitly if
-  they are not metres. Source pipeline transforms and display transforms are
-  included. The sender currently assumes Y-up unless `--ras` is selected.
+- ParaView plugin: preserve pipeline coordinates; set Metres Per Unit explicitly.
+  Use an upstream Transform filter. Display-only Position/Scale/Orientation are
+  not included by the plugin. The older `export_active` convenience helper also
+  bakes the active view's display transform. The sender assumes Y-up unless
+  `--ras` is selected.
 
 The scene is one opaque green surface at its original position; it is not
 silently centered or resized. The demo cube is centered at the content origin.
@@ -56,14 +62,46 @@ The current unlit surface emits fixed RGB values; tone mapping, color-space
 conversion, translucent surfaces, clinical transfer functions and multi-layer
 occlusion need separate design and validation.
 
-## Why standalone first
+## Plugin boundary and process protocol
 
 ParaView and Slicer package different VTK/Qt versions. Loading an independently
 built VTK library into either process risks ABI and graphics-context conflicts.
-The file bridge allows us to validate QAROS's frame and synchronization contract
-before building native host plugins against each host's exact source/version.
-The C++ `Renderer::set_polydata` entry point is a starting point for a future
-adapter, but it is not ABI-safe across unrelated VTK builds.
+Python host plugins control the existing renderer without loading the SDK or
+another VTK into the host. The C++ `Renderer::set_polydata` entry point is available
+for a later native adapter but is not ABI-safe across unrelated VTK builds.
+
+Protocol 1 consists of:
+
+- `--sdk-info`: JSON with exact header SHA-256, `modern_api` and `plugin_protocol`.
+  The plugin checks these and the presence of the platform runtime before launch.
+- A private working directory per instance, atomically updated `scene.vtp`, and
+  `--watch`. Only geometry updates use CPU/files; every video frame stays on GPU.
+- `--stop-file`: the owner requests cooperative shutdown by creating its own file.
+  `--parent-pid` terminates the render/wait loop if the host disappears. Windows
+  holds a process handle; Linux checks whether the parent PID still exists.
+- Pairing code on stdin, a persistent identity outside the checkout, and a log.
+  The Slicer UI clears the code after launch. ParaView reuses prior pairing so
+  that no code is stored as a pipeline property in a saved state.
+- Explicit Start commands only: loading a Slicer scene or a ParaView state never
+  starts streaming automatically. `running` reports process liveness, not a
+  confirmed viewer connection.
+
+SDK calls can block until their configured 60-second timeout. Slicer's Stop
+requests shutdown without blocking the UI; polling enforces a 65-second deadline.
+Cleanup/ParaView Stop waits up to three seconds before killing an unresponsive
+child. That fallback cannot guarantee SDK-side cleanup. Private geometry is
+deleted on cleanup, logs are retained for diagnosis. A host crash can leave a
+temporary VTP; no patient data belongs in the repository.
+
+Slicer settings hold paths and host name, not pairing codes. Its optional one-second
+publication is intentionally opt-in because large surfaces can block the GUI.
+ParaView publishes on pipeline updates, supports only the local built-in session,
+and rejects pvserver/MPI execution before writing a scene or starting a process.
+
+`scripts/package_plugins.py` copies an explicit allowlist into self-contained
+host folders. It bundles neither the SDK nor backend binaries. The Slicer CMake
+extension entry point supports the standard developer packaging route; the ZIP
+is a portable manual-install bundle, not an Extensions Manager package.
 
 ## Next integration stages
 
@@ -73,8 +111,9 @@ adapter, but it is not ABI-safe across unrelated VTK builds.
 3. Add a scene abstraction for actors, colors, transforms and volumes.
 4. Build a native ParaView view plugin against a pinned ParaView version, using
    render requests and host pipeline updates instead of VTP snapshots.
-5. Build a Slicer extension against its pinned VTK/Qt: MRML change observation,
-   medical volume/segmentation visibility and calibrated world transforms.
+5. Extend the Slicer plugin with debounced MRML change observation, medical
+   volume/segmentation visibility and calibrated world transforms; publish a
+   validated extension package.
 6. Add per-viewer senders/cameras, picking/gestures, then benchmark and replace
    conservative synchronization where the SDK contract permits it.
 

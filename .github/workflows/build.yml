@@ -38,17 +38,29 @@ jobs:
     runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@v4
-      - name: Install ParaView
-        run: sudo apt-get update && sudo apt-get install -y paraview python3-paraview xvfb
+      - name: Install ParaView prerequisites
+        run: sudo apt-get update && sudo apt-get install -y xvfb libgl1 libglu1-mesa libxt6t64 libxrender1 libsm6 libopengl0 libxkbcommon-x11-0 libxcb-xinerama0 libnss3
+      - uses: actions/cache@v4
+        with:
+          path: .cache/ParaView-5.12.1-linux.tar.gz
+          key: paraview-official-linux-5.12.1
+      - name: Download official ParaView with its matching Python
+        run: |
+          mkdir -p .cache build-paraview
+          if [ ! -f .cache/ParaView-5.12.1-linux.tar.gz ]; then
+            curl --fail --location --retry 3 https://www.paraview.org/files/v5.12/ParaView-5.12.1-MPI-Linux-Python3.10-x86_64.tar.gz -o .cache/ParaView-5.12.1-linux.tar.gz
+          fi
+          echo 'cd8d4b4dada44c8f36dc17e676cc5d8ae6b0a3c0449da9092e9df8bb8b5d48e7  .cache/ParaView-5.12.1-linux.tar.gz' | sha256sum --check
+          tar -xzf .cache/ParaView-5.12.1-linux.tar.gz --strip-components=1 -C build-paraview
       - name: Package plugins and build process test fixture
         run: |
           python3 scripts/package_plugins.py
           cmake -S . -B build-fixture -DQARVTK_BUILD_RENDERER=OFF
           cmake --build build-fixture --parallel 2
       - name: Export a real ParaView pipeline and verify world bounds
-        run: xvfb-run -a env LIBGL_ALWAYS_SOFTWARE=1 pvpython tests/paraview_smoke.py
+        run: xvfb-run -a env LIBGL_ALWAYS_SOFTWARE=1 build-paraview/bin/pvpython tests/paraview_smoke.py
       - name: Load packaged plugin and exercise process controls
-        run: xvfb-run -a env LIBGL_ALWAYS_SOFTWARE=1 QARVTK_TEST_BACKEND="$PWD/build-fixture/qarvtk-process-fixture" pvpython tests/paraview_plugin_smoke.py
+        run: xvfb-run -a env LIBGL_ALWAYS_SOFTWARE=1 QARVTK_TEST_BACKEND="$PWD/build-fixture/qarvtk-process-fixture" build-paraview/bin/pvpython tests/paraview_plugin_smoke.py
       - uses: actions/upload-artifact@v4
         with:
           name: QAROS-VTK-python-plugins

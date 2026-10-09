@@ -1,8 +1,10 @@
 # QAROS × VTK
 
-První funkční základ pro přenos povrchové 3D scény z VTK do QAROS. Cílem jsou
-ParaView a 3D Slicer. Společná renderovací cesta používá OpenGL, které již QAROS
-podporuje; Vulkan není součástí této implementace.
+Pluginy pro **ParaView a 3D Slicer** se společným VTK/OpenGL backendem pro QAROS.
+Instalují se do běžných hostitelských aplikací; backend renderuje v samostatném
+procesu. QAROS už OpenGL podporuje; Vulkan není součástí této implementace.
+
+**Začni zde: [instalace na Windows, instalace pluginů a první pokus](docs/INSTALLATION.md).**
 
 **Stav: prototyp před ověřením s reálným QAROS Hubem a headsetem.** GPU cesta se
 ověřuje na Linuxu s Mesa. Úspěšný test není potvrzení funkčnosti NVIDIA enkodéru,
@@ -15,13 +17,16 @@ transportu ani výsledného obrazu v headsetu. Aktuální sestavení a jejich v�
 - VTK/OpenGL renderer a samostatný náhled bez QAROS SDK.
 - GPU kopírování barvy a hloubky do textur QAROS bez čtení obrazu na CPU.
 - Odesílač pro Windows/WGL a Linux/GLX: nový Hub onboarding i starší SDK 2540.
-- Export aktivního povrchu z ParaView a modul pro export modelu/segmentu ze Sliceru.
+- Slicer plugin: výběr modelu/segmentu, Start/Stop, pairing, aktualizace a log.
+- ParaView Python plugin přes Plugin Manager: filtr QAROS Streaming, Start/Stop
+  a publikování změn pipeline. První Hub pairing se provede ve Sliceru nebo terminálu.
+- Samostatné složky pluginů, ZIP balíček a základ CMake extension pro Slicer.
 - Znovunačtení exportu za běhu (`--watch`), kontrola shody SDK, skripty pro build a CI.
 
-Hostitelské mosty v této fázi exportují povrch do `.vtp`; VTK renderer běží jako
-samostatný proces. To odděluje jeho VTK/Qt knihovny od verzí přibalených k ParaView
-nebo Sliceru. Nejde zatím o přímý renderovací plugin ani přenos kompletní scény,
-volume renderingu, barevných map nebo interakcí z headsetu zpět do aplikace.
+Pluginy předávají geometrii přes atomicky zapsaný `.vtp`; video snímky zůstávají
+na GPU backendu. Tím jsou jeho knihovny oddělené od VTK/Qt hostitele. První verze
+podporuje jeden povrch; kompletní scény, volume rendering, barevné mapy a interakce
+z headsetu zpět do aplikace zbývá implementovat.
 
 ## Rychlé spuštění na Linuxu
 
@@ -50,7 +55,7 @@ Linuxové připojení k Hubu vyžaduje odpovídající nativní QAROS SDK/runtim
 
 ## Přenos na Windows
 
-Postup v [docs/WINDOWS.md](docs/WINDOWS.md). Potřeba: Visual Studio 2022 s C++,
+Postup v [docs/INSTALLATION.md](docs/INSTALLATION.md). Potřeba: Visual Studio 2022 s C++,
 CMake, Git, Python a vcpkg; pro QAROS také kompletní odpovídající SDK a podporovaná
 NVIDIA karta. Ve složce repozitáře:
 
@@ -66,8 +71,17 @@ header do staršího balíku s DLL.
 
 ## ParaView a Slicer
 
-Podrobné kroky a příklady: [docs/HOST_INTEGRATIONS.md](docs/HOST_INTEGRATIONS.md).
-Slicer exportuje world RAS v milimetrech, proto jeho data spouštějte takto:
+Pluginy připravíš bez kompilace hostitelů:
+
+```powershell
+py -3 scripts/package_plugins.py
+```
+
+Složku `package/QAROS-VTK-plugins/slicer` přidej do Additional module paths.
+Soubor `package/QAROS-VTK-plugins/paraview/QarosVTKPlugin.py` načti přes Plugin
+Manager ParaView. Podrobnosti jsou v instalačním návodu; pomocné exportní API
+zůstává popsané v [docs/HOST_INTEGRATIONS.md](docs/HOST_INTEGRATIONS.md).
+Pro ruční export ze Sliceru platí world RAS milimetry:
 
 ```powershell
 python scripts/run_sender.py --exe build-windows/Release/qarvtk-sender.exe --sdk C:/QAROS --scene C:/data/surface.vtp --ras --meters-per-unit 0.001 --watch --preview

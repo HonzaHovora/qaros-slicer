@@ -7,8 +7,12 @@ import slicer
 from slicer.ScriptedLoadableModule import ScriptedLoadableModule, ScriptedLoadableModuleWidget
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
-from qarvtk_slicer import export_node
-from qarvtk_runtime import Backend, user_directory
+if (Path(__file__).resolve().parent / "QarosVTKLib").is_dir():
+    from QarosVTKLib.qarvtk_slicer import export_node
+    from QarosVTKLib.qarvtk_runtime import Backend, user_directory
+else:  # Source checkout, before packaging.
+    from qarvtk_slicer import export_node
+    from qarvtk_runtime import Backend, user_directory
 
 
 class QarosVTK(ScriptedLoadableModule):
@@ -26,6 +30,7 @@ class QarosVTK(ScriptedLoadableModule):
 class QarosVTKWidget(ScriptedLoadableModuleWidget):
     def setup(self):
         super().setup()
+        self._cleaned_up = False
         self.backend = Backend(slicer.util.startupEnvironment())
         self.settings = qt.QSettings()
         form = qt.QFormLayout()
@@ -156,6 +161,10 @@ class QarosVTKWidget(ScriptedLoadableModuleWidget):
         self.backend.close()
 
     def cleanup(self):
+        if getattr(self, "_cleaned_up", False):
+            return
+        self._cleaned_up = True
+        slicer.app.disconnect("aboutToQuit()", self.cleanup)
         if hasattr(self, "timer"):
             self.timer.stop()
         if getattr(self, "sceneObserver", None):

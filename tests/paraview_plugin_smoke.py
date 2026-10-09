@@ -17,7 +17,7 @@ with tempfile.TemporaryDirectory() as directory:
     previous = tempfile.tempdir
     tempfile.tempdir = directory
     source = simple.Box(XLength=2, YLength=4, ZLength=6)
-    proxy = QarosStreaming(Input=source)
+    proxy = QAROSStreaming(Input=source)
     try:
         proxy.UpdatePipeline()
         assert servermanager.Fetch(proxy).GetBounds() == (-1, 1, -2, 2, -3, 3)
@@ -49,7 +49,8 @@ with tempfile.TemporaryDirectory() as directory:
         assert reader.GetOutput().GetBounds() == (-2, 2, -2, 2, -3, 3)
         proxy.InvokeCommand("StopStream")
         proxy.UpdatePropertyInformation()
-        assert "exited with code 0" in str(proxy.SenderStatus), str(proxy.SenderStatus)
+        status = proxy.GetProperty("SenderStatus").GetData()
+        assert "exited with code 0" in str(status), status
         assert not scene.exists()
         assert "FIXTURE_STOPPED" in log.read_text()
         # Normal Start after Stop republishes the surface without a manual export.

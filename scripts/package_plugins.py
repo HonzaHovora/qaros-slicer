@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Build portable, self-contained Python plugin folders; does not install or fetch an SDK."""
+"""Build portable, self-contained Python plugin folders; never fetch/install an SDK."""
 import argparse
 from pathlib import Path
 import shutil
@@ -11,28 +11,35 @@ ROOT = Path(__file__).resolve().parents[1]
 def package(output):
     output = Path(output).resolve()
     bundle = output / "QAROS-VTK-plugins"
-    for host, files in {
-        "slicer": ["QarosVTK.py", "qarvtk_slicer.py"],
-        "paraview": ["QarosVTKPlugin.py", "qarvtk_paraview.py"],
-    }.items():
-        destination = bundle / host
-        destination.mkdir(parents=True, exist_ok=True)
-        for name in files:
-            shutil.copyfile(ROOT / "integrations" / host / name, destination / name)
-        for name in ("qarvtk_bridge.py", "qarvtk_runtime.py"):
-            shutil.copyfile(ROOT / "integrations" / name, destination / name)
-    shutil.copyfile(ROOT / "docs" / "INSTALLATION.md", bundle / "INSTALLATION.md")
+    files = {
+        "slicer/QarosVTK.py": "integrations/slicer/QarosVTK.py",
+        "slicer/QarosVTKLib/qarvtk_slicer.py": "integrations/slicer/qarvtk_slicer.py",
+        "slicer/QarosVTKLib/qarvtk_bridge.py": "integrations/qarvtk_bridge.py",
+        "slicer/QarosVTKLib/qarvtk_runtime.py": "integrations/qarvtk_runtime.py",
+        "paraview/QarosVTKPlugin.py": "integrations/paraview/QarosVTKPlugin.py",
+        "paraview/qarvtk_paraview.py": "integrations/paraview/qarvtk_paraview.py",
+        "paraview/qarvtk_bridge.py": "integrations/qarvtk_bridge.py",
+        "paraview/qarvtk_runtime.py": "integrations/qarvtk_runtime.py",
+        "INSTALLATION.md": "docs/INSTALLATION.md",
+    }
+    for relative, source in files.items():
+        destination = bundle / relative
+        destination.parent.mkdir(parents=True, exist_ok=True)
+        shutil.copyfile(ROOT / source, destination)
+    init = "slicer/QarosVTKLib/__init__.py"
+    (bundle / init).write_text('"""Private support package, not a Slicer module."""\n')
+    # Remove only known obsolete generated files, so Slicer will not discover them
+    # as separate modules after an upgrade from the first packaging layout.
+    for name in ("qarvtk_slicer.py", "qarvtk_bridge.py", "qarvtk_runtime.py"):
+        old = bundle / "slicer" / name
+        if old.exists():
+            old.unlink()
     archive = output / "QAROS-VTK-plugins.zip"
-    # Explicit allowlist; never package caches, SDK files or local credentials.
+    # Explicit allowlist: no caches, SDKs, local credentials or extra user files.
     with zipfile.ZipFile(archive, "w", zipfile.ZIP_DEFLATED) as stream:
-        for host, names in {
-            "slicer": ["QarosVTK.py", "qarvtk_slicer.py", "qarvtk_bridge.py", "qarvtk_runtime.py"],
-            "paraview": ["QarosVTKPlugin.py", "qarvtk_paraview.py", "qarvtk_bridge.py", "qarvtk_runtime.py"],
-        }.items():
-            for name in names:
-                path = bundle / host / name
-                stream.write(path, path.relative_to(output))
-        stream.write(bundle / "INSTALLATION.md", "QAROS-VTK-plugins/INSTALLATION.md")
+        for relative in [*files, init]:
+            path = bundle / relative
+            stream.write(path, path.relative_to(output))
     print("Plugin folders: " + str(bundle))
     print("Archive: " + str(archive))
     return bundle

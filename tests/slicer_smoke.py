@@ -12,7 +12,7 @@ import qt
 plugin = Path(__file__).resolve().parents[1] / "package" / "QAROS-VTK-plugins" / "slicer"
 sys.path.insert(0, str(plugin))
 sys.path.insert(0, str(Path(__file__).resolve().parent))
-from qarvtk_slicer import export_node
+from QarosVTKLib.qarvtk_slicer import export_node
 from fixture_support import make_sdk, wait_ready
 
 

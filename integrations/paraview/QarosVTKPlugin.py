@@ -39,6 +39,8 @@ class QarosStreaming(VTKPythonAlgorithmBase):
             raise RuntimeError("QAROS Streaming requires a local built-in connection (no pvserver/MPI).")
 
     def _set(self, key, value):
+        if key != "scale":
+            value = "" if value is None else str(value)
         if self._backend.running:
             raise RuntimeError("Stop the sender before changing connection settings")
         self._settings[key] = value

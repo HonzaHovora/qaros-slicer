@@ -13,7 +13,7 @@
 | Legacy 2540 SDK sender | PASS: Linux C++ syntax check against actual package header; no link/runtime claim |
 | Surface interchange | PASS: real VTK round-trip, baked world transform, triangulation, input unchanged, invalid export preserves previous file |
 | ParaView host smoke | PASS in ParaView 5.11.2 on Ubuntu: export, display transform and original active source |
-| Windows native VTK/sender | Native build started; result is tracked separately below (not an end-to-end runtime test) |
+| Windows native VTK/sender | Original Debug + Release build timed out; Release-only rebuild in progress (not an end-to-end runtime test) |
 | Slicer host UI/segmentation smoke | PASS in Slicer 5.12.4 on Ubuntu: model, segment, world transform and widget creation |
 | Hub / encoder / headset | Not run: no matching live runtime and supported NVIDIA device in this environment |
 
@@ -22,7 +22,10 @@ The sender/interchange Linux build is [run 37951256265](https://github.com/Honza
 The ParaView test is [run 37952481684](https://github.com/HonzaHovora/QAROS_VTK/actions/runs/37952481684).
 The Slicer test is [run 37952928419](https://github.com/HonzaHovora/QAROS_VTK/actions/runs/37952928419).
 The full Windows build is [run 37952481497](https://github.com/HonzaHovora/QAROS_VTK/actions/runs/37952481497);
-its dependency compilation was still running when this record was written.
+it was cancelled after the 60-minute limit while vcpkg was compiling Debug VTK.
+The workflow now builds Release only, with a 180-minute cold-build limit.
+Runs [37985668990](https://github.com/HonzaHovora/QAROS_VTK/actions/runs/37985668990)
+and [37986750101](https://github.com/HonzaHovora/QAROS_VTK/actions/runs/37986750101) track the replacement builds.
 See [all runs](https://github.com/HonzaHovora/QAROS_VTK/actions) for the current commit;
 these historic passes must not be read as proof for later untested changes.
 
@@ -40,7 +43,7 @@ ctest --preset core
 python tests/test_bridge.py             # Python with VTK
 xvfb-run -a env LIBGL_ALWAYS_SOFTWARE=1 bash scripts/build-linux.sh
 pvpython tests/paraview_smoke.py         # ParaView's own interpreter
-Slicer --no-splash --no-main-window --python-script tests/slicer_smoke.py
+# Packaged plugin host tests: see HOST_INTEGRATIONS.md
 ```
 
 For a local SDK compile, use `bash scripts/build-linux.sh /path/to/sdk`; actual
@@ -59,14 +62,14 @@ prototype validated.
 ## Known constraints
 
 - One viewer, one opaque surface, fixed green color, no text/overlays.
-- Host-to-sender update is an explicit file snapshot, not native plugin rendering.
+- Installed plugins control the sender; geometry exchange remains a file snapshot, not in-process host rendering.
 - No CT/MR volume rendering, transfer functions, picking or bidirectional gestures.
 - Fixed clip range and fixed initial app-volume placement; no auto-fit.
 - Single-sample 2D textures; no array layers, Vulkan import, reverse-Z or HDR.
 - Conservative `glFinish`, no performance/latency claim or clinical validation.
 - No Wayland/EGL sender path or macOS sender implementation.
-- No packaging/installer, auto-update, multi-instance shared volume identity,
-  or distribution of QAROS runtime binaries.
+- Portable Python plugin folders/ZIP are provided; no official catalog release,
+  automatic update or QAROS runtime redistribution. Backend builds are separate.
 
 The file/CPU scene exchange is intentional for this first stage; the per-frame
 pixel path stays on the GPU. A future in-process adapter must match its host's

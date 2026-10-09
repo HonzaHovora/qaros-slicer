@@ -8,7 +8,7 @@ První verze přenáší **jeden povrchový model nebo jeden segment**, jeho zm�
 
 - Windows x64, podporovanou NVIDIA GPU a její aktuální ovladač pro použitou verzi QAROS.
 - QAROS Hub/viewer a **kompletní SDK**: `include/qar_streaming.h` a původní `bin/`. Samotná hlavička nestačí. SDK musí odpovídat backendu.
-- [3D Slicer](https://download.slicer.org/) nebo [ParaView](https://www.paraview.org/download/). Referenční hostitelské testy používají Slicer 5.12.4 a ParaView 5.11.2 na Linuxu; Windows hosty ověříme na tvém PC.
+- [3D Slicer](https://download.slicer.org/) nebo [ParaView](https://www.paraview.org/download/). Referenční hostitelské testy používají Slicer 5.12.4 a oficiální balík ParaView 5.12.1 na Linuxu; Windows hosty ověříme na tvém PC.
 - Pro sestavení backendu: Git, Python 3.9+, CMake 3.20+ a Visual Studio 2022 s **Desktop development with C++**, MSVC v143 a Windows SDK.
 
 Instalace Python pluginů nevyžaduje `pip install vtk` do Sliceru ani ParaView. Každý host používá vlastní VTK. SDK ani jeho DLL se do hostitelské aplikace nekopírují.
@@ -77,7 +77,7 @@ Při přesunu backendu zkopíruj **celou složku `Release` s DLL**, ne samotné 
 6. U staršího SDK 2540 se používá session invite: případně vyber **Legacy invite**, zvol **Legacy viewer** (`visualizer` nebo `quest`). Pole Hub identity/kód se u něj nepoužívají.
 7. Klikni **Start streaming**. U nového API otevři aplikaci/volume v Hub vieweru. Sleduj **Sender log**; chyba GPU, SDK nebo připojení je vidět zde.
 8. Po změně modelu stiskni **Update surface**. Volitelně zapni aktualizaci každou sekundu; u velkých segmentací může export zdržovat UI.
-9. **Stop streaming** požádá backend o ukončení. Během blokujícího SDK připojení to může trvat až přibližně 65 sekund. Zavření modulu/aplikace má navíc vynucený úklid procesu.
+9. **Stop streaming** požádá backend o ukončení. Během blokujícího SDK připojení to může trvat až přibližně 65 sekund. Při zavření Sliceru se neukončený proces po krátkém čekání ukončí vynuceně.
 
 Transformace rodičů MRML se aplikují automaticky; jednotky jsou RAS milimetry a převod do QAROS metrů provádí backend. Nastavení scénu automaticky nevystředí. Model mimo počátek může být mimo záběr/app volume.
 
@@ -107,6 +107,8 @@ py -3 scripts/run_sender.py --exe build-windows-release/Release/qarvtk-sender.ex
 Kód zadej až na výzvu programu. Potom program ukonči Ctrl+C a identitu použij v pluginu. ParaView nemá pole pro pairing kód, aby se kód neukládal do `.pvsm` stavu. Po expiraci/zrušení identity zopakuj párování. Pro první test používej jeden sender současně.
 
 ## 6. Linux
+
+Pro ParaView použij oficiální binární balík z webu projektu. Ubuntu 24.04 balíček ParaView 5.11.2 se systémovým Pythonem 3.12 má chybu loaderu Python pluginů (`inspect.getargspec`); samotný exportní helper v něm funguje, plugin se ale nenačte. Neupravuj kvůli tomu systémový Python.
 
 Slicer i ParaView mají Linuxové verze. Python pluginy se instalují stejnými kroky. Backend:
 

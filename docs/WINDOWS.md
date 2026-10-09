@@ -1,4 +1,9 @@
-# Windows: první spuštění
+# Windows: doplňující poznámky k backendu
+
+**Aktuální postup včetně pluginů je v [INSTALLATION.md](INSTALLATION.md).**
+Níže zůstávají podrobnosti pro ruční spouštění backendu a test na hardware.
+Používejte nový build adresář, pokud přecházíte z tripletu `x64-windows`
+na `x64-windows-release`; existující cache nelze mezi triplety míchat.
 
 ## 1. Nástroje
 
