@@ -9,13 +9,14 @@ on:
       - 'CMakeLists.txt'
       - 'vcpkg.json'
       - 'vcpkg-configuration.json'
+      - 'cmake/triplets/**'
       - '.github/workflows/windows-native.yml'
 permissions:
   contents: read
 jobs:
   windows-native:
     runs-on: windows-2022
-    timeout-minutes: 60
+    timeout-minutes: 180
     env:
       VCPKG_BINARY_SOURCES: 'clear;files,C:\vcpkg-cache,readwrite'
     steps:
@@ -23,7 +24,7 @@ jobs:
       - uses: actions/cache@v4
         with:
           path: C:\vcpkg-cache
-          key: windows-vcpkg-${{ hashFiles('vcpkg.json', 'vcpkg-configuration.json') }}
+          key: windows-release-vcpkg-${{ hashFiles('vcpkg.json', 'vcpkg-configuration.json', 'cmake/triplets/**') }}
       - name: Fetch pinned public SDK header (compile only)
         shell: pwsh
         run: |
@@ -33,7 +34,7 @@ jobs:
         shell: pwsh
         run: |
           New-Item -ItemType Directory -Force C:/vcpkg-cache | Out-Null
-          cmake -S . -B build-windows -G "Visual Studio 17 2022" -A x64 "-DCMAKE_TOOLCHAIN_FILE=$env:VCPKG_INSTALLATION_ROOT/scripts/buildsystems/vcpkg.cmake" -DVCPKG_TARGET_TRIPLET=x64-windows -DQARVTK_BUILD_SENDER=ON "-DQAROS_SDK_ROOT=$env:GITHUB_WORKSPACE/sdk"
+          cmake -S . -B build-windows -G "Visual Studio 17 2022" -A x64 "-DCMAKE_TOOLCHAIN_FILE=$env:VCPKG_INSTALLATION_ROOT/scripts/buildsystems/vcpkg.cmake" "-DVCPKG_OVERLAY_TRIPLETS=$env:GITHUB_WORKSPACE/cmake/triplets" -DVCPKG_TARGET_TRIPLET=x64-windows-release -DQARVTK_BUILD_SENDER=ON "-DQAROS_SDK_ROOT=$env:GITHUB_WORKSPACE/sdk"
       - name: Compile renderer, preview and sender
         run: cmake --build build-windows --config Release --parallel 4
       - name: Core tests and SDK fingerprint (runner has no supported XR GPU)
