@@ -34,3 +34,11 @@ jobs:
       - run: cmake -S . -B build-core -DQARVTK_BUILD_RENDERER=OFF
       - run: cmake --build build-core --config Release
       - run: ctest --test-dir build-core -C Release --output-on-failure
+  paraview-bridge:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install ParaView
+        run: sudo apt-get update && sudo apt-get install -y paraview python3-paraview xvfb
+      - name: Export a real ParaView pipeline and verify world bounds
+        run: xvfb-run -a env LIBGL_ALWAYS_SOFTWARE=1 pvpython tests/paraview_smoke.py
