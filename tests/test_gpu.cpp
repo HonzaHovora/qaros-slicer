@@ -31,7 +31,7 @@ int main(){try{
     frame.views={{Eye::right,Plane::depth,3,size,size,0,0,0},{Eye::left,Plane::color,0,0,0,size,size,0},
                  {Eye::right,Plane::color,2,size,size,0,0,0},{Eye::left,Plane::depth,1,0,0,size,size,0}};
     auto views=validate_stereo(frame);Clip clip{.1,10};Fov fov{-.6,.6,.6,-.6};
-    for(int eye=0;eye<2;++eye){Pose p;p.position.x=eye==0?-.032:.032;
+    for(int eye=0;eye<2;++eye){Pose p;p.position.z=2;p.position.x=eye==0?-.032:.032;
       auto s=renderer.render(p,fov,clip,size,size);
       // The copy must survive and restore a non-default host GL state.
       glEnable(GL_BLEND);glEnable(GL_SCISSOR_TEST);glScissor(0,0,1,1);

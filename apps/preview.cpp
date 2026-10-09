@@ -19,7 +19,7 @@ int main(int argc,char**argv){try{
   qarvtk::Renderer renderer(!hidden);std::cout<<renderer.capabilities()<<'\n';
   if(!scene.empty())renderer.load_vtp(scene,scale,ras);
   for(int n=0;!renderer.closing()&&(frames==0||n<frames);++n){
-    qarvtk::Pose p; p.position.x=.06*std::sin(n*.025);
+    qarvtk::Pose p; p.position.z=2; p.position.x=.06*std::sin(n*.025);
     renderer.render(p,{}, {},640,640);if(!hidden)renderer.present();renderer.poll();
     std::this_thread::sleep_for(std::chrono::milliseconds(10));
   }

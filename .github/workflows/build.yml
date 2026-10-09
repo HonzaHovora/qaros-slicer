@@ -9,14 +9,24 @@ jobs:
       - uses: actions/checkout@v4
       - name: Install development dependencies
         run: sudo apt-get update && sudo apt-get install -y ninja-build libvtk9-dev libglfw3-dev libgl1-mesa-dev xvfb
+      - name: Fetch pinned public SDK header for compile coverage (no runtime)
+        run: |
+          mkdir -p sdk/include
+          curl --fail --location --retry 3 https://raw.githubusercontent.com/Quaternar/qaros/678e5463bb14a9d4d1f681fcdb9dfab9fe61e77e/qar-streaming-c/include/qar_streaming.h -o sdk/include/qar_streaming.h
       - name: Configure
-        run: cmake -S . -B build -G Ninja -DCMAKE_BUILD_TYPE=Release
+        run: cmake -S . -B build -G Ninja -DCMAKE_BUILD_TYPE=Release -DQARVTK_BUILD_SENDER=ON -DQAROS_SDK_ROOT=${{ github.workspace }}/sdk
       - name: Build
         run: cmake --build build -j 2
       - name: Test with Mesa and Xvfb
         run: xvfb-run -a env LIBGL_ALWAYS_SOFTWARE=1 ctest --test-dir build --output-on-failure
       - name: Preview smoke
         run: xvfb-run -a env LIBGL_ALWAYS_SOFTWARE=1 ./build/qarvtk-preview --hidden --frames 5
+      - name: SDK compile fingerprint
+        run: ./build/qarvtk-sender --sdk-info
+      - name: Surface interchange tests
+        run: |
+          /usr/bin/python3 tests/test_bridge.py
+          /usr/bin/python3 -m compileall -q integrations scripts
   windows-core:
     runs-on: windows-latest
     steps:

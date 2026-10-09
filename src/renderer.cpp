@@ -8,6 +8,7 @@
 #include <vtkGenericOpenGLRenderWindow.h>
 #include <vtkMatrix4x4.h>
 #include <vtkNew.h>
+#include <vtkSmartPointer.h>
 #include <vtkOpenGLFramebufferObject.h>
 #include <vtkPolyData.h>
 #include <vtkPolyDataMapper.h>
@@ -76,9 +77,10 @@ Renderer::Renderer(bool visible):impl_(std::make_unique<Impl>()) {
   impl_->actor->GetProperty()->SetColor(.15,.8,.35);
   impl_->actor->GetProperty()->LightingOff();
   impl_->renderer->AddActor(impl_->actor);
-  vtkNew<vtkCubeSource> cube;cube->SetCenter(0,0,-2);cube->SetXLength(.4);cube->SetYLength(.4);cube->SetZLength(.4);cube->Update();
+  vtkNew<vtkCubeSource> cube;cube->SetCenter(0,0,0);cube->SetXLength(.4);cube->SetYLength(.4);cube->SetZLength(.4);cube->Update();
   impl_->mapper->SetInputData(cube->GetOutput());
-  render({}, {}, {}, 640,640); // Initialize VTK's GL loader and render targets.
+  Pose initial; initial.position.z=2;
+  render(initial, {}, {}, 640,640); // Initialize VTK's GL loader and render targets.
 }
 Renderer::~Renderer()=default;
 void Renderer::make_current(){glfwMakeContextCurrent(impl_->main);}

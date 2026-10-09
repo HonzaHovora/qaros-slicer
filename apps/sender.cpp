@@ -1,0 +1,410 @@
+#include "qarvtk/gl.hpp"
+#include "qarvtk/gl_copy.hpp"
+#include "sdk_config.hpp"
+#ifdef _WIN32
+#define GLFW_EXPOSE_NATIVE_WIN32
+#define GLFW_EXPOSE_NATIVE_WGL
+#else
+#define GLFW_EXPOSE_NATIVE_X11
+#define GLFW_EXPOSE_NATIVE_GLX
+#endif
+#include <GLFW/glfw3native.h>
+// Both inspected SDK headers emit Windows dllimport annotations on Linux.
+// Dynamic loading uses dlsym there; suppress only that declaration annotation
+// while including the unmodified SDK header (no ABI/type changes).
+#if !defined(_WIN32) && defined(__GNUC__)
+#pragma push_macro("__declspec")
+#define __declspec(annotation)
+#endif
+#include <qar_streaming.h>
+#if !defined(_WIN32) && defined(__GNUC__)
+#pragma pop_macro("__declspec")
+#endif
+#include <algorithm>
+#include <chrono>
+#include <cmath>
+#include <csignal>
+#include <cstring>
+#include <filesystem>
+#include <fstream>
+#include <iostream>
+#include <memory>
+#include <mutex>
+#include <optional>
+#include <stdexcept>
+#include <string>
+#include <thread>
+#include <vector>
+
+QAR_IMPLEMENT_DYNAMIC_LOADING()
+namespace fs = std::filesystem;
+using Clock = std::chrono::steady_clock;
+namespace {
+volatile std::sig_atomic_t stop_requested = 0;
+void on_signal(int) { stop_requested = 1; }
+
+void checked(QarResult result, const char* operation) {
+  if (qar_result_is_success(result)) return;
+  char message[1024]{};
+  qar_result_message(result, message, sizeof(message));
+  throw std::runtime_error(std::string(operation) + " (" + std::to_string(result.code) + "): " + message);
+}
+
+struct Options {
+  fs::path sdk, scene, identity{"qarvtk.onboarding-id.txt"}, invite;
+  std::string host, target{"visualizer"};
+  double scale{1}; int frames{0}, timeout{60}; bool ras{}, preview{}, watch{};
+};
+void usage() {
+  std::cout << "qarvtk-sender --sdk ROOT [--scene model.vtp] [--meters-per-unit 1] [--ras]\n"
+      "  [--preview] [--watch] [--frames N] [--timeout 60]\n"
+#if QARVTK_MODERN_SDK
+      "  [--identity qarvtk.onboarding-id.txt] [--hub HOST]\n"
+      "Pairing code is read from stdin on first run; later runs rejoin.\n"
+#else
+      "  [--invite-file invite.json] [--target visualizer|quest|hololens:HOST]\n"
+      "Legacy SDK 2540: join supplied session or create one, then invite a viewer.\n"
+#endif
+      "--sdk-info prints the build's header fingerprint without loading the runtime.\n";
+}
+Options parse(int argc, char** argv) {
+  Options o;
+  for (int i=1; i<argc; ++i) {
+    const std::string a=argv[i];
+    auto value=[&]() { if (++i>=argc) throw std::invalid_argument("Missing value: "+a); return std::string(argv[i]); };
+    if (a=="--sdk") o.sdk=value();
+    else if (a=="--scene") o.scene=value();
+    else if (a=="--meters-per-unit") o.scale=std::stod(value());
+    else if (a=="--frames") o.frames=std::stoi(value());
+    else if (a=="--timeout") o.timeout=std::stoi(value());
+    else if (a=="--preview") o.preview=true;
+    else if (a=="--ras") o.ras=true;
+    else if (a=="--watch") o.watch=true;
+#if QARVTK_MODERN_SDK
+    else if (a=="--identity") o.identity=value();
+    else if (a=="--hub") o.host=value();
+#else
+    else if (a=="--invite-file") o.invite=value();
+    else if (a=="--target") o.target=value();
+#endif
+    else throw std::invalid_argument("Unknown argument: "+a);
+  }
+  if (o.sdk.empty()) throw std::invalid_argument("--sdk ROOT is required");
+  o.sdk=fs::absolute(o.sdk);
+  if (o.frames<0 || o.timeout<1 || o.timeout>3600 || !std::isfinite(o.scale) || o.scale<=0)
+    throw std::invalid_argument("Invalid frame limit, timeout or scale");
+  if (o.watch && o.scene.empty()) throw std::invalid_argument("--watch requires --scene");
+  return o;
+}
+
+// The application and encoder must select the same GPU. No silent adapter fallback.
+QarGraphicsDeviceId graphics_device() {
+  auto id=qar_graphics_device_id_default();
+  if (!glfwExtensionSupported("GL_EXT_memory_object"))
+    throw std::runtime_error("QAROS requires a shared-memory capable GPU; GL_EXT_memory_object is missing. Preview works without it.");
+#ifdef _WIN32
+  using GetBytes = void (APIENTRY*)(GLenum, GLubyte*);
+  auto get=reinterpret_cast<GetBytes>(glfwGetProcAddress("glGetUnsignedBytevEXT"));
+  if (!get) throw std::runtime_error("Cannot query OpenGL GPU LUID");
+  id.id_type=QAR_GPU_DEVICE_ID_TYPE_LUID;
+  get(0x9599 /* GL_DEVICE_LUID_EXT */, reinterpret_cast<GLubyte*>(&id.luid));
+#else
+  using GetBytes = void (APIENTRY*)(GLenum, GLuint, GLubyte*);
+  auto get=reinterpret_cast<GetBytes>(glfwGetProcAddress("glGetUnsignedBytei_vEXT"));
+  if (!get) throw std::runtime_error("Cannot query OpenGL GPU UUID");
+  id.id_type=QAR_GPU_DEVICE_ID_TYPE_UUID;
+  get(0x9597 /* GL_DEVICE_UUID_EXT */, 0, id.uuid);
+#endif
+  if (glGetError()!=GL_NO_ERROR) throw std::runtime_error("OpenGL GPU identity query failed");
+  return id;
+}
+
+struct NativeContext {
+#ifdef _WIN32
+  HWND window{}; HDC dc{};
+  QarStreamParamsOpenGlWgl params=qar_stream_params_opengl_wgl_default();
+  explicit NativeContext(qarvtk::Renderer& renderer) {
+    window=glfwGetWin32Window(renderer.sdk_window()); dc=GetDC(window);
+    params.device_context=dc; params.context=glfwGetWGLContext(renderer.sdk_window());
+    if (!dc || !params.context) throw std::runtime_error("WGL shared context unavailable");
+  }
+  ~NativeContext() { if (dc) ReleaseDC(window,dc); }
+#else
+  QarStreamParamsOpenGlGlx params=qar_stream_params_opengl_glx_default();
+  explicit NativeContext(qarvtk::Renderer& renderer) {
+    params.display=glfwGetX11Display(); params.drawable=glfwGetGLXWindow(renderer.sdk_window());
+    params.context=glfwGetGLXContext(renderer.sdk_window());
+    if (!params.display || !params.drawable || !params.context)
+      throw std::runtime_error("GLX shared context unavailable; run in an X11 session");
+  }
+#endif
+};
+
+#if QARVTK_MODERN_SDK
+struct Requests { std::mutex mutex; std::optional<QarPeerId> first; };
+void on_request(QarRenderStreamRequest* request, void* context) {
+  auto& state=*static_cast<Requests*>(context);
+  QarPeerId peer=qar_peer_id_default();
+  auto result=qar_render_request_get_target_peer_id(request,&peer);
+  if (qar_result_is_success(result)) {
+    std::lock_guard<std::mutex> lock(state.mutex);
+    if (!state.first) state.first=peer; // This prototype serves one viewer per process.
+  }
+  qar_render_request_handle_destroy(request);
+}
+#endif
+
+struct Sdk {
+  bool loaded{}, initialized{}, volume_created{};
+  QarRuntime* runtime{}; QarSession* session{}; QarRenderSender* sender{};
+  QarCancelToken* operation{}; QarCancelToken* subscription{};
+  QarAppVolumeId volume=qar_app_volume_id_default();
+#if QARVTK_MODERN_SDK
+  Requests requests; // Must outlive cancellation and session/runtime destruction.
+#endif
+  ~Sdk() {
+    if (subscription) qar_cancel_token_cancel(subscription);
+    if (sender) qar_render_stream_handle_destroy(sender);
+    if (volume_created) qar_app_volumes_close_volume(session,&volume);
+    if (session) qar_session_handle_destroy(session);
+    if (runtime) qar_runtime_destroy(runtime);
+    if (subscription) qar_cancel_token_handle_destroy(subscription);
+    if (operation) qar_cancel_token_handle_destroy(operation);
+    if (initialized) qar_library_destroy();
+    if (loaded) qar_library_unload();
+  }
+  void deadline(int seconds) {
+    if (operation) qar_cancel_token_handle_destroy(operation);
+    operation=nullptr;
+    checked(qar_cancel_token_create_with_timeout(&operation,static_cast<uint32_t>(seconds*1000)),"create timeout");
+  }
+  void open(const Options& o) {
+#ifdef _WIN32
+    auto library=o.sdk/"bin"/"qar-streaming-c.dll";
+#else
+    auto library=o.sdk/"bin"/"libqar-streaming-c.so";
+#endif
+    if (!fs::is_regular_file(library)) throw std::runtime_error("Missing runtime library: "+library.string());
+    if (!qar_library_load(library.string().c_str())) throw std::runtime_error("Cannot load SDK; use the complete package matching the build header");
+    loaded=true;
+    auto init=qar_library_init_default(); init.enable_console_logging=true;
+    checked(qar_library_init(&init),"library init"); initialized=true;
+    const auto folder=(o.sdk/"bin").string();
+    auto ri=qar_runtime_init_default(); ri.runtime_binaries_folder_path=folder.c_str();
+    checked(qar_runtime_create(&ri,&runtime),"runtime create");
+    if (!runtime) throw std::runtime_error("Runtime returned a null handle");
+  }
+
+  void connect(const Options& o, QarGraphicsDeviceId& adapter) {
+    deadline(o.timeout);
+#if QARVTK_MODERN_SDK
+    auto identity=qar_onboarding_id_default();
+    if (fs::exists(o.identity)) {
+      std::ifstream file(o.identity); std::string text; std::getline(file,text);
+      checked(qar_uuid_from_string(text.c_str(),identity.data),"read onboarding identity");
+      auto init=qar_rejoin_init_default(); init.onboarding_id=identity;
+      init.presentation.display_name="QAROS VTK"; init.header.next=&adapter.header;
+      auto result=qar_runtime_rejoin(runtime,&init,nullptr,nullptr,operation,&session);
+      if (qar_result_is_success(result)) return;
+      if (!qar_result_has_code(result,QAR_STATUS_ONBOARDING_SESSION_NOT_FOUND)) checked(result,"rejoin Hub");
+    }
+    std::cout << "Hub pairing code: " << std::flush;
+    std::string code; if (!std::getline(std::cin,code) || code.empty()) throw std::runtime_error("Pairing code is required on first run");
+    deadline(o.timeout); // Human input time must not consume the SDK timeout.
+    auto init=qar_onboard_init_default(); init.presentation.display_name="QAROS VTK";
+    auto code_ext=qar_onboard_code_ext_default(); code_ext.code=code.c_str();
+    auto host=qar_onboard_host_ext_default(); host.hostname=o.host.c_str();
+    init.header.next=&code_ext.header; code_ext.header.next=&adapter.header;
+    if (!o.host.empty()) { adapter.header.next=&host.header; }
+    checked(qar_runtime_onboard(runtime,&init,nullptr,nullptr,operation,&identity,&session),"onboard Hub");
+    adapter.header.next=nullptr;
+    char text[64]{}; checked(qar_uuid_to_string(identity.data,text,sizeof(text)),"serialize identity");
+    std::ofstream file(o.identity); file<<text<<'\n'; file.close();
+    if (!file) throw std::runtime_error("Cannot persist onboarding identity: "+o.identity.string());
+#else
+    std::vector<uint8_t> bytes;
+    if (!o.invite.empty()) {
+      std::ifstream input(o.invite,std::ios::binary);
+      if (!input) throw std::runtime_error("Cannot read invite file");
+      if (fs::file_size(o.invite)>1024*1024) throw std::runtime_error("Invite file exceeds 1 MiB");
+      bytes.assign(std::istreambuf_iterator<char>(input),{});
+    } else {
+      QarSessionInvite* raw{};
+      auto init=qar_session_create_init_default(); init.header.next=&adapter.header;
+      checked(qar_runtime_create_session(runtime,&init,&raw),"create legacy session");
+      std::unique_ptr<QarSessionInvite,decltype(&qar_session_invite_handle_destroy)> invite(raw,qar_session_invite_handle_destroy);
+      // Invites are small JSON blobs; a fixed bounded buffer avoids printing credentials.
+      bytes.resize(1024*1024); size_t written{};
+      checked(qar_session_invite_serialize(invite.get(),bytes.data(),bytes.size(),&written),"serialize invite");
+      if (written>bytes.size()) throw std::runtime_error("Invalid invite size");
+      bytes.resize(written);
+    }
+    if (bytes.empty()) throw std::runtime_error("Empty session invite");
+    auto join=qar_session_join_init_default(); join.header.next=&adapter.header;
+    join.invite_data=bytes.data(); join.invite_data_size=bytes.size(); join.peer_spec_init.display_name="QAROS VTK";
+    checked(qar_session_join(&join,&session),"join legacy session");
+#endif
+    if (!session) throw std::runtime_error("SDK returned a null session");
+  }
+  void create_volume() {
+    auto init=qar_app_volume_init_default(); init.display_name="VTK surface";
+    init.pose.position.z=-1.5F; init.size={1.2F,1.2F,1.2F}; init.app_scale=1;
+#if QARVTK_MODERN_SDK
+    // Unique per process run; closing this volume cannot close another sender's volume.
+    const auto name="vtk.prototype."+std::to_string(Clock::now().time_since_epoch().count());
+    init.common_name=name.c_str();
+    checked(qar_app_volumes_get_or_create(session,&init,&volume),"create app volume");
+#else
+    checked(qar_app_volumes_add_volume(session,&init,&volume),"create app volume");
+#endif
+    volume_created=true;
+  }
+  QarPeerId target(const Options& o, qarvtk::Renderer& renderer) {
+#if QARVTK_MODERN_SDK
+    checked(qar_cancel_token_create(&subscription),"create subscription token");
+    checked(qar_render_sender_subscribe_requests(session,on_request,&requests,subscription),"subscribe render requests");
+    std::cout << "Open this app's volume in a Hub viewer; waiting for its render request...\n";
+    const auto end=Clock::now()+std::chrono::seconds(o.timeout);
+    while (!stop_requested && !renderer.closing() && Clock::now()<end) {
+      { std::lock_guard<std::mutex> lock(requests.mutex); if (requests.first) return *requests.first; }
+      renderer.poll(); std::this_thread::sleep_for(std::chrono::milliseconds(20));
+    }
+    throw std::runtime_error("No viewer request before timeout or shutdown");
+#else
+    char connection[1024]{};
+    if (o.target=="visualizer") checked(qar_session_invite_connection_string_visualizer(connection,sizeof(connection)),"visualizer connection");
+    else if (o.target=="quest") checked(qar_session_invite_connection_string_quest(connection,sizeof(connection)),"Quest connection");
+    else if (o.target.rfind("hololens:",0)==0) checked(qar_session_invite_connection_string_hololens(o.target.substr(9).c_str(),connection,sizeof(connection)),"HoloLens connection");
+    else throw std::invalid_argument("Target must be visualizer, quest or hololens:HOST");
+    auto init=qar_session_invite_peer_init_default(); init.connection_string=connection;
+    QarPeerId peer=qar_peer_id_default(); deadline(o.timeout);
+    checked(qar_session_invite_peer(session,&init,&peer,operation),"invite target");
+    const auto end=Clock::now()+std::chrono::seconds(o.timeout);
+    while (!stop_requested && !renderer.closing() && Clock::now()<end) {
+      size_t count{},written{}; checked(qar_query_peer_specs_count(session,&count),"peer count");
+      std::vector<QarPeerSpec*> specs(count+8,nullptr);
+      auto result=qar_query_peer_specs(session,specs.data(),specs.size(),&written);
+      bool ready=false;
+      for (auto* spec:specs) if (spec) {
+        QarPeerId id{}; QarAppState state=QAR_APP_STATE_UNKNOWN;
+        const auto ri=qar_peer_spec_get_id(spec,&id), rs=qar_peer_spec_get_app_state(spec,&state);
+        if (qar_result_is_success(ri) && qar_result_is_success(rs) &&
+            std::memcmp(id.data,peer.data,QAR_MAX_ID_LENGTH)==0 && state==QAR_APP_STATE_RUNNING) ready=true;
+        qar_peer_spec_handle_destroy(spec);
+      }
+      checked(result,"query peers"); if (ready) return peer;
+      renderer.poll(); std::this_thread::sleep_for(std::chrono::milliseconds(20));
+    }
+    throw std::runtime_error("Invited viewer did not reach RUNNING before timeout");
+#endif
+  }
+};
+
+qarvtk::Frame frame_layout(const QarVideoFrameOpenGl& frame) {
+  if (frame.textures_count>QAR_MAX_FRAME_TEXTURES || frame.texture_views_count>QAR_MAX_FRAME_VIEWS)
+    throw std::runtime_error("Invalid SDK frame array sizes");
+  qarvtk::Frame f;
+  for (size_t i=0;i<frame.textures_count;++i) {
+    const auto& t=frame.textures[i]; f.textures.push_back({t.texture,t.size.width,t.size.height,t.size.array_layers});
+  }
+  for (size_t i=0;i<frame.texture_views_count;++i) {
+    const auto& v=frame.texture_views[i];
+    if (v.eye!=QAR_VIDEO_FRAME_VIEW_EYE_LEFT && v.eye!=QAR_VIDEO_FRAME_VIEW_EYE_RIGHT)
+      throw std::runtime_error("Only stereo LEFT/RIGHT views supported");
+    if (v.data_type!=QAR_VIDEO_FRAME_VIEW_TYPE_COLOR && v.data_type!=QAR_VIDEO_FRAME_VIEW_TYPE_DEPTH)
+      throw std::runtime_error("Unsupported frame plane");
+    const bool depth=v.data_type==QAR_VIDEO_FRAME_VIEW_TYPE_DEPTH;
+    if ((!depth && v.texture_format!=QAR_PIXEL_FORMAT_R8G8B8A8) ||
+        (depth && v.texture_format!=QAR_PIXEL_FORMAT_D32_FLOAT && v.texture_format!=QAR_PIXEL_FORMAT_R32_FLOAT))
+      throw std::runtime_error("Unsupported negotiated pixel format");
+    f.views.push_back({v.eye==QAR_VIDEO_FRAME_VIEW_EYE_LEFT?qarvtk::Eye::left:qarvtk::Eye::right,
+       depth?qarvtk::Plane::depth:qarvtk::Plane::color,v.texture_index,v.start_x,v.start_y,v.end_x,v.end_y,v.array_layer_index});
+  }
+  return f;
+}
+bool transient(QarResult result) {
+  return qar_result_has_code(result,QAR_STATUS_MEDIA_STREAMING_STREAM_IS_RECONNECTING) ||
+      qar_result_has_code(result,QAR_STATUS_MEDIA_STREAMING_NO_ACTIVE_TRANSFERS)
+#if QARVTK_MODERN_SDK
+      || qar_result_has_code(result,QAR_STATUS_RENDERING_PRODUCER_APP_VOLUME_UNRESOLVED)
+#endif
+      ;
+}
+}
+
+int main(int argc,char** argv) { try {
+  for (int i=1;i<argc;++i) {
+    if (std::string(argv[i])=="--help") { usage(); return 0; }
+    if (std::string(argv[i])=="--sdk-info") {
+      std::cout << "{\"header_sha256\":\"" << QARVTK_SDK_SHA256 << "\",\"modern_api\":" << QARVTK_MODERN_SDK << "}\n"; return 0;
+    }
+  }
+  const auto options=parse(argc,argv);
+  std::signal(SIGINT,on_signal); std::signal(SIGTERM,on_signal);
+  qarvtk::Renderer renderer(options.preview); std::cout<<renderer.capabilities()<<'\n';
+  if (!options.scene.empty()) renderer.load_vtp(options.scene.string(),options.scale,options.ras);
+  auto adapter=graphics_device();
+  qarvtk::GlCopy copy;
+  NativeContext native(renderer); // Outlives SDK; SDK context is never current on this thread.
+  Sdk sdk; sdk.open(options); sdk.connect(options,adapter); sdk.create_volume();
+  const auto peer=sdk.target(options,renderer);
+  checked(qar_app_volumes_update_used_by_peers(sdk.session,&sdk.volume,&peer,1,nullptr,0),"attach viewer to volume");
+  auto init=qar_render_sender_init_default(); init.graphics_api=QAR_GRAPHICS_API_OPENGL;
+  init.header.next=&native.params.header; init.peer_id=peer; init.app_volume_id=&sdk.volume;
+  init.enable_auto_reconnects=true; init.texture_layout=QAR_FRAME_LAYOUT_SEPARATED_TEXTURES;
+  init.color_format=QAR_PIXEL_FORMAT_R8G8B8A8; init.depth_format=QAR_PIXEL_FORMAT_D32_FLOAT;
+  init.frame_views_count=4;
+  for (unsigned i=0;i<4;++i) {
+    init.frame_views[i]=qar_render_frame_view_default();
+    init.frame_views[i].eye=i<2?QAR_VIDEO_FRAME_VIEW_EYE_LEFT:QAR_VIDEO_FRAME_VIEW_EYE_RIGHT;
+    init.frame_views[i].data_type=i%2?QAR_VIDEO_FRAME_VIEW_TYPE_DEPTH:QAR_VIDEO_FRAME_VIEW_TYPE_COLOR;
+    init.frame_views[i].texture_index=i;
+  }
+  sdk.deadline(options.timeout);
+  checked(qar_render_sender_create(sdk.session,&init,sdk.operation,&sdk.sender),"create OpenGL sender");
+  if (!sdk.sender) throw std::runtime_error("SDK returned a null sender");
+  const qarvtk::Clip clip{.05,20};
+  auto last_frame=Clock::now(),last_watch=last_frame;
+  auto scene_time=options.scene.empty()?fs::file_time_type{}:fs::last_write_time(options.scene);
+  int sent=0;
+  while (!stop_requested && !renderer.closing() && (!options.frames || sent<options.frames)) {
+    renderer.poll();
+    if (options.watch && Clock::now()-last_watch>std::chrono::milliseconds(250)) {
+      last_watch=Clock::now(); std::error_code ec; const auto changed=fs::last_write_time(options.scene,ec);
+      if (!ec && changed!=scene_time) {
+        try { renderer.load_vtp(options.scene.string(),options.scale,options.ras); scene_time=changed; std::cout<<"Scene reloaded\n"; }
+        catch (const std::exception& e) { std::cerr<<"Keeping previous scene: "<<e.what()<<'\n'; }
+      }
+    }
+    if (Clock::now()-last_frame>std::chrono::seconds(options.timeout)) throw std::runtime_error("No frame received before timeout; check viewer and GPU adapter");
+    QarRenderFrameInfo* raw{}; bool ready=false;
+    const auto result=qar_render_sender_try_begin_frame(sdk.sender,&raw,&ready);
+    std::unique_ptr<QarRenderFrameInfo,decltype(&qar_render_frame_info_handle_destroy)> info(raw,qar_render_frame_info_handle_destroy);
+    if (transient(result) || (qar_result_is_success(result) && !ready)) {
+      std::this_thread::sleep_for(std::chrono::milliseconds(2)); continue;
+    }
+    checked(result,"begin frame"); if (!info) throw std::runtime_error("Ready frame has no view metadata");
+    auto access=qar_video_frame_opengl_default(); checked(qar_render_sender_frame_opengl(sdk.sender,&access),"get OpenGL frame");
+    const auto frame=frame_layout(access); const auto views=qarvtk::validate_stereo(frame);
+    for (const auto& eye:views) {
+      QarPose pose=qar_pose_default(); QarFov fov=qar_fov_default();
+      checked(qar_render_frame_info_get_view_pose(info.get(),eye.color,&pose),"get view pose");
+      checked(qar_render_frame_info_get_view_fov(info.get(),eye.color,&fov),"get view FOV");
+      const qarvtk::Pose camera{{pose.position.x,pose.position.y,pose.position.z},
+          {pose.orientation.x,pose.orientation.y,pose.orientation.z,pose.orientation.w}};
+      const qarvtk::Fov angles{fov.angle_left,fov.angle_right,fov.angle_up,fov.angle_down};
+      const auto& view=frame.views[eye.color];
+      auto source=renderer.render(camera,angles,clip,qarvtk::width(view),qarvtk::height(view));
+      copy.copy(source,frame,eye);
+    }
+    copy.finish(); // glFinish: correctness baseline before SDK's graphics thread consumes textures.
+    auto show=qar_render_frame_show_default();
+    show.rendered_near_far={static_cast<float>(clip.near_plane),static_cast<float>(clip.far_plane)}; show.depth_scale=1;
+    checked(qar_render_sender_show_frame(sdk.sender,&show),"show frame");
+    last_frame=Clock::now(); ++sent;
+    if (options.preview) renderer.present();
+    if (sent==1 || sent%300==0) std::cout<<"Submitted "<<sent<<" stereo frames\n";
+  }
+  std::cout<<"Stopped after "<<sent<<" stereo frames\n";
+  return sent>0?0:2;
+} catch (const std::exception& e) { std::cerr<<"ERROR: "<<e.what()<<'\n'; return 1; } }
