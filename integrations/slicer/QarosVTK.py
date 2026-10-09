@@ -1,4 +1,4 @@
-"""Install as an Additional module path in Slicer; restart Slicer."""
+"""QAROS scripted Slicer module; rendering/SDK work stays in a child process."""
 from pathlib import Path
 import sys
 import qt
@@ -8,23 +8,26 @@ from slicer.ScriptedLoadableModule import ScriptedLoadableModule, ScriptedLoadab
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 from qarvtk_slicer import export_node
+from qarvtk_runtime import Backend, user_directory
 
 
 class QarosVTK(ScriptedLoadableModule):
     def __init__(self, parent):
         super().__init__(parent)
-        parent.title = "QAROS VTK Surface Bridge"
-        parent.categories = ["Examples"]
+        parent.title = "QAROS Streaming"
+        parent.categories = ["QAROS"]
         parent.contributors = ["QuaternAR"]
-        parent.helpText = ("Export a model or one segment as world RAS millimetres. "
-                           "Start qarvtk-sender with --ras --meters-per-unit 0.001 --watch "
-                           "and export again to update the viewer.")
+        parent.helpText = ("Stream one model or one segment through the QAROS VTK backend. "
+                           "World RAS millimetres are converted to QAROS metres. "
+                           "See docs/INSTALLATION.md in QAROS_VTK.")
         parent.acknowledgementText = "QAROS VTK integration prototype."
 
 
 class QarosVTKWidget(ScriptedLoadableModuleWidget):
     def setup(self):
         super().setup()
+        self.backend = Backend(slicer.util.startupEnvironment())
+        self.settings = qt.QSettings()
         form = qt.QFormLayout()
         self.layout.addLayout(form)
         self.node = slicer.qMRMLNodeComboBox()
@@ -36,20 +39,64 @@ class QarosVTKWidget(ScriptedLoadableModuleWidget):
         form.addRow("Model or segmentation", self.node)
         self.segment = qt.QComboBox()
         form.addRow("Segment", self.segment)
+        self.exe = self.path_field(form, "Sender executable", "Executable", False)
+        self.sdk = self.path_field(form, "QAROS SDK folder", "Sdk", True)
+        self.identity = self.path_field(form, "Hub identity file", "Identity", False,
+                                        str(user_directory() / "onboarding-id.txt"))
+        self.code = qt.QLineEdit()
+        self.code.echoMode = qt.QLineEdit.Password
+        self.code.placeholderText = "First connection only; not saved"
+        form.addRow("Hub pairing code", self.code)
+        self.hub = qt.QLineEdit()
+        self.hub.text = str(self.settings.value("QAROS_VTK/Hub", ""))
+        form.addRow("Hub host (optional)", self.hub)
+        self.invite = self.path_field(form, "Legacy invite (optional)", "Invite", False)
+        self.target = qt.QComboBox()
+        self.target.addItems(["visualizer", "quest"])
+        form.addRow("Legacy viewer", self.target)
+        self.startButton = qt.QPushButton("Start streaming")
+        self.stopButton = qt.QPushButton("Stop streaming")
+        self.updateButton = qt.QPushButton("Update surface")
+        form.addRow(self.startButton, self.stopButton)
+        form.addRow(self.updateButton)
+        self.autoUpdate = qt.QCheckBox("Update surface every second while sender runs")
+        self.autoUpdate.checked = False
+        form.addRow(self.autoUpdate)
         self.path = ctk.ctkPathLineEdit()
         self.path.filters = ctk.ctkPathLineEdit.Files
         self.path.nameFilters = ["VTK surface (*.vtp)"]
         self.path.currentPath = str(Path.home() / "qarvtk-surface.vtp")
-        form.addRow("Export file", self.path)
-        self.button = qt.QPushButton("Export surface")
+        form.addRow("Optional export file", self.path)
+        self.button = qt.QPushButton("Export surface to file")
         form.addRow(self.button)
-        self.status = qt.QLabel("The export contains the selected surface and its world transform.")
+        self.status = qt.QLabel("Choose a surface and configure the sender and SDK paths.")
         self.status.wordWrap = True
         form.addRow(self.status)
+        self.log = qt.QPlainTextEdit()
+        self.log.readOnly = True
+        self.log.maximumHeight = 150
+        form.addRow("Sender log", self.log)
         self.node.connect("currentNodeChanged(vtkMRMLNode*)", self.update_segments)
         self.button.connect("clicked()", self.export)
+        self.startButton.connect("clicked()", self.start_stream)
+        self.stopButton.connect("clicked()", self.backend.request_stop)
+        self.updateButton.connect("clicked()", self.publish_surface)
+        self.timer = qt.QTimer(self.parent)
+        self.timer.setInterval(1000)
+        self.timer.connect("timeout()", self.poll)
+        self.timer.start()
+        self.sceneObserver = slicer.mrmlScene.AddObserver(
+            slicer.mrmlScene.StartCloseEvent, self.on_scene_close)
+        slicer.app.connect("aboutToQuit()", self.cleanup)
         self.update_segments(self.node.currentNode())
         self.layout.addStretch(1)
+
+    def path_field(self, form, label, key, directory, default=""):
+        field = ctk.ctkPathLineEdit()
+        field.filters = ctk.ctkPathLineEdit.Dirs if directory else ctk.ctkPathLineEdit.Files
+        field.currentPath = str(self.settings.value("QAROS_VTK/" + key, default))
+        form.addRow(label, field)
+        return field
 
     def update_segments(self, node):
         self.segment.clear()
@@ -61,10 +108,58 @@ class QarosVTKWidget(ScriptedLoadableModuleWidget):
                 sid = segmentation.GetNthSegmentID(index)
                 self.segment.addItem(segmentation.GetSegment(sid).GetName(), sid)
 
+    def write_surface(self, path):
+        sid = self.segment.itemData(self.segment.currentIndex) if self.segment.enabled else None
+        return export_node(self.node.currentNode(), path, sid)
+
     def export(self):
         try:
-            sid = self.segment.itemData(self.segment.currentIndex) if self.segment.enabled else None
-            path = export_node(self.node.currentNode(), self.path.currentPath, sid)
-            self.status.text = "Exported: " + path + "\nRe-export after edits to update a running sender."
+            self.status.text = "Exported: " + self.write_surface(self.path.currentPath)
         except Exception as error:
             slicer.util.errorDisplay(str(error))
+
+    def publish_surface(self):
+        try:
+            self.write_surface(self.backend.scene)
+            self.status.text = "Surface updated. " + self.backend.status()
+        except Exception as error:
+            self.autoUpdate.checked = False
+            self.status.text = str(error)
+
+    def start_stream(self):
+        try:
+            self.write_surface(self.backend.scene)
+            self.backend.start(self.exe.currentPath, self.sdk.currentPath, scale=0.001, ras=True,
+                pairing_code=self.code.text, hub=self.hub.text, identity=self.identity.currentPath,
+                invite=self.invite.currentPath, target=self.target.currentText)
+            for key, value in (("Executable", self.exe.currentPath), ("Sdk", self.sdk.currentPath),
+                               ("Identity", self.identity.currentPath), ("Hub", self.hub.text),
+                               ("Invite", self.invite.currentPath)):
+                self.settings.setValue("QAROS_VTK/" + key, value)
+            self.poll()
+        except Exception as error:
+            self.status.text = str(error)
+            slicer.util.errorDisplay(str(error))
+        finally:
+            self.code.clear()
+
+    def poll(self):
+        self.status.text = self.backend.status()
+        self.startButton.enabled = not self.backend.running
+        self.stopButton.enabled = self.backend.running
+        self.log.setPlainText(self.backend.log_tail())
+        if self.autoUpdate.checked and self.backend.running:
+            self.publish_surface()
+
+    def on_scene_close(self, caller=None, event=None):
+        self.autoUpdate.checked = False
+        self.backend.close()
+
+    def cleanup(self):
+        if hasattr(self, "timer"):
+            self.timer.stop()
+        if getattr(self, "sceneObserver", None):
+            slicer.mrmlScene.RemoveObserver(self.sceneObserver)
+            self.sceneObserver = None
+        if hasattr(self, "backend"):
+            self.backend.close()

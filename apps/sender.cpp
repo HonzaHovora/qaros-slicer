@@ -1,5 +1,6 @@
 #include "qarvtk/gl.hpp"
 #include "qarvtk/gl_copy.hpp"
+#include "qarvtk/shutdown.hpp"
 #include "sdk_config.hpp"
 #ifdef _WIN32
 #define GLFW_EXPOSE_NATIVE_WIN32
@@ -51,13 +52,15 @@ void checked(QarResult result, const char* operation) {
 }
 
 struct Options {
-  fs::path sdk, scene, identity{"qarvtk.onboarding-id.txt"}, invite;
+  fs::path sdk, scene, identity{"qarvtk.onboarding-id.txt"}, invite, stop_file;
+  unsigned long parent_pid{};
   std::string host, target{"visualizer"};
   double scale{1}; int frames{0}, timeout{60}; bool ras{}, preview{}, watch{};
 };
 void usage() {
   std::cout << "qarvtk-sender --sdk ROOT [--scene model.vtp] [--meters-per-unit 1] [--ras]\n"
       "  [--preview] [--watch] [--frames N] [--timeout 60]\n"
+      "  [--stop-file PATH] [--parent-pid PID] (plugin lifecycle)\n"
 #if QARVTK_MODERN_SDK
       "  [--identity qarvtk.onboarding-id.txt] [--hub HOST]\n"
       "Pairing code is read from stdin on first run; later runs rejoin.\n"
@@ -80,6 +83,12 @@ Options parse(int argc, char** argv) {
     else if (a=="--preview") o.preview=true;
     else if (a=="--ras") o.ras=true;
     else if (a=="--watch") o.watch=true;
+    else if (a=="--stop-file") o.stop_file=value();
+    else if (a=="--parent-pid") {
+      const auto pid=std::stol(value());
+      if (pid<=0) throw std::invalid_argument("Parent PID must be positive");
+      o.parent_pid=static_cast<unsigned long>(pid);
+    }
 #if QARVTK_MODERN_SDK
     else if (a=="--identity") o.identity=value();
     else if (a=="--hub") o.host=value();
@@ -269,13 +278,13 @@ struct Sdk {
 #endif
     volume_created=true;
   }
-  QarPeerId target(const Options& o, qarvtk::Renderer& renderer) {
+  QarPeerId target(const Options& o, qarvtk::Renderer& renderer, const qarvtk::Shutdown& shutdown) {
 #if QARVTK_MODERN_SDK
     checked(qar_cancel_token_create(&subscription),"create subscription token");
     checked(qar_render_sender_subscribe_requests(session,on_request,&requests,subscription),"subscribe render requests");
     std::cout << "Open this app's volume in a Hub viewer; waiting for its render request...\n";
     const auto end=Clock::now()+std::chrono::seconds(o.timeout);
-    while (!stop_requested && !renderer.closing() && Clock::now()<end) {
+    while (!stop_requested && !shutdown.requested() && !renderer.closing() && Clock::now()<end) {
       { std::lock_guard<std::mutex> lock(requests.mutex); if (requests.first) return *requests.first; }
       renderer.poll(); std::this_thread::sleep_for(std::chrono::milliseconds(20));
     }
@@ -290,7 +299,7 @@ struct Sdk {
     QarPeerId peer=qar_peer_id_default(); deadline(o.timeout);
     checked(qar_session_invite_peer(session,&init,&peer,operation),"invite target");
     const auto end=Clock::now()+std::chrono::seconds(o.timeout);
-    while (!stop_requested && !renderer.closing() && Clock::now()<end) {
+    while (!stop_requested && !shutdown.requested() && !renderer.closing() && Clock::now()<end) {
       size_t count{},written{}; checked(qar_query_peer_specs_count(session,&count),"peer count");
       std::vector<QarPeerSpec*> specs(count+8,nullptr);
       auto result=qar_query_peer_specs(session,specs.data(),specs.size(),&written);
@@ -346,10 +355,13 @@ int main(int argc,char** argv) { try {
   for (int i=1;i<argc;++i) {
     if (std::string(argv[i])=="--help") { usage(); return 0; }
     if (std::string(argv[i])=="--sdk-info") {
-      std::cout << "{\"header_sha256\":\"" << QARVTK_SDK_SHA256 << "\",\"modern_api\":" << QARVTK_MODERN_SDK << "}\n"; return 0;
+      std::cout << "{\"header_sha256\":\"" << QARVTK_SDK_SHA256 << "\",\"modern_api\":" << QARVTK_MODERN_SDK << ",\"plugin_protocol\":1}\n"; return 0;
     }
   }
   const auto options=parse(argc,argv);
+  std::cout.setf(std::ios::unitbuf);
+  const qarvtk::Shutdown shutdown(options.stop_file,options.parent_pid);
+  if (shutdown.requested()) return 0;
   std::signal(SIGINT,on_signal); std::signal(SIGTERM,on_signal);
   qarvtk::Renderer renderer(options.preview); std::cout<<renderer.capabilities()<<'\n';
   if (!options.scene.empty()) renderer.load_vtp(options.scene.string(),options.scale,options.ras);
@@ -357,7 +369,8 @@ int main(int argc,char** argv) { try {
   qarvtk::GlCopy copy;
   NativeContext native(renderer); // Outlives SDK; SDK context is never current on this thread.
   Sdk sdk; sdk.open(options); sdk.connect(options,adapter); sdk.create_volume();
-  const auto peer=sdk.target(options,renderer);
+  if (shutdown.requested()) return 0;
+  const auto peer=sdk.target(options,renderer,shutdown);
   checked(qar_app_volumes_update_used_by_peers(sdk.session,&sdk.volume,&peer,1,nullptr,0),"attach viewer to volume");
   auto init=qar_render_sender_init_default(); init.graphics_api=QAR_GRAPHICS_API_OPENGL;
   init.header.next=&native.params.header; init.peer_id=peer; init.app_volume_id=&sdk.volume;
@@ -377,7 +390,7 @@ int main(int argc,char** argv) { try {
   auto last_frame=Clock::now(),last_watch=last_frame;
   auto scene_time=options.scene.empty()?fs::file_time_type{}:fs::last_write_time(options.scene);
   int sent=0;
-  while (!stop_requested && !renderer.closing() && (!options.frames || sent<options.frames)) {
+  while (!stop_requested && !shutdown.requested() && !renderer.closing() && (!options.frames || sent<options.frames)) {
     renderer.poll();
     if (options.watch && Clock::now()-last_watch>std::chrono::milliseconds(250)) {
       last_watch=Clock::now(); std::error_code ec; const auto changed=fs::last_write_time(options.scene,ec);

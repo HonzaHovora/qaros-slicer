@@ -5,6 +5,9 @@ on:
     paths:
       - 'integrations/**'
       - 'tests/slicer_smoke.py'
+      - 'tests/process_fixture.cpp'
+      - 'tests/fixture_support.py'
+      - 'scripts/package_plugins.py'
       - '.github/workflows/slicer.yml'
 permissions:
   contents: read
@@ -28,5 +31,10 @@ jobs:
           fi
           echo 'ac76c5061a8fff20d4e59732855f74360930fd4891450085bcbc6a8eb1a1f4ade9a1ca4fc633142661b714dbe8c4604306079f9546e52053faa5e6f99410cf76  .cache/Slicer-5.12.4-linux-amd64.tar.gz' | sha512sum --check
           tar -xzf .cache/Slicer-5.12.4-linux-amd64.tar.gz --strip-components=1 -C build-slicer
-      - name: Verify model, segmentation, transforms and widget creation
-        run: xvfb-run -a env LIBGL_ALWAYS_SOFTWARE=1 build-slicer/Slicer --no-splash --no-main-window --ignore-slicerrc --python-script tests/slicer_smoke.py
+      - name: Package plugins and build process test fixture
+        run: |
+          python3 scripts/package_plugins.py
+          cmake -S . -B build-fixture -DQARVTK_BUILD_RENDERER=OFF
+          cmake --build build-fixture --parallel 2
+      - name: Discover packaged module and verify surface and process controls
+        run: xvfb-run -a env LIBGL_ALWAYS_SOFTWARE=1 QARVTK_TEST_BACKEND="$PWD/build-fixture/qarvtk-process-fixture" build-slicer/Slicer --no-splash --no-main-window --ignore-slicerrc --additional-module-paths "$PWD/package/QAROS-VTK-plugins/slicer" --python-script tests/slicer_smoke.py

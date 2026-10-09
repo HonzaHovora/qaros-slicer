@@ -9,7 +9,8 @@ $toolchain = Join-Path $VcpkgRoot "scripts/buildsystems/vcpkg.cmake"
 if (-not (Test-Path $toolchain)) { throw "VcpkgRoot must contain a bootstrapped vcpkg checkout" }
 $build = Join-Path $repo $BuildDirectory
 $cmakeArgs = @("-S", $repo, "-B", $build, "-G", "Visual Studio 17 2022", "-A", "x64",
-    "-DCMAKE_TOOLCHAIN_FILE=$toolchain", "-DVCPKG_TARGET_TRIPLET=x64-windows")
+    "-DCMAKE_TOOLCHAIN_FILE=$toolchain", "-DVCPKG_OVERLAY_TRIPLETS=$repo/cmake/triplets",
+    "-DVCPKG_TARGET_TRIPLET=x64-windows-release")
 if ($SdkRoot) {
     $sdk = (Resolve-Path $SdkRoot).Path
     $cmakeArgs += @("-DQARVTK_BUILD_SENDER=ON", "-DQAROS_SDK_ROOT=$sdk")

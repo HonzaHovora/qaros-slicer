@@ -40,5 +40,17 @@ jobs:
       - uses: actions/checkout@v4
       - name: Install ParaView
         run: sudo apt-get update && sudo apt-get install -y paraview python3-paraview xvfb
+      - name: Package plugins and build process test fixture
+        run: |
+          python3 scripts/package_plugins.py
+          cmake -S . -B build-fixture -DQARVTK_BUILD_RENDERER=OFF
+          cmake --build build-fixture --parallel 2
       - name: Export a real ParaView pipeline and verify world bounds
         run: xvfb-run -a env LIBGL_ALWAYS_SOFTWARE=1 pvpython tests/paraview_smoke.py
+      - name: Load packaged plugin and exercise process controls
+        run: xvfb-run -a env LIBGL_ALWAYS_SOFTWARE=1 QARVTK_TEST_BACKEND="$PWD/build-fixture/qarvtk-process-fixture" pvpython tests/paraview_plugin_smoke.py
+      - uses: actions/upload-artifact@v4
+        with:
+          name: QAROS-VTK-python-plugins
+          path: package/QAROS-VTK-plugins.zip
+          retention-days: 30
