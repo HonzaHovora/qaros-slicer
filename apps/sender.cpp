@@ -103,12 +103,17 @@ QarGraphicsDeviceId graphics_device() {
   if (!glfwExtensionSupported("GL_EXT_memory_object"))
     throw std::runtime_error("QAROS requires a shared-memory capable GPU; GL_EXT_memory_object is missing. Preview works without it.");
 #ifdef _WIN32
+  if (!glfwExtensionSupported("GL_EXT_memory_object_win32"))
+    throw std::runtime_error("OpenGL driver cannot expose a Windows adapter LUID");
   using GetBytes = void (APIENTRY*)(GLenum, GLubyte*);
   auto get=reinterpret_cast<GetBytes>(glfwGetProcAddress("glGetUnsignedBytevEXT"));
   if (!get) throw std::runtime_error("Cannot query OpenGL GPU LUID");
   id.id_type=QAR_GPU_DEVICE_ID_TYPE_LUID;
   get(0x9599 /* GL_DEVICE_LUID_EXT */, reinterpret_cast<GLubyte*>(&id.luid));
 #else
+  GLint devices=0;
+  glGetIntegerv(0x9596 /* GL_NUM_DEVICE_UUIDS_EXT */,&devices);
+  if (devices!=1) throw std::runtime_error("Exactly one OpenGL device UUID is required; multi-device contexts are unsupported");
   using GetBytes = void (APIENTRY*)(GLenum, GLuint, GLubyte*);
   auto get=reinterpret_cast<GetBytes>(glfwGetProcAddress("glGetUnsignedBytei_vEXT"));
   if (!get) throw std::runtime_error("Cannot query OpenGL GPU UUID");
@@ -228,6 +233,11 @@ struct Sdk {
       if (!input) throw std::runtime_error("Cannot read invite file");
       if (fs::file_size(o.invite)>1024*1024) throw std::runtime_error("Invite file exceeds 1 MiB");
       bytes.assign(std::istreambuf_iterator<char>(input),{});
+      QarSessionInvite* raw{};
+      checked(qar_session_invite_deserialize(bytes.data(),bytes.size(),&raw),"read legacy invite");
+      std::unique_ptr<QarSessionInvite,decltype(&qar_session_invite_handle_destroy)> invite(raw,qar_session_invite_handle_destroy);
+      auto runtime_join=qar_runtime_join_init_default(); runtime_join.header.next=&adapter.header;
+      checked(qar_runtime_join_session(runtime,&runtime_join,invite.get()),"attach runtime to invited session");
     } else {
       QarSessionInvite* raw{};
       auto init=qar_session_create_init_default(); init.header.next=&adapter.header;

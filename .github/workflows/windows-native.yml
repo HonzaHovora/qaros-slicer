@@ -8,6 +8,7 @@ on:
       - 'include/**'
       - 'CMakeLists.txt'
       - 'vcpkg.json'
+      - 'vcpkg-configuration.json'
       - '.github/workflows/windows-native.yml'
 permissions:
   contents: read
@@ -19,16 +20,10 @@ jobs:
       VCPKG_BINARY_SOURCES: 'clear;files,C:\vcpkg-cache,readwrite'
     steps:
       - uses: actions/checkout@v4
-      - name: Fetch the manifest baseline into the runner's vcpkg checkout
-        shell: pwsh
-        run: |
-          git -C "$env:VCPKG_INSTALLATION_ROOT" fetch --depth=1 origin 0699a19d0c6386247ce50d4dedbb8217d484d536
-          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
-          New-Item -ItemType Directory -Force C:/vcpkg-cache | Out-Null
       - uses: actions/cache@v4
         with:
           path: C:\vcpkg-cache
-          key: windows-vcpkg-${{ hashFiles('vcpkg.json') }}
+          key: windows-vcpkg-${{ hashFiles('vcpkg.json', 'vcpkg-configuration.json') }}
       - name: Fetch pinned public SDK header (compile only)
         shell: pwsh
         run: |
@@ -37,6 +32,7 @@ jobs:
       - name: Configure with vcpkg
         shell: pwsh
         run: |
+          New-Item -ItemType Directory -Force C:/vcpkg-cache | Out-Null
           cmake -S . -B build-windows -G "Visual Studio 17 2022" -A x64 "-DCMAKE_TOOLCHAIN_FILE=$env:VCPKG_INSTALLATION_ROOT/scripts/buildsystems/vcpkg.cmake" -DVCPKG_TARGET_TRIPLET=x64-windows -DQARVTK_BUILD_SENDER=ON "-DQAROS_SDK_ROOT=$env:GITHUB_WORKSPACE/sdk"
       - name: Compile renderer, preview and sender
         run: cmake --build build-windows --config Release --parallel 4

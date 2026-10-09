@@ -2,7 +2,8 @@
 from pathlib import Path
 import sys
 import tempfile
-from paraview import simple, vtk
+from paraview import simple
+from vtkmodules.vtkIOXML import vtkXMLPolyDataReader
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "integrations" / "paraview"))
 from qarvtk_paraview import export_active
@@ -16,7 +17,7 @@ simple.SetActiveSource(source)
 with tempfile.TemporaryDirectory() as directory:
     path = Path(directory) / "paraview.vtp"
     export_active(path)
-    reader = vtk.vtkXMLPolyDataReader()
+    reader = vtkXMLPolyDataReader()
     reader.SetFileName(str(path)); reader.Update()
     assert reader.GetOutput().GetBounds() == (10, 14, 20, 28, 30, 42), reader.GetOutput().GetBounds()
     assert simple.GetActiveSource().SMProxy == source.SMProxy

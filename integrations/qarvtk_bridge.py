@@ -9,7 +9,7 @@ def vtk_module():
     try:
         import vtk
     except ImportError:
-        from paraview import vtk
+        import vtkmodules.all as vtk
     return vtk
 
 

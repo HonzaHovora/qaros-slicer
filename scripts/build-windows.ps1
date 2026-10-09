@@ -7,13 +7,6 @@ $ErrorActionPreference = "Stop"
 $repo = Split-Path -Parent $PSScriptRoot
 $toolchain = Join-Path $VcpkgRoot "scripts/buildsystems/vcpkg.cmake"
 if (-not (Test-Path $toolchain)) { throw "VcpkgRoot must contain a bootstrapped vcpkg checkout" }
-$manifest = Get-Content (Join-Path $repo "vcpkg.json") -Raw | ConvertFrom-Json
-$baseline = $manifest.'builtin-baseline'
-& git -C $VcpkgRoot cat-file -e "$baseline`^{commit}" 2>$null
-if ($LASTEXITCODE -ne 0) {
-    & git -C $VcpkgRoot fetch origin $baseline
-    if ($LASTEXITCODE -ne 0) { throw "Cannot fetch the pinned vcpkg baseline" }
-}
 $build = Join-Path $repo $BuildDirectory
 $cmakeArgs = @("-S", $repo, "-B", $build, "-G", "Visual Studio 17 2022", "-A", "x64",
     "-DCMAKE_TOOLCHAIN_FILE=$toolchain", "-DVCPKG_TARGET_TRIPLET=x64-windows")
