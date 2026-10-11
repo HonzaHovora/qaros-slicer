@@ -20,7 +20,7 @@ def run():
     ready = output / (args.app + ".ready")
     ready.unlink(missing_ok=True)
     ready.with_suffix(".ready.failed").unlink(missing_ok=True)
-    env = dict(os.environ, QARVTK_SCREENSHOT_READY=str(ready),
+    env = dict(os.environ, QARVTK_SCREENSHOT_READY=str(ready), QARVTK_SOURCE_ROOT=str(root),
                LIBGL_ALWAYS_SOFTWARE="1")
     script = root / "scripts/screenshots" / (args.app + "_scene.py")
     command = [str(args.executable.resolve())]
@@ -44,6 +44,9 @@ def run():
                     raise RuntimeError(f"{args.app} exited with {process.returncode}")
                 if ready.with_suffix(".ready.failed").exists():
                     raise RuntimeError(f"{args.app} scene setup failed; see log")
+                if "Traceback (most recent call last):" in (
+                        output / (args.app + ".log")).read_text(errors="replace"):
+                    raise RuntimeError(f"{args.app} startup script failed; see log")
                 if time.monotonic() > deadline:
                     raise TimeoutError(f"{args.app} did not prepare its scene")
                 time.sleep(1)
@@ -53,13 +56,17 @@ def run():
             subprocess.run(["wmctrl", "-a", title], check=True)
             subprocess.run(["wmctrl", "-r", title, "-b",
                             "add,maximized_vert,maximized_horz"], check=True)
-            subprocess.run(["xdotool", "mousemove", "1710", "1070"], check=False)
+            subprocess.run(["xdotool", "mousemove", "800", "9"], check=False)
             time.sleep(4)
             subprocess.run(["wmctrl", "-l"], check=True)
             subprocess.run(["import", "-window", "root", str(output / filename)],
                            check=True)
             assert (output / filename).stat().st_size > 20000
             print(f"Captured real {args.app} GUI: {output / filename}", flush=True)
+        except Exception:
+            subprocess.run(["import", "-window", "root",
+                            str(output / (args.app + "-diagnostic.png"))], check=False)
+            raise
         finally:
             # Only terminate the process group created by this capture invocation.
             if process.poll() is None:

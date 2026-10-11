@@ -4,7 +4,8 @@ from pathlib import Path
 
 from paraview import simple
 
-root = Path(__file__).resolve().parents[2]
+# ParaView's GUI executes --script as a string without defining __file__.
+root = Path(os.environ["QARVTK_SOURCE_ROOT"])
 simple.LoadPlugin(str(root / "package/QAROS-VTK-plugins/paraview/QarosVTKPlugin.py"),
                   remote=False, ns=globals())
 
