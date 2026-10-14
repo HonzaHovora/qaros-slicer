@@ -15,6 +15,13 @@ Both use `QAR_ENABLE_OPENGL`, dynamic loading, an adopted shared WGL/GLX context
 `qar_render_sender_try_begin_frame`, `qar_render_sender_frame_opengl`, per-view
 pose/FOV, `qar_render_sender_show_frame`, and frame info destruction.
 
+The OpenGL context extension is detected separately from the session API.
+The supplied `022c40b6` header uses `QarStreamParamsOpenGl`, with an explicit
+WGL/GLX discriminator and native context fields. Newer headers split these into
+`QarStreamParamsOpenGlWgl` and `QarStreamParamsOpenGlGlx`. CMake selects the
+matching structs and default initializers; there are no casts between their
+different ABI layouts. Both variants retain the separate SDK-owned shared context.
+
 The selected adapter is read from OpenGL `GL_EXT_memory_object` (LUID on Windows,
 UUID on Linux) and chained into session creation/join or onboarding/rejoin.
 The inspected SDK documents NVIDIA-only support. Mesa is used only for the

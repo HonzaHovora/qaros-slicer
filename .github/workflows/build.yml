@@ -23,6 +23,12 @@ jobs:
         run: xvfb-run -a env LIBGL_ALWAYS_SOFTWARE=1 ./build/qarvtk-preview --hidden --frames 5
       - name: SDK compile fingerprint
         run: ./build/qarvtk-sender --sdk-info
+      - name: Compile the supplied session SDK branch (no runtime)
+        run: |
+          echo '022c40b670f87a066664c37daeb06da525db37fffdf5810e72cff8a5b81e677d  ci/sdk-headers/session-022c40b6/include/qar_streaming.h' | sha256sum --check
+          cmake -S . -B build -DQAROS_SDK_ROOT="$PWD/ci/sdk-headers/session-022c40b6"
+          cmake --build build --target qarvtk-sender -j 2
+          ./build/qarvtk-sender --sdk-info
       - name: Surface interchange tests
         run: |
           /usr/bin/python3 tests/test_bridge.py

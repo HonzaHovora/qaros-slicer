@@ -136,19 +136,39 @@ QarGraphicsDeviceId graphics_device() {
 struct NativeContext {
 #ifdef _WIN32
   HWND window{}; HDC dc{};
+#if QARVTK_SPLIT_OPENGL_PARAMS
   QarStreamParamsOpenGlWgl params=qar_stream_params_opengl_wgl_default();
+#else
+  QarStreamParamsOpenGl params=qar_stream_params_opengl_default();
+#endif
   explicit NativeContext(qarvtk::Renderer& renderer) {
     window=glfwGetWin32Window(renderer.sdk_window()); dc=GetDC(window);
-    params.device_context=dc; params.context=glfwGetWGLContext(renderer.sdk_window());
+#if QARVTK_SPLIT_OPENGL_PARAMS
+    params.device_context=dc;
+#else
+    params.context_type=QAR_OPENGL_CONTEXT_TYPE_WGL;
+    params.display_or_device_context=dc;
+#endif
+    params.context=glfwGetWGLContext(renderer.sdk_window());
     if (!dc || !params.context) throw std::runtime_error("WGL shared context unavailable");
   }
   ~NativeContext() { if (dc) ReleaseDC(window,dc); }
 #else
+#if QARVTK_SPLIT_OPENGL_PARAMS
   QarStreamParamsOpenGlGlx params=qar_stream_params_opengl_glx_default();
+#else
+  QarStreamParamsOpenGl params=qar_stream_params_opengl_default();
+#endif
   explicit NativeContext(qarvtk::Renderer& renderer) {
-    params.display=glfwGetX11Display(); params.drawable=glfwGetGLXWindow(renderer.sdk_window());
+    auto display=glfwGetX11Display(); auto drawable=glfwGetGLXWindow(renderer.sdk_window());
+#if QARVTK_SPLIT_OPENGL_PARAMS
+    params.display=display; params.drawable=drawable;
+#else
+    params.context_type=QAR_OPENGL_CONTEXT_TYPE_GLX;
+    params.display_or_device_context=display; params.draw_surface=drawable;
+#endif
     params.context=glfwGetGLXContext(renderer.sdk_window());
-    if (!params.display || !params.drawable || !params.context)
+    if (!display || !drawable || !params.context)
       throw std::runtime_error("GLX shared context unavailable; run in an X11 session");
   }
 #endif
