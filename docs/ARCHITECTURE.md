@@ -1,6 +1,72 @@
 # Architecture
 
-## Data and frame paths
+## Host rendering first (decision, 2026-10-14)
+
+The next integration must use the host application's actual rendering pipeline.
+Slicer/ParaView remain responsible for their live scene, mappers, lights,
+materials, volume transfer functions, clipping, shaders and plugin render passes.
+QAROS supplies viewer pose/FOV and transports the resulting color and depth.
+Recreating host features in a separate renderer repeats the compatibility and
+maintenance problem identified with the ANARI integration.
+
+**Status:** r9 is a standalone rendering and transport prototype. It reconstructs
+an exported subset of the scene; the host-rendered path is not implemented yet.
+The following is the target, not a capability of the published Windows ZIP.
+
+### First milestone: Slicer's live 3D view to Visualizer
+
+1. Use the existing host view and its rendering pipeline for each requested eye.
+   Copying its actors into another `vtkRenderer` is not sufficient: host display
+   managers and custom passes must remain involved. Treat the host as the source
+   of scene state instead of extending the VTP/VTM exporter.
+2. Separate the reusable SDK transport/GPU copy from `qarvtk::Renderer` and GLFW
+   ownership in `apps/sender.cpp`. Establish GPU access to the host-rendered
+   output. The first candidate is an in-process bridge with an SDK worker context
+   sharing resources with the host context. A GL texture name alone is not a
+   cross-process sharing mechanism. Verify context/thread ownership before
+   selecting the final bridge implementation.
+3. Render on the host's render/GUI thread without reentrant rendering. Apply each
+   QAROS eye pose, asymmetric projection and clipping in host coordinates; restore
+   desktop camera and render state on success, stop and error. Unit conversion
+   and XR placement belong at the view boundary, not in rewritten scene data.
+   The SDK worker must not take over the host's GUI context.
+4. Transfer host color and validated depth to SDK textures on the GPU. Reuse
+   layout/origin checks and synchronization from the transport prototype where
+   applicable. Do not introduce per-frame screenshots or CPU pixel readback into
+   the production path.
+5. Validate volume depth explicitly. A normal scene depth attachment must not be
+   assumed to describe visible tissue in a ray-cast volume. Determine how to
+   obtain a usable depth from the host's active volume pipeline while preserving
+   its color output. One depth value cannot describe every transparent layer;
+   document the policy and verify it with surfaces, cropping and empty rays.
+
+Do not load r9's independently built VTK/Qt libraries into Slicer or ParaView.
+Any C++ extension using their VTK/Qt types must target the matching host build.
+A transport-only bridge may instead expose a narrow native interface without
+linking another VTK; its shared-context integration still needs validation.
+
+### Acceptance before UI work
+
+- On the target Windows Slicer installation, stream a live CT/MR volume and an
+  opaque model/segment to Visualizer from the host's render path. Verify stereo
+  pose/FOV, depth orientation, scale and surface/volume occlusion.
+- Change transfer functions, visibility, lighting and ROI cropping in Slicer.
+  The streamed view must follow the live host rendering without scene export or
+  new per-feature serialization. Include a host-only custom render effect in
+  the comparison so that a reconstructed scene cannot pass as host rendering.
+- Compare the host and streamed source at the same camera, FOV and resolution.
+  Preserve the desktop view and normal interaction after frames, stop and
+  failure. Check resource cleanup when the host view closes. Test-only readback
+  may be used as an oracle; it is not a production capture path or an FPS test.
+- Verify the real Windows SDK/GPU path. A synthetic renderer test or a passed
+  Linux host smoke test does not complete this milestone.
+
+Once this works, adapt the same transport to ParaView's own view/render lifecycle.
+Then address original host panels with input forwarding and an optional public
+UI extension interface. Do not build or maintain a replica UI for each plugin.
+FPS investigation remains a separate deferred task.
+
+## Current r9 data and frame paths
 
 Host path: a Slicer scripted module or a ParaView Python pipeline plugin controls
 one child sender through `integrations/qarvtk_runtime.py`. The plugins and backend
@@ -72,15 +138,18 @@ is cleared even when a volume is outside the view.
 One depth sample approximates a translucent volume; it cannot encode every
 contributing tissue layer. One scalar volume with opaque surfaces is supported;
 translucent surface/volume combinations are rejected by the exporter. ROI/MIP,
-multiple volumes, tone mapping and color-space calibration remain future work.
+multiple volumes, tone mapping and color-space calibration are not supported
+by r9. The next integration must assess these through the host-rendered path.
 
 ## Plugin boundary and process protocol
 
 ParaView and Slicer package different VTK/Qt versions. Loading an independently
 built VTK library into either process risks ABI and graphics-context conflicts.
-Python host plugins control the existing renderer without loading the SDK or
-another VTK into the host. The C++ `Renderer::set_polydata` entry point is available
-for a later native adapter but is not ABI-safe across unrelated VTK builds.
+The current Python host plugins export a scene and control the child sender;
+they do not stream the host renderer's output. They load neither the SDK nor
+another VTK into the host. The C++ `Renderer::set_polydata` entry point feeds the
+standalone renderer and is not a host-rendering integration. It is also not
+ABI-safe across unrelated VTK builds.
 
 Protocol 2 adds scene/volume snapshots; protocol 1 remains readable for the
 legacy ParaView/VTP route. The process contract consists of:
@@ -121,18 +190,17 @@ is a portable manual-install bundle, not an Extensions Manager package.
 
 ## Next integration stages
 
-1. Validate end-to-end WGL → QAROS → viewer with known cube dimensions/depth.
-2. Repeat the Linux-validated ParaView/Slicer host smoke scripts on the target
-   Windows installations and verify the resulting stream in the viewer.
-3. Extend scenes with ROI clipping, translucent surface/volume composition,
-   multiple volumes and bounded acknowledged snapshot retention.
-4. Build a native ParaView view plugin against a pinned ParaView version, using
-   render requests and host pipeline updates instead of VTP snapshots.
-5. Extend the Slicer plugin with debounced MRML change observation, medical
-   volume/segmentation visibility and calibrated world transforms; publish a
-   validated extension package.
-6. Add per-viewer senders/cameras, picking/gestures, then benchmark and replace
-   conservative synchronization where the SDK contract permits it.
+1. Complete the host-rendered Slicer milestone and acceptance checks above.
+2. Integrate ParaView's actual renderer using a matching host adapter and the
+   shared transport boundary. Verify live pipeline updates and render effects.
+3. Integrate original host panels/input and an optional extension interface.
+4. Add per-viewer cameras and picking/gestures; profile synchronization with the
+   real encoder before replacing conservative waits.
+
+Further per-feature scene-export reconstruction is no longer the integration
+roadmap. R9's snapshot format and standalone renderer remain useful as a
+transport/debugging baseline; their documented limitations describe the current
+implementation, not the desired host-rendering feature boundary.
 
 OpenGL is the shortest path for the existing VTK OpenGL2 backend. QAROS's existing
 Vulkan support can be used by another renderer later; this repo does not add a

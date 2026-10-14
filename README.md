@@ -4,6 +4,12 @@ Pluginy pro **ParaView a 3D Slicer** se společným VTK/OpenGL backendem pro QAR
 Instalují se do běžných hostitelských aplikací; backend renderuje v samostatném
 procesu. QAROS už OpenGL podporuje; Vulkan není součástí této implementace.
 
+**Priorita dalšího vývoje (14. 10. 2026): přímý výstup rendereru hostitelské
+aplikace.** R9 znovu sestavuje exportovanou scénu ve vlastním rendereru a není
+přenosem vizualizace 1:1. Další milník musí použít skutečný renderer Sliceru,
+potom ParaView, včetně jejich objemového vykreslování a efektů. Přenos ovládacích
+panelů navazuje až na ověřený obraz a hloubku. [Rozhodnutí a podmínky ověření](docs/ARCHITECTURE.md#host-rendering-first-decision-2026-10-14).
+
 **První test přes GitHub Desktop:** po Fetch/Pull spusť `START-PREVIEW.cmd`
 v kořeni checkoutu. Hotový Windows ZIP se stáhne spolu s repozitářem; skript ho
 ověří, rozbalí a otevře zelenou kostku. [Postup pro D:\QAROS_VTK](docs/WINDOWS_DESKTOP.md).
