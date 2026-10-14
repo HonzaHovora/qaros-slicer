@@ -38,6 +38,7 @@
 #include <vector>
 #if !QARVTK_MODERN_SDK
 #include "legacy_peer_observer.hpp"
+#include "legacy_frame_wait.hpp"
 #endif
 #if defined(_WIN32) && !QARVTK_SPLIT_OPENGL_PARAMS
 #include "wgl_callbacks.hpp"
@@ -484,6 +485,17 @@ int main(int argc,char** argv) { try {
   std::cout << "OpenGL sender created; waiting for the viewer's first frame request...\n";
   const qarvtk::Clip clip{.05,20};
   auto last_frame=Clock::now(),last_watch=last_frame;
+#if !QARVTK_MODERN_SDK
+  // Match the working BANC bridge: creation precedes primary-transfer readiness.
+  // Keep this wait interruptible and inside the existing first-frame timeout.
+  std::cout << "Allowing 1.2 seconds for the primary transfer to settle...\n";
+  const auto settle_until=last_frame+std::chrono::milliseconds(1200);
+  while (!stop_requested && !shutdown.requested() && !renderer.closing() &&
+         Clock::now()<settle_until && Clock::now()-last_frame<std::chrono::seconds(options.timeout)) {
+    renderer.poll(); std::this_thread::sleep_for(std::chrono::milliseconds(20));
+  }
+  bool pause_reported=false;
+#endif
   auto scene_time=options.scene.empty()?fs::file_time_type{}:fs::last_write_time(options.scene);
   int sent=0;
   while (!stop_requested && !shutdown.requested() && !renderer.closing() && (!options.frames || sent<options.frames)) {
@@ -499,10 +511,26 @@ int main(int argc,char** argv) { try {
     QarRenderFrameInfo* raw{}; bool ready=false;
     const auto result=qar_render_sender_try_begin_frame(sdk.sender,&raw,&ready);
     std::unique_ptr<QarRenderFrameInfo,decltype(&qar_render_frame_info_handle_destroy)> info(raw,qar_render_frame_info_handle_destroy);
+#if !QARVTK_MODERN_SDK
+    if (qarvtk::legacy_begin_frame_paused(result)) {
+      if (!pause_reported) {
+        std::cout << "Primary transfer is paused; retrying every 100 ms (frame timeout "
+                  << options.timeout << " seconds remains active)...\n";
+        pause_reported=true;
+      }
+      std::this_thread::sleep_for(std::chrono::milliseconds(100)); continue;
+    }
+#endif
     if (transient(result) || (qar_result_is_success(result) && !ready)) {
       std::this_thread::sleep_for(std::chrono::milliseconds(2)); continue;
     }
     checked(result,"begin frame"); if (!info) throw std::runtime_error("Ready frame has no view metadata");
+#if !QARVTK_MODERN_SDK
+    if (pause_reported) {
+      std::cout << "Primary transfer resumed; received a frame request.\n";
+      pause_reported=false;
+    }
+#endif
     auto access=qar_video_frame_opengl_default(); checked(qar_render_sender_frame_opengl(sdk.sender,&access),"get OpenGL frame");
     const auto frame=frame_layout(access); const auto views=qarvtk::validate_stereo(frame);
     for (const auto& eye:views) {

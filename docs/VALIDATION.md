@@ -1,5 +1,29 @@
 # Validation and next work
 
+## Primary-transfer startup pause: 2026-10-14, r4
+
+The r3 diagnostics confirm the WGL fix on the user's RTX 2070 Max-Q: the worker
+probe passed, the SDK invoked bind/resolve/capture/restore callbacks, OpenGL
+sender creation completed, and the SDK reported the transfer connected. The
+first begin-frame then returned 803 wrapping internal status 602,
+`MediaStreamingStreamIsPaused`. Our sender treated it as fatal, destroyed the
+session and submitted no frames.
+
+The r4 legacy sender follows the working BANC bridge: allow an interruptible
+1.2-second negotiation interval, then retry a paused primary transfer with a
+100 ms backoff. The original no-frame timeout and Stop handling still apply.
+The supplied C header omits status 602 and provides no cause traversal API, so
+the compatibility helper requires top-level 803, a diagnostic handle, and the
+exact nested `Code: 602 Desc: MediaStreamingStreamIsPaused` diagnostic. Other
+begin-frame failures still terminate with their original error. The unmodified
+SDK header and r3 WGL callbacks are retained.
+
+The `legacy-frame-wait` regression uses the captured diagnostic through the C
+API's result-message function pointer. It also checks success, closed streams,
+missing diagnostics and unrelated 803 causes. This tests our retry decision,
+not a live runtime. Actual first-frame submission/display still needs the user's
+Windows/NVIDIA test.
+
 ## WGL context callbacks: 2026-10-14, r3
 
 The r2 diagnostics from the user's Windows PC confirmed that the exact invited
