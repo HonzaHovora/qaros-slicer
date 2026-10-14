@@ -8,10 +8,10 @@ from slicer.ScriptedLoadableModule import ScriptedLoadableModule, ScriptedLoadab
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 if (Path(__file__).resolve().parent / "QarosVTKLib").is_dir():
-    from QarosVTKLib.qarvtk_slicer import export_node
+    from QarosVTKLib.qarvtk_slicer import export_node, export_selection
     from QarosVTKLib.qarvtk_runtime import Backend, user_directory
 else:  # Source checkout, before packaging.
-    from qarvtk_slicer import export_node
+    from qarvtk_slicer import export_node, export_selection
     from qarvtk_runtime import Backend, user_directory
 
 
@@ -21,7 +21,7 @@ class QarosVTK(ScriptedLoadableModule):
         parent.title = "QAROS Streaming"
         parent.categories = ["QAROS"]
         parent.contributors = ["QuaternAR"]
-        parent.helpText = ("Stream one model or one segment through the QAROS VTK backend. "
+        parent.helpText = ("Stream lit models, segments and one CT/MR volume through the QAROS VTK backend. "
                            "World RAS millimetres are converted to QAROS metres. "
                            "See docs/INSTALLATION.md in QAROS_VTK.")
         parent.acknowledgementText = "QAROS VTK integration prototype."
@@ -31,17 +31,24 @@ class QarosVTKWidget(ScriptedLoadableModuleWidget):
     def setup(self):
         super().setup()
         self._cleaned_up = False
-        self.backend = Backend(slicer.util.startupEnvironment())
+        self.backend = Backend(slicer.util.startupEnvironment(), scene_suffix=".vtm")
         self.settings = qt.QSettings()
         form = qt.QFormLayout()
         self.layout.addLayout(form)
+        self.scope = qt.QComboBox()
+        self.scope.addItems(["Selected object", "Visible 3D scene (first view)"])
+        form.addRow("Stream", self.scope)
+        self.fit = qt.QCheckBox("Center and fit into 65 cm workspace")
+        self.fit.checked = True
+        self.fit.toolTip = "Turn off to preserve world RAS position and physical size."
+        form.addRow(self.fit)
         self.node = slicer.qMRMLNodeComboBox()
-        self.node.nodeTypes = ["vtkMRMLModelNode", "vtkMRMLSegmentationNode"]
+        self.node.nodeTypes = ["vtkMRMLModelNode", "vtkMRMLSegmentationNode", "vtkMRMLScalarVolumeNode"]
         self.node.addEnabled = False
         self.node.removeEnabled = False
         self.node.noneEnabled = True
         self.node.setMRMLScene(slicer.mrmlScene)
-        form.addRow("Model or segmentation", self.node)
+        form.addRow("Model, segmentation or CT/MR", self.node)
         self.segment = qt.QComboBox()
         form.addRow("Segment", self.segment)
         self.exe = self.path_field(form, "Sender executable", "Executable", False)
@@ -61,12 +68,15 @@ class QarosVTKWidget(ScriptedLoadableModuleWidget):
         form.addRow("Legacy viewer", self.target)
         self.startButton = qt.QPushButton("Start streaming")
         self.stopButton = qt.QPushButton("Stop streaming")
-        self.updateButton = qt.QPushButton("Update surface")
+        self.updateButton = qt.QPushButton("Update scene")
         form.addRow(self.startButton, self.stopButton)
         form.addRow(self.updateButton)
-        self.autoUpdate = qt.QCheckBox("Update surface every second while sender runs")
+        self.autoUpdate = qt.QCheckBox("Update surfaces automatically (one second interval)")
         self.autoUpdate.checked = False
         form.addRow(self.autoUpdate)
+        self.sceneInfo = qt.QLabel("CT/MR: enable Volume Rendering, choose a preset, then Start. Use Update scene after changes. One volume; Composite mode; cropping off.")
+        self.sceneInfo.wordWrap = True
+        form.addRow(self.sceneInfo)
         self.path = ctk.ctkPathLineEdit()
         self.path.filters = ctk.ctkPathLineEdit.Files
         self.path.nameFilters = ["VTK surface (*.vtp)"]
@@ -74,7 +84,7 @@ class QarosVTKWidget(ScriptedLoadableModuleWidget):
         form.addRow("Optional export file", self.path)
         self.button = qt.QPushButton("Export surface to file")
         form.addRow(self.button)
-        self.status = qt.QLabel("Choose a surface and configure the sender and SDK paths.")
+        self.status = qt.QLabel("Choose an object or visible scene, then configure the sender and SDK paths.")
         self.status.wordWrap = True
         form.addRow(self.status)
         self.log = qt.QPlainTextEdit()
@@ -82,6 +92,7 @@ class QarosVTKWidget(ScriptedLoadableModuleWidget):
         self.log.maximumHeight = 150
         form.addRow("Sender log", self.log)
         self.node.connect("currentNodeChanged(vtkMRMLNode*)", self.update_segments)
+        self.scope.connect("currentIndexChanged(int)", self.update_scope)
         self.button.connect("clicked()", self.export)
         self.startButton.connect("clicked()", self.start_stream)
         self.stopButton.connect("clicked()", self.backend.request_stop)
@@ -113,9 +124,24 @@ class QarosVTKWidget(ScriptedLoadableModuleWidget):
                 sid = segmentation.GetNthSegmentID(index)
                 self.segment.addItem(segmentation.GetSegment(sid).GetName(), sid)
 
+    def update_scope(self, index):
+        self.node.enabled = index == 0
+        self.update_segments(self.node.currentNode())
+        if index != 0:
+            self.segment.enabled = False
+
     def write_surface(self, path):
         sid = self.segment.itemData(self.segment.currentIndex) if self.segment.enabled else None
-        return export_node(self.node.currentNode(), path, sid)
+        if Path(path).suffix.lower() == ".vtp":
+            return export_node(self.node.currentNode(), path, sid)
+        result, volumes, objects = export_selection(self.node.currentNode(), path, sid,
+            visible_scene=self.scope.currentIndex == 1, fit=self.fit.checked)
+        if volumes:
+            self.autoUpdate.checked = False
+        self.autoUpdate.enabled = not bool(volumes)
+        self.sceneInfo.text = "{} objects, {} CT/MR volume. {}".format(objects, volumes,
+            "Use Update scene after changing the volume preset or data." if volumes else "Lighting and model colors enabled.")
+        return result
 
     def export(self):
         try:
@@ -126,7 +152,7 @@ class QarosVTKWidget(ScriptedLoadableModuleWidget):
     def publish_surface(self):
         try:
             self.write_surface(self.backend.scene)
-            self.status.text = "Surface updated. " + self.backend.status()
+            self.status.text = "Scene updated. " + self.backend.status()
         except Exception as error:
             self.autoUpdate.checked = False
             self.status.text = str(error)

@@ -70,7 +70,7 @@ int main(){try{
       double xsum=0,ysum=0;unsigned count=0;
       for(unsigned y=0;y<height;++y)for(unsigned x=0;x<width;++x){const auto i=y*width+x;
         check(std::isfinite(depth[i])&&depth[i]>=0&&depth[i]<=1,"invalid depth range");
-        if(rgba[i*4+3]>128){check(rgba[i*4+1]>100,"cube color missing");xsum+=x+.5;ysum+=y+.5;++count;
+        if(rgba[i*4+3]>128){check(rgba[i*4+1]>30 && rgba[i*4+1]>rgba[i*4],"cube color missing");xsum+=x+.5;ysum+=y+.5;++count;
           check(std::abs(depth[i]-depth_from_distance(1.8,clip))<.005,"front depth differs from analytic projection");}
       }
       check(count>100,"no visible cube pixels");centroids[eye]=xsum/count;

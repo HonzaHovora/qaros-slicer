@@ -45,7 +45,7 @@ def package(native_archive, plugins_archive, output):
     modern_api = config.get('modern_api', 1)
     if modern_api not in (0, 1):
         raise ValueError('Unknown SDK connection API')
-    if sdk.get('modern_api') != modern_api or sdk.get('plugin_protocol') != 1:
+    if sdk.get('modern_api') != modern_api or sdk.get('plugin_protocol') != 2:
         raise ValueError('Sender API mode or plugin protocol differs from the selected release')
 
     with verified_zip(plugins_archive, config['plugins']['sha256']) as outer:

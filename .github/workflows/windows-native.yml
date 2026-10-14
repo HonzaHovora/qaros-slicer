@@ -67,7 +67,7 @@ jobs:
           $metadata = ./build-windows/Release/qarvtk-sender.exe --sdk-info
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           $info = $metadata | ConvertFrom-Json
-          if ($info.header_sha256 -ne '022c40b670f87a066664c37daeb06da525db37fffdf5810e72cff8a5b81e677d' -or $info.modern_api -ne 0 -or $info.plugin_protocol -ne 1) { throw 'Incorrect session sender fingerprint or API mode' }
+          if ($info.header_sha256 -ne '022c40b670f87a066664c37daeb06da525db37fffdf5810e72cff8a5b81e677d' -or $info.modern_api -ne 0 -or $info.plugin_protocol -ne 2) { throw 'Incorrect session sender fingerprint or API mode' }
           Write-Output $metadata
       - uses: actions/upload-artifact@v4
         with:

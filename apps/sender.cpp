@@ -128,7 +128,7 @@ struct Options {
   double scale{1}; int frames{0}, timeout{60}; bool ras{}, preview{}, watch{};
 };
 void usage() {
-  std::cout << "qarvtk-sender --sdk ROOT [--scene model.vtp] [--meters-per-unit 1] [--ras]\n"
+  std::cout << "qarvtk-sender --sdk ROOT [--scene model.vtp|scene.vtm] [--meters-per-unit 1] [--ras]\n"
       "  [--preview] [--watch] [--frames N] [--timeout 60]\n"
       "  [--stop-file PATH] [--parent-pid PID] (plugin lifecycle)\n"
 #if QARVTK_MODERN_SDK
@@ -503,7 +503,7 @@ int main(int argc,char** argv) { try {
   for (int i=1;i<argc;++i) {
     if (std::string(argv[i])=="--help") { usage(); return 0; }
     if (std::string(argv[i])=="--sdk-info") {
-      std::cout << "{\"header_sha256\":\"" << QARVTK_SDK_SHA256 << "\",\"modern_api\":" << QARVTK_MODERN_SDK << ",\"plugin_protocol\":1}\n"; return 0;
+      std::cout << "{\"header_sha256\":\"" << QARVTK_SDK_SHA256 << "\",\"modern_api\":" << QARVTK_MODERN_SDK << ",\"plugin_protocol\":2}\n"; return 0;
     }
   }
   const auto options=parse(argc,argv);
@@ -512,7 +512,7 @@ int main(int argc,char** argv) { try {
   if (shutdown.requested()) return 0;
   std::signal(SIGINT,on_signal); std::signal(SIGTERM,on_signal);
   qarvtk::Renderer renderer(options.preview); std::cout<<renderer.capabilities()<<'\n';
-  if (!options.scene.empty()) renderer.load_vtp(options.scene.string(),options.scale,options.ras);
+  if (!options.scene.empty()) renderer.load_scene(options.scene.string(),options.scale,options.ras);
   auto adapter=graphics_device();
   qarvtk::GlCopy copy;
   NativeContext native(renderer); // Outlives SDK; shared context belongs to worker threads.
@@ -573,7 +573,7 @@ int main(int argc,char** argv) { try {
     if (options.watch && Clock::now()-last_watch>std::chrono::milliseconds(250)) {
       last_watch=Clock::now(); std::error_code ec; const auto changed=fs::last_write_time(options.scene,ec);
       if (!ec && changed!=scene_time) {
-        try { renderer.load_vtp(options.scene.string(),options.scale,options.ras); scene_time=changed; ++performance.scene_reloads; std::cout<<"Scene reloaded\n"; }
+        try { renderer.load_scene(options.scene.string(),options.scale,options.ras); scene_time=changed; ++performance.scene_reloads; std::cout<<"Scene reloaded\n"; }
         catch (const std::exception& e) { std::cerr<<"Keeping previous scene: "<<e.what()<<'\n'; }
       }
     }

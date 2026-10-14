@@ -11,7 +11,7 @@ int main(int argc,char** argv) {
   for(int i=1;i<argc;++i) {
     const std::string arg=argv[i];
     if(arg=="--sdk-info") {
-      std::cout << "{\"header_sha256\":\"f756a760e5658cbc187a5572c246521344a909c60bb58dff621fe307f3b2ea69\",\"modern_api\":1,\"plugin_protocol\":1}\n";
+      std::cout << "{\"header_sha256\":\"f756a760e5658cbc187a5572c246521344a909c60bb58dff621fe307f3b2ea69\",\"modern_api\":1,\"plugin_protocol\":2}\n";
       return 0;
     }
     if(arg=="--stop-file" && i+1<argc) stop_file=argv[++i];

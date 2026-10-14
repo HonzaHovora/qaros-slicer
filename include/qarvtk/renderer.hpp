@@ -16,6 +16,7 @@ public:
   Renderer& operator=(const Renderer&)=delete;
   void set_polydata(vtkPolyData* data, double meters_per_unit=1.0, bool ras=false);
   void load_vtp(const std::string& path, double meters_per_unit=1.0, bool ras=false);
+  void load_scene(const std::string& path, double meters_per_unit=1.0, bool ras=false);
   RenderedEye render(Pose pose,Fov fov,Clip clip,unsigned width,unsigned height);
   void present();
   void poll();

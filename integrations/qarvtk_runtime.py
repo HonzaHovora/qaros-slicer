@@ -5,6 +5,7 @@ import json
 import math
 import os
 from pathlib import Path
+import shutil
 import subprocess
 import tempfile
 import time
@@ -40,7 +41,7 @@ def verify_sdk(executable, sdk, environment=None):
         env=backend_environment(environment), **_process_options()))
     if hashlib.sha256(header.read_bytes()).hexdigest() != info.get("header_sha256"):
         raise ValueError("SDK does not match this sender. Rebuild the sender with this complete SDK package.")
-    if info.get("plugin_protocol") != 1:
+    if info.get("plugin_protocol") not in (1, 2):
         raise ValueError("Sender is too old for these plugins. Rebuild it from the same repository revision.")
     library = "qar-streaming-c.dll" if os.name == "nt" else "libqar-streaming-c.so"
     if not (sdk / "bin" / library).is_file():
@@ -69,9 +70,11 @@ class Backend:
     'running' means the process exists, not that a viewer is connected.
     Pairing codes travel over stdin and are never persisted by this module.
     """
-    def __init__(self, environment=None):
+    def __init__(self, environment=None, scene_suffix=".vtp"):
+        if scene_suffix not in (".vtp", ".vtm"):
+            raise ValueError("Unsupported scene format")
         self.directory = Path(tempfile.mkdtemp(prefix="qarvtk-"))
-        self.scene = self.directory / "scene.vtp"
+        self.scene = self.directory / ("scene" + scene_suffix)
         self.log_path = self.directory / "sender.log"
         self.stop_path = self.directory / "stop"
         self.environment = backend_environment(environment)
@@ -90,10 +93,12 @@ class Backend:
         if self.running:
             raise RuntimeError("This plugin already has a running sender")
         if not self.scene.is_file():
-            raise ValueError("Publish a surface before starting the sender")
+            raise ValueError("Publish a scene before starting the sender")
         if not math.isfinite(scale) or scale <= 0:
             raise ValueError("Metres per unit must be positive and finite")
         info = verify_sdk(executable, sdk, self.environment)
+        if self.scene.suffix == ".vtm" and info.get("plugin_protocol", 0) < 2:
+            raise ValueError("Scene/volume streaming requires the r9 sender or newer. Update the complete starter package.")
         if self._log:
             self._log.close()
         if self.stop_path.exists():
@@ -188,3 +193,6 @@ class Backend:
                 path.unlink()
             except FileNotFoundError:
                 pass
+        for generation in self.directory.glob("scene-data-*"):
+            if generation.is_dir():
+                shutil.rmtree(generation)

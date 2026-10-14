@@ -84,7 +84,7 @@ int main(){try{
           const auto ci=address(cv,x,y)*4,di=address(dv,x,y);
           const bool drawn=rgba[ci+3]>128,expected=distance>0;
           if(drawn!=expected){++wrongMask;continue;}
-          if(expected){++visible;check(rgba[ci+1]>100,"cube color missing");
+          if(expected){++visible;check(rgba[ci+1]>30 && rgba[ci+1]>rgba[ci],"cube color missing");
             check(std::abs(depth[di]-depth_from_distance(distance,clip))<.00005,
                   "depth does not reconstruct the stationary cube at this pose");}
           else check(depth[di]>.9999,"background color/depth orientation differs");

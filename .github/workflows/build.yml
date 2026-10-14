@@ -32,6 +32,7 @@ jobs:
       - name: Surface interchange tests
         run: |
           /usr/bin/python3 tests/test_bridge.py
+          /usr/bin/python3 tests/test_scene.py
           /usr/bin/python3 -m compileall -q integrations scripts
   windows-core:
     runs-on: windows-latest

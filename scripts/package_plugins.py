@@ -14,6 +14,7 @@ def package(output):
     files = {
         "slicer/QarosVTK.py": "integrations/slicer/QarosVTK.py",
         "slicer/QarosVTKLib/qarvtk_slicer.py": "integrations/slicer/qarvtk_slicer.py",
+        "slicer/QarosVTKLib/qarvtk_scene.py": "integrations/qarvtk_scene.py",
         "slicer/QarosVTKLib/qarvtk_bridge.py": "integrations/qarvtk_bridge.py",
         "slicer/QarosVTKLib/qarvtk_runtime.py": "integrations/qarvtk_runtime.py",
         "paraview/QarosVTKPlugin.py": "integrations/paraview/QarosVTKPlugin.py",
@@ -30,7 +31,7 @@ def package(output):
     (bundle / init).write_text('"""Private support package, not a Slicer module."""\n')
     # Remove only known obsolete generated files, so Slicer will not discover them
     # as separate modules after an upgrade from the first packaging layout.
-    for name in ("qarvtk_slicer.py", "qarvtk_bridge.py", "qarvtk_runtime.py"):
+    for name in ("qarvtk_slicer.py", "qarvtk_bridge.py", "qarvtk_scene.py", "qarvtk_runtime.py"):
         old = bundle / "slicer" / name
         if old.exists():
             old.unlink()

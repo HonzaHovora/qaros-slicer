@@ -15,7 +15,7 @@ class RuntimeTest(unittest.TestCase):
     def test_lifecycle_and_isolation(self):
         with tempfile.TemporaryDirectory() as directory:
             sdk = make_sdk(directory)
-            first, second = Backend(), Backend()
+            first, second = Backend(scene_suffix=".vtm"), Backend()
             try:
                 for index, backend in enumerate((first, second)):
                     backend.scene.write_text("fixture surface")
@@ -24,7 +24,10 @@ class RuntimeTest(unittest.TestCase):
                     wait_ready(backend)
                     self.assertEqual(identity.read_text(), "fixture-id\n")
                     self.assertNotIn("not-in-log", backend.log_tail())
+                generation = first.directory / "scene-data-test"
+                generation.mkdir(); (generation / "private-data.vti").write_text("synthetic image")
                 first.close()
+                self.assertFalse(generation.exists())
                 self.assertEqual(first.process.returncode, 0)
                 self.assertFalse(first.forced_stop)
                 self.assertFalse(first.scene.exists())
