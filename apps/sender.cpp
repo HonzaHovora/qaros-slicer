@@ -36,6 +36,9 @@
 #include <string>
 #include <thread>
 #include <vector>
+#if !QARVTK_MODERN_SDK
+#include "legacy_peer_observer.hpp"
+#endif
 
 QAR_IMPLEMENT_DYNAMIC_LOADING()
 namespace fs = std::filesystem;
@@ -186,6 +189,24 @@ void on_request(QarRenderStreamRequest* request, void* context) {
   }
   qar_render_request_handle_destroy(request);
 }
+#else
+void on_peer_update(QarPeerSpec* spec, void* context) noexcept {
+  if (!spec || !context) return;
+  QarPeerId peer{}; QarAppState state=QAR_APP_STATE_UNKNOWN;
+  if (qar_result_is_success(qar_peer_spec_get_id(spec,&peer)) &&
+      qar_result_is_success(qar_peer_spec_get_app_state(spec,&state)))
+    static_cast<qarvtk::LegacyPeerObserver*>(context)->record(peer,state);
+  // The callback borrows the spec; retain only copied id/state values.
+}
+const char* peer_state_name(QarAppState state) {
+  switch (state) {
+    case QAR_APP_STATE_UNKNOWN: return "UNKNOWN";
+    case QAR_APP_STATE_INITIALIZING: return "INITIALIZING";
+    case QAR_APP_STATE_RUNNING: return "RUNNING";
+    case QAR_APP_STATE_SHUTTING_DOWN: return "SHUTTING_DOWN";
+    default: return "unrecognized";
+  }
+}
 #endif
 
 struct Sdk {
@@ -195,12 +216,20 @@ struct Sdk {
   QarAppVolumeId volume=qar_app_volume_id_default();
 #if QARVTK_MODERN_SDK
   Requests requests; // Must outlive cancellation and session/runtime destruction.
+#else
+  qarvtk::LegacyPeerObserver peers; // Same callback lifetime requirement.
 #endif
   ~Sdk() {
     if (subscription) qar_cancel_token_cancel(subscription);
     if (sender) qar_render_stream_handle_destroy(sender);
     if (volume_created) qar_app_volumes_close_volume(session,&volume);
-    if (session) qar_session_handle_destroy(session);
+    if (session) {
+#if QARVTK_MODERN_SDK
+      qar_session_handle_destroy(session);
+#else
+      qar_session_destroy(session); // Leave and tear down callback workers.
+#endif
+    }
     if (runtime) qar_runtime_destroy(runtime);
     if (subscription) qar_cancel_token_handle_destroy(subscription);
     if (operation) qar_cancel_token_handle_destroy(operation);
@@ -285,7 +314,7 @@ struct Sdk {
 #endif
     if (!session) throw std::runtime_error("SDK returned a null session");
   }
-  void create_volume() {
+  void create_volume(const QarPeerId* peer=nullptr) {
     auto init=qar_app_volume_init_default(); init.display_name="VTK surface";
     init.pose.position.z=-1.5F; init.size={1.2F,1.2F,1.2F}; init.app_scale=1;
 #if QARVTK_MODERN_SDK
@@ -294,6 +323,9 @@ struct Sdk {
     init.common_name=name.c_str();
     checked(qar_app_volumes_get_or_create(session,&init,&volume),"create app volume");
 #else
+    if (!peer) throw std::logic_error("Observe the invited viewer before creating a volume");
+    const QarPeerId* initial_peers[]={peer};
+    init.initial_peers=initial_peers; init.initial_peer_count=1;
     checked(qar_app_volumes_add_volume(session,&init,&volume),"create app volume");
 #endif
     volume_created=true;
@@ -310,6 +342,8 @@ struct Sdk {
     }
     throw std::runtime_error("No viewer request before timeout or shutdown");
 #else
+    checked(qar_cancel_token_create(&subscription),"create peer subscription token");
+    checked(qar_peer_subscribe_updates(session,on_peer_update,&peers,subscription),"subscribe peer updates");
     char connection[1024]{};
     if (o.target=="visualizer") checked(qar_session_invite_connection_string_visualizer(connection,sizeof(connection)),"visualizer connection");
     else if (o.target=="quest") checked(qar_session_invite_connection_string_quest(connection,sizeof(connection)),"Quest connection");
@@ -317,24 +351,33 @@ struct Sdk {
     else throw std::invalid_argument("Target must be visualizer, quest or hololens:HOST");
     auto init=qar_session_invite_peer_init_default(); init.connection_string=connection;
     QarPeerId peer=qar_peer_id_default(); deadline(o.timeout);
+    std::cout << "Inviting " << o.target << " viewer...\n";
     checked(qar_session_invite_peer(session,&init,&peer,operation),"invite target");
+    char id[64]{}; checked(qar_uuid_to_string(peer.data,id,sizeof(id)),"format invited peer id");
+    std::cout << "Invited viewer " << id << "; waiting for its peer update (UNKNOWN is accepted)...\n";
+    const auto stopping=[&] { return stop_requested || shutdown.requested() || renderer.closing(); };
     const auto end=Clock::now()+std::chrono::seconds(o.timeout);
-    while (!stop_requested && !shutdown.requested() && !renderer.closing() && Clock::now()<end) {
-      size_t count{},written{}; checked(qar_query_peer_specs_count(session,&count),"peer count");
-      std::vector<QarPeerSpec*> specs(count+8,nullptr);
-      auto result=qar_query_peer_specs(session,specs.data(),specs.size(),&written);
-      bool ready=false;
-      for (auto* spec:specs) if (spec) {
-        QarPeerId id{}; QarAppState state=QAR_APP_STATE_UNKNOWN;
-        const auto ri=qar_peer_spec_get_id(spec,&id), rs=qar_peer_spec_get_app_state(spec,&state);
-        if (qar_result_is_success(ri) && qar_result_is_success(rs) &&
-            std::memcmp(id.data,peer.data,QAR_MAX_ID_LENGTH)==0 && state==QAR_APP_STATE_RUNNING) ready=true;
-        qar_peer_spec_handle_destroy(spec);
+    while (!stopping() && Clock::now()<end) {
+      if (const auto state=peers.state(peer)) {
+        if (*state==QAR_APP_STATE_SHUTTING_DOWN) throw std::runtime_error("Invited viewer is shutting down");
+        std::cout << "Invited viewer observed: " << peer_state_name(*state)
+                  << "; allowing 2 seconds for receiver subscriptions...\n";
+        // This local session has no persistent storage. Match the working BANC
+        // bridge: observe the exact invited id, let subscriptions settle, then
+        // publish the volume with that peer assigned in its initial update.
+        const auto settled=Clock::now()+std::chrono::seconds(2);
+        while (!stopping() && Clock::now()<settled) {
+          renderer.poll(); std::this_thread::sleep_for(std::chrono::milliseconds(20));
+        }
+        if (stopping()) throw std::runtime_error("Viewer startup interrupted");
+        if (peers.state(peer)==QAR_APP_STATE_SHUTTING_DOWN)
+          throw std::runtime_error("Invited viewer shut down during startup");
+        return peer;
       }
-      checked(result,"query peers"); if (ready) return peer;
       renderer.poll(); std::this_thread::sleep_for(std::chrono::milliseconds(20));
     }
-    throw std::runtime_error("Invited viewer did not reach RUNNING before timeout");
+    if (stopping()) throw std::runtime_error("Viewer startup interrupted");
+    throw std::runtime_error(std::string("Invited viewer ")+id+" was not observed before timeout; no volume was published");
 #endif
   }
 };
@@ -388,10 +431,18 @@ int main(int argc,char** argv) { try {
   auto adapter=graphics_device();
   qarvtk::GlCopy copy;
   NativeContext native(renderer); // Outlives SDK; SDK context is never current on this thread.
-  Sdk sdk; sdk.open(options); sdk.connect(options,adapter); sdk.create_volume();
+  Sdk sdk; sdk.open(options); sdk.connect(options,adapter);
+#if QARVTK_MODERN_SDK
+  sdk.create_volume(); // Hub viewers request an existing volume.
+#endif
   if (shutdown.requested()) return 0;
   const auto peer=sdk.target(options,renderer,shutdown);
+#if QARVTK_MODERN_SDK
   checked(qar_app_volumes_update_used_by_peers(sdk.session,&sdk.volume,&peer,1,nullptr,0),"attach viewer to volume");
+#else
+  std::cout << "Creating app volume for the observed viewer...\n";
+  sdk.create_volume(&peer);
+#endif
   auto init=qar_render_sender_init_default(); init.graphics_api=QAR_GRAPHICS_API_OPENGL;
   init.header.next=&native.params.header; init.peer_id=peer; init.app_volume_id=&sdk.volume;
   init.enable_auto_reconnects=true; init.texture_layout=QAR_FRAME_LAYOUT_SEPARATED_TEXTURES;
@@ -404,8 +455,10 @@ int main(int argc,char** argv) { try {
     init.frame_views[i].texture_index=i;
   }
   sdk.deadline(options.timeout);
+  std::cout << "Creating OpenGL sender...\n";
   checked(qar_render_sender_create(sdk.session,&init,sdk.operation,&sdk.sender),"create OpenGL sender");
   if (!sdk.sender) throw std::runtime_error("SDK returned a null sender");
+  std::cout << "OpenGL sender created; waiting for the viewer's first frame request...\n";
   const qarvtk::Clip clip{.05,20};
   auto last_frame=Clock::now(),last_watch=last_frame;
   auto scene_time=options.scene.empty()?fs::file_time_type{}:fs::last_write_time(options.scene);

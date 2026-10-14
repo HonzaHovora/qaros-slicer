@@ -41,7 +41,7 @@ jobs:
       - name: Core tests and SDK fingerprint (runner has no supported XR GPU)
         shell: pwsh
         run: |
-          ctest --test-dir build-windows -C Release -R '^core$' --output-on-failure
+          ctest --test-dir build-windows -C Release -R '^(core|legacy-peer)$' --output-on-failure
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           ./build-windows/Release/qarvtk-sender.exe --sdk-info
       - uses: actions/upload-artifact@v4
