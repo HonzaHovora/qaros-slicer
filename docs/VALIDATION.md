@@ -24,6 +24,13 @@ missing diagnostics and unrelated 803 causes. This tests our retry decision,
 not a live runtime. Actual first-frame submission/display still needs the user's
 Windows/NVIDIA test.
 
+Code commit `7a065af10cdccc4354941df60c6687f6d2ff2c44` passed both Windows SDK
+builds, core/peer/frame-wait/WGL tests and exact header fingerprint verification in
+[run 38574633107](https://github.com/HonzaHovora/QAROS_VTK/actions/runs/38574633107).
+[Run 38574633198](https://github.com/HonzaHovora/QAROS_VTK/actions/runs/38574633198)
+passed Windows core/process tests, Linux core/peer/frame-wait/process/Mesa GPU
+tests, both Linux SDK builds, surface interchange and ParaView host tests.
+
 ## WGL context callbacks: 2026-10-14, r3
 
 The r2 diagnostics from the user's Windows PC confirmed that the exact invited

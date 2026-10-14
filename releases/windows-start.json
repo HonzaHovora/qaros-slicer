@@ -1,13 +1,13 @@
 {
-  "tag": "windows-start-2026-10-14-session022c40b6r3",
+  "tag": "windows-start-2026-10-14-session022c40b6r4",
   "date": "2026-10-14",
-  "title": "Windows starter \u2014 explicit WGL callbacks r3",
-  "filename": "QAROS_VTK_Windows_session_022c40b6_2026-10-14_r3.zip",
+  "title": "Windows starter \u2014 primary-transfer startup retry r4",
+  "filename": "QAROS_VTK_Windows_session_022c40b6_2026-10-14_r4.zip",
   "native": {
-    "run_id": 38572186047,
-    "artifact_id": 11896974774,
-    "commit": "3b560c184f34fa124cc204c11dfdc03e21f1b13e",
-    "sha256": "e0a6982c6ffacf673b90276e8f429829f681214d0a9d553f07d2b0dacdd7a3ae"
+    "run_id": 38574633107,
+    "artifact_id": 11899272772,
+    "commit": "7a065af10cdccc4354941df60c6687f6d2ff2c44",
+    "sha256": "f6587a41437f355de84007b5c1f313c043950f53bff65ee646363bdfe961ea31"
   },
   "plugins": {
     "run_id": 38135146417,
