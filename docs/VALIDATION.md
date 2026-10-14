@@ -1,5 +1,59 @@
 # Validation and next work
 
+## On-device r8 result: SDK readiness dominates, 2026-10-14
+
+`QAROS-VTK-diagnostics-20261014-172918-472.zip` verifies the exact r8 sender
+SHA-256 `2e35c170c9e0f663db7bb3bc8479f38ee490d97ed4a63046757f89e28bdc1321`
+and the unchanged session SDK header. The sender submitted 1212 stereo frames
+and stopped normally. A first-pose 801 retry occurred during startup and
+recovered; the measured streaming windows contain no error retries or scene
+reloads. The collector contains no matching Windows crash records.
+
+Eleven complete windows contain 1125 frames over approximately 55.35 seconds:
+**20.33 source stereo FPS**, at 1920 x 1080 per eye. Weighted wall times:
+
+| Sender measurement | Mean ms / stereo frame |
+| --- | ---: |
+| Whole frame cycle | 49.20 |
+| Begin-frame request to ready (overlapping total) | 42.57 |
+| Pending-poll sleep (part of the readiness wait) | 40.47 |
+| Housekeeping (mostly while polling) | 2.11 |
+| VTK rendering, both eyes | 4.01 |
+| GPU texture copy | 0.64 |
+| glFinish | 0.42 |
+| SDK submission | 1.44 |
+| All nonblocking begin-frame calls | 0.08 |
+| OpenGL texture access | 0.01 |
+| Layout and pose access | 0.01 |
+| Frame metadata release | 0.00 (rounded) |
+| Unattributed time | 0.02 |
+
+The request-to-ready total overlaps polling/sleep/housekeeping, so these rows
+must not all be added together. It represents about 86.5% of the frame cycle.
+There are 14.50 pending polls per frame. Each requested 2 ms sleep actually takes
+2.79 ms on average, with an 8.86 ms maximum over the run. This is not a single
+40 ms oversleep. The supplied C header says try_begin_frame starts one async wait
+and subsequent calls poll its completion. Repeated pending results therefore
+point to readiness pacing/backpressure, rather than 40 ms of frame-texture access
+or rendering. Faster polling may reduce readiness-detection latency, but this
+measurement does not prove that removing sleep removes the SDK's wait.
+
+The immediate bottleneck is now localized to SDK frame readiness. It does **not**
+yet identify which internal condition holds it up: render-request pacing, transfer
+buffer availability, downstream mixer/receiver GPU work, or synchronization.
+The sender-thread timings do not measure asynchronous SDK workers. In particular,
+fast application GPU copies do not prove all internal transfers/conversions are
+fast. Slicer only exports geometry to the separate sender; no repeated exports
+occurred in this run.
+
+Next evidence must come from the actual QAROS stream route: source -> mixer and
+mixer -> Visualizer FPS, source render-request wait versus frame hold, receiver
+frame/pose age and mixer timing. The public SDK documentation describes Stream
+Graph / warping timing views, but this installed session runtime's exact UI has
+not been observed. Obtain a screenshot of the running Visualizer to locate the
+available timing view before giving version-specific click instructions. No r9
+binary change or claimed 60 FPS fix follows from this log alone.
+
 ## Confirmed orientation and source throughput: 2026-10-14, r8 diagnostics
 
 The user confirmed that r7's transformations are now correct and that Visualizer

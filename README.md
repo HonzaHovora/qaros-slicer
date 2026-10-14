@@ -11,12 +11,13 @@ ověří, rozbalí a otevře zelenou kostku. [Postup pro D:\QAROS_VTK](docs/WIND
 Aktuální balíček pro GitHub Desktop používá session API a přesně odpovídá
 hlavičce `022c40b6…` ze stávajícího SDK v `D:\install`. Použij **Legacy viewer →
 visualizer**; Hub pairing code nech prázdný. Podrobnosti jsou v uvedeném postupu.
-R7 už má na testovacím PC potvrzené správné transformace. Visualizer ukazuje
-přibližně 44 FPS, ale log senderu měří asi 19,7 nových stereo snímků za sekundu.
-Vykreslení obou očí trvá průměrně 4,6 ms; většina zbývajícího času zatím není
-přesně přiřazená. Diagnostická verze r8 rozlišuje čekání na snímek, skutečné
-uspání smyčky a převzetí textur (`PERF` a `PACING`). Dosažení cíle 60 FPS ještě
-není potvrzené. Před rozbalením zavři Slicer i Visualizer;
+R7 už má na testovacím PC potvrzené správné transformace. Diagnostická r8
+naměřila asi 20,3 nových stereo snímků za sekundu: vykreslení obou očí trvá
+4,0 ms, čekání na připravenost dalšího snímku od QAROS 42,6 ms. Převzetí textur
+je rychlé (0,01 ms). Další diagnostika musí rozlišit příčinu čekání uvnitř
+QAROS/mixeru/přijímače; podrobnosti jsou v [VALIDATION.md](docs/VALIDATION.md).
+Údaj přibližně 44 FPS ve Visualizeru měří jinou část přenosu. Dosažení cíle
+60 FPS ještě není potvrzené. Před rozbalením zavři Slicer i Visualizer;
 cesty k pluginu a senderu zůstávají stejné. Logy lze zabalit pomocí `COLLECT-LOGS.cmd`.
 Samostatné stažení je také v [GitHub Release](https://github.com/HonzaHovora/QAROS_VTK/releases/tag/windows-start-2026-10-14-session022c40b6r8).
 Původní [moderní Hub varianta](https://github.com/HonzaHovora/QAROS_VTK/releases/tag/windows-start-2026-10-14)
