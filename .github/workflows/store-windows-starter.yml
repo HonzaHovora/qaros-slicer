@@ -24,12 +24,12 @@ jobs:
       - name: Download the published and verified starter
         run: |
           mkdir -p downloads
-          gh release download windows-start-2026-10-14 --pattern QAROS_VTK_Windows_start_2026-10-14.zip --dir downloads --clobber
+          gh release download windows-start-2026-10-14-session022c40b6 --pattern QAROS_VTK_Windows_session_022c40b6_2026-10-14.zip --dir downloads --clobber
           python3 - <<'PY'
           import hashlib
           from pathlib import Path
-          archive = Path('downloads/QAROS_VTK_Windows_start_2026-10-14.zip')
-          expected = 'ec6527bd5ca3d354feb7becef8586ae8c66474676073f66db68391930bfc0435'
+          archive = Path('downloads/QAROS_VTK_Windows_session_022c40b6_2026-10-14.zip')
+          expected = '4daf48fd135bc9c57424f2273bceeab9d1bd19a736c0d476cb2c9a37e3b8d7c5'
           actual = hashlib.sha256(archive.read_bytes()).hexdigest()
           if actual != expected:
               raise ValueError('Published starter checksum mismatch: ' + actual)
@@ -37,10 +37,11 @@ jobs:
           PY
       - name: Make the starter available through normal GitHub Desktop pull
         run: |
-          git add -- downloads/QAROS_VTK_Windows_start_2026-10-14.zip downloads/QAROS_VTK_Windows_start_2026-10-14.zip.sha256
+          git add -- downloads/QAROS_VTK_Windows_session_022c40b6_2026-10-14.zip downloads/QAROS_VTK_Windows_session_022c40b6_2026-10-14.zip.sha256
           if git diff --cached --quiet; then
             echo "The checked-out starter already matches the release."
             exit 0
           fi
           git -c user.name='github-actions[bot]' -c user.email='41898282+github-actions[bot]@users.noreply.github.com' commit -m "Include verified Windows starter for GitHub Desktop checkout"
           git push origin HEAD:main
+
