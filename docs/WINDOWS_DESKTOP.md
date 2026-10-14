@@ -3,6 +3,8 @@
 Tento postup používá již přihlášený GitHub Desktop a checkout `D:\QAROS_VTK`.
 Slicer je nainstalovaný v `D:\3D Slicer 5.12.4`.
 
+Při aktualizaci nejdřív zastav stream a zavři Slicer i náhled kostky.
+
 1. V GitHub Desktop otevři repozitář QAROS_VTK na větvi main.
 2. Klikni **Fetch origin**, potom **Pull origin**, pokud se nabízí.
 3. Spusť `D:\QAROS_VTK\START-PREVIEW.cmd`.
@@ -28,13 +30,19 @@ nahraď starou cestu novou.
 
 - Sender executable: `D:/QAROS_VTK/package/windows-start/Release/qarvtk-sender.exe`
 - Testovací model: `D:/QAROS_VTK/package/windows-start/sample/cube-200mm.vtp`
-- QAROS SDK folder: skutečný adresář tvého kompletního SDK, obsahující include a bin.
+- QAROS SDK folder: `D:/install` (stávající kompletní SDK s include a bin).
+- Legacy viewer: `visualizer`.
+- Legacy invite, Hub pairing code a Hub host: prázdné.
 
-Nejdřív zkontroluj shodu SDK podle `package/windows-start/ZACNI_ZDE.txt`; v jeho
-PowerShell příkladu nastav `$kit = 'D:\QAROS_VTK\package\windows-start'`.
-SDK, Hub a viewer nejsou součástí repozitáře. Přiložený sender používá moderní
-Hub API; starší SDK 2540 s ním není kompatibilní.
+Podrobný postup pro první použití Sliceru je v
+[WINDOWS_SESSION_QUICKSTART.txt](WINDOWS_SESSION_QUICKSTART.txt) a v rozbaleném
+`package/windows-start/ZACNI_ZDE.txt`. Přiložený sender používá **session API**
+a odpovídá přesné hlavičce z existujícího SDK:
+`022c40b670f87a066664c37daeb06da525db37fffdf5810e72cff8a5b81e677d`.
+Plugin tuto shodu ověřuje automaticky. Toto SDK neposkytuje nové Hub párování;
+pole Hub identity se nepoužívá. SDK runtime a viewer nejsou součástí balíčku.
 
-Balíček odpovídá testovacímu vydání windows-start-2026-10-14. Nativní Windows
-sestavení a core testy prošly, skutečný NVIDIA/Hub/headset přenos zůstává
-k ověření. První verze přenáší jeden povrchový model.
+Balíček odpovídá testovacímu vydání `windows-start-2026-10-14-session022c40b6`.
+CI ověřuje kompilaci a vložený otisk hlavičky; skutečný NVIDIA/QAROS přenos
+zůstává k ověření na tomto PC. První verze přenáší jeden povrchový model.
+

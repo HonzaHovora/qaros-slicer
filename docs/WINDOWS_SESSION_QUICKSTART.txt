@@ -1,0 +1,75 @@
+﻿QAROS VTK — test s existujícím SDK v D:\install
+Varianta session-022c40b6, připravena 14. 10. 2026.
+
+1. AKTUALIZACE PŘES GITHUB DESKTOP
+
+Ve Sliceru nejdřív použij Stop streaming, pokud nějaký sender běží.
+Zavři Slicer i okno náhledu zelené kostky.
+V GitHub Desktop otevři QAROS_VTK, větev main, klikni Fetch origin a Pull origin.
+V Průzkumníku otevři D:\QAROS_VTK a dvakrát klikni na START-PREVIEW.cmd.
+Skript ověří nový ZIP, rozbalí ho do package\windows-start a otevře náhled.
+Po zobrazení zelené kostky náhled zavři. Potom znovu spusť Slicer.
+Samostatný ZIP ani přihlášení do GitHubu v prohlížeči nejsou potřeba.
+
+2. CESTA K PLUGINU
+
+Pokud už v nabídce modulů vidíš QAROS → QAROS Streaming, pokračuj bodem 3.
+Jinak otevři Edit → Application Settings → Modules. V části Additional module
+paths přidej složku D:/QAROS_VTK/package/windows-start/plugins/slicer.
+Potvrď OK a restartuj Slicer. Nepřidávej další kopii stejného modulu.
+
+3. NAČTENÍ KOSTKY
+
+Pokud už máš v modelové scéně cube-200mm, pokračuj bodem 4.
+Jinak nahoře otevři File → Add Data, klikni Choose File(s) a vyber:
+D:\QAROS_VTK\package\windows-start\sample\cube-200mm.vtp
+Potvrď Open a potom OK. Pokud Slicer nabízí typ dat, vyber Model.
+
+4. VÝBĚR MODELU A NASTAVENÍ
+
+V horním výběru Modules najdi QAROS → QAROS Streaming.
+V levém panelu nastav následující pole; cesty můžeš přímo zkopírovat:
+
+Model or segmentation: cube-200mm
+Segment: pro tento model se nepoužívá, nech beze změny
+Sender executable: D:/QAROS_VTK/package/windows-start/Release/qarvtk-sender.exe
+QAROS SDK folder: D:/install
+Legacy invite (optional): prázdné
+Legacy viewer: visualizer
+Hub pairing code: prázdné
+Hub host (optional): prázdné
+Hub identity file: ponech výchozí hodnotu; tato varianta ho nepoužívá
+
+Tento sender je sestavený přímo pro hlavičku z tvého SDK v D:\install:
+SHA256 022c40b670f87a066664c37daeb06da525db37fffdf5810e72cff8a5b81e677d
+Jde o session API s pozváním vieweru. Nové Hub párování toto SDK neposkytuje.
+Hlavičku ani DLL v D:\install ničím nenahrazuj. Plugin před startem ověří shodu.
+SDK musí obsahovat include\qar_streaming.h a celé původní bin\ včetně runtime
+a součástí potřebných pro Visualizer. VTK DLL ve složce Release nech vedle EXE.
+
+5. PRVNÍ PŘENOS
+
+Klikni Start streaming. Sender vytvoří session a pozve Visualizer.
+Sleduj pole Sender log dole v levém panelu. Pro první test nech až 60 sekund
+na připojení vieweru. Řádek Submitted 1 stereo frames znamená, že sender
+vykreslil a předal první stereo snímek SDK; ve vieweru pak ověř viditelnou kostku.
+Samotný stav Sender process running ještě neznamená funkční přenos.
+
+Po testu klikni Stop streaming. Když změníš geometrii nebo rodičovskou
+transformaci modelu ve Sliceru, tlačítko Update surface ji znovu vyexportuje.
+Kostka má hranu 200 mm ve Sliceru a 0,2 m v QAROS.
+
+Pokud se přenos zastaví nebo Visualizer neukáže model, zkopíruj text ze Sender
+log. Chybu neopravuj výměnou jednotlivých DLL. Neposílej session invite ani
+párovací kódy. Pro první pokus používej jeden sender a jeden viewer.
+
+CO BYLO OVĚŘENO
+
+Windows CI sestavuje sender proti přesné dodané hlavičce a kontroluje otisk
+vložený do EXE. Podrobnosti o původu binárek jsou v BUILD_INFO.json.
+Pluginy byly ověřeny na Linuxu; zelený lokální náhled už funguje na tomto PC.
+Skutečný přenos přes NVIDIA a QAROS runtime musí ověřit tento test.
+
+Prototyp přenáší jeden neprůhledný povrch, v backendu zelený. Přenáší geometrii,
+nikoli celou obrazovku Sliceru. CT/MR volume rendering, barvy, popisky a ovládání
+Sliceru z headsetu ještě nejsou implementované. SDK ani Visualizer nejsou v ZIPu.

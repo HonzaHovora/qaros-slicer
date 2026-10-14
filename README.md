@@ -8,8 +8,12 @@ procesu. QAROS už OpenGL podporuje; Vulkan není součástí této implementace
 v kořeni checkoutu. Hotový Windows ZIP se stáhne spolu s repozitářem; skript ho
 ověří, rozbalí a otevře zelenou kostku. [Postup pro D:\QAROS_VTK](docs/WINDOWS_DESKTOP.md).
 
-Samostatné stažení balíčku je také v [GitHub Release](https://github.com/HonzaHovora/QAROS_VTK/releases/tag/windows-start-2026-10-14).
-Pro přenos do Hubu je nutné odpovídající kompletní SDK.
+Aktuální balíček pro GitHub Desktop používá session API a přesně odpovídá
+hlavičce `022c40b6…` ze stávajícího SDK v `D:\install`. Použij **Legacy viewer →
+visualizer**; Hub pairing code nech prázdný. Podrobnosti jsou v uvedeném postupu.
+Samostatné stažení je také v [GitHub Release](https://github.com/HonzaHovora/QAROS_VTK/releases/tag/windows-start-2026-10-14-session022c40b6).
+Původní [moderní Hub varianta](https://github.com/HonzaHovora/QAROS_VTK/releases/tag/windows-start-2026-10-14)
+zůstává dostupná pro jiné SDK. Každý sender vyžaduje odpovídající kompletní runtime.
 
 **Začni zde: [instalace na Windows, instalace pluginů a první pokus](docs/INSTALLATION.md).**
 
@@ -100,5 +104,8 @@ Další podklady:
 - [Ověření a další práce](docs/VALIDATION.md)
 - [Rozdíly verzí SDK](docs/SDK_COMPATIBILITY.md)
 
-SDK, runtime DLL, pozvánky a párovací identity nejsou součástí repozitáře.
+SDK runtime DLL, pozvánky a párovací identity nejsou součástí repozitáře.
+Pro reprodukovatelné sestavení session senderu je uložená přesná dodaná hlavička
+v `ci/sdk-headers/`; do instalovaného SDK ji nekopíruj.
+
 

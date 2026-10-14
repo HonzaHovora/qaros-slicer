@@ -1,13 +1,13 @@
 {
-  "tag": "windows-start-2026-10-14",
+  "tag": "windows-start-2026-10-14-session022c40b6",
   "date": "2026-10-14",
-  "title": "Windows starter — Slicer and ParaView prototype",
-  "filename": "QAROS_VTK_Windows_start_2026-10-14.zip",
+  "title": "Windows starter \u2014 session SDK 022c40b6",
+  "filename": "QAROS_VTK_Windows_session_022c40b6_2026-10-14.zip",
   "native": {
-    "run_id": 37986750101,
-    "artifact_id": 11648381876,
-    "commit": "d16e50cb956386f836b2cdf3f0866e8263c44432",
-    "sha256": "b5dead0258abf105541392d8566131cab4d8a0be6ad3b93d9b3c5d27cd62c637"
+    "run_id": 38564098141,
+    "artifact_id": 11895315042,
+    "commit": "353d7e6fc162456c9f55b2be9941caba47f5cbf1",
+    "sha256": "31f001b71e6bb29efc3966f1bdafa2cfaba313388da1a3a781432bef59eea196"
   },
   "plugins": {
     "run_id": 38135146417,
@@ -15,5 +15,7 @@
     "commit": "10f589420e29405f9bb8a41f207018b4a17384e9",
     "sha256": "2ee77f4ccbe6c7a0af38da6c003ea47e07215a2bc7b6b6a4ce2d911cd1e5594f"
   },
-  "sdk_header_sha256": "eed88c1e4a6c8038a96038e1850deee3241e3f3c460fd24a10c3706f1df599d9"
+  "sdk_header_sha256": "022c40b670f87a066664c37daeb06da525db37fffdf5810e72cff8a5b81e677d",
+  "modern_api": 0,
+  "quickstart": "docs/WINDOWS_SESSION_QUICKSTART.txt"
 }

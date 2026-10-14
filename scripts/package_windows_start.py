@@ -42,8 +42,11 @@ def package(native_archive, plugins_archive, output):
     sdk = json.loads(payload['qarvtk-sdk.json'])
     if sdk['header_sha256'] != config['sdk_header_sha256']:
         raise ValueError('SDK fingerprint differs from the selected release')
-    if sdk.get('modern_api') != 1 or sdk.get('plugin_protocol') != 1:
-        raise ValueError('This starter needs the modern Hub API and plugin protocol 1')
+    modern_api = config.get('modern_api', 1)
+    if modern_api not in (0, 1):
+        raise ValueError('Unknown SDK connection API')
+    if sdk.get('modern_api') != modern_api or sdk.get('plugin_protocol') != 1:
+        raise ValueError('Sender API mode or plugin protocol differs from the selected release')
 
     with verified_zip(plugins_archive, config['plugins']['sha256']) as outer:
         with zipfile.ZipFile(io.BytesIO(outer.read('QAROS-VTK-plugins.zip'))) as archive:
@@ -61,7 +64,7 @@ def package(native_archive, plugins_archive, output):
             raise ValueError(f'Missing plugin file: {name}')
     for target, source in {
         '01-Preview.cmd': 'scripts/windows/01-Preview.cmd',
-        'ZACNI_ZDE.txt': 'docs/WINDOWS_QUICKSTART.txt',
+        'ZACNI_ZDE.txt': config.get('quickstart', 'docs/WINDOWS_QUICKSTART.txt'),
         'sample/cube-200mm.vtp': 'samples/cube-200mm.vtp',
     }.items():
         payload[target] = (ROOT / source).read_bytes()
@@ -97,14 +100,20 @@ def package(native_archive, plugins_archive, output):
             raise ValueError('Release ZIP failed CRC verification')
     digest = hashlib.sha256(target.read_bytes()).hexdigest()
     (output / (filename + '.sha256')).write_text(digest + '  ' + filename + '\n')
-    notes = f'''Hotový balíček pro první test **Slicer → VTK/OpenGL → QAROS Hub** na Windows x64.
+    connection = 'QAROS Hub' if modern_api else 'QAROS session / Visualizer'
+    sdk_requirement = (
+        'Použij odpovídající moderní SDK s Hub onboarding API.' if modern_api else
+        'Tato varianta používá session API a Legacy viewer; Hub pairing code se nevyplňuje.')
+    notes = f'''Hotový balíček pro první test **Slicer → VTK/OpenGL → {connection}** na Windows x64.
 
-Stáhni **{filename}** v Assets a rozbal do `C:\\QAROS-VTK`.
-Spusť `01-Preview.cmd`; podrobný postup je v `ZACNI_ZDE.txt`.
+Balíček **{filename}** lze stáhnout v Assets. Pro již přihlášený GitHub Desktop
+použij `Fetch origin`, `Pull origin` a `START-PREVIEW.cmd` v checkoutu, jakmile je
+balíček uložen v `downloads/`. Podrobný postup je v `ZACNI_ZDE.txt`.
 
 Obsahuje odesílač, lokální náhled, potřebné VTK DLL, pluginy Slicer/ParaView a testovací kostku.
-QAROS SDK, Hub ani viewer nejsou součástí balíčku. Použij odpovídající moderní SDK;
-balík 2540 s těmito binárkami není kompatibilní. Kontrola SDK je popsaná v návodu.
+QAROS SDK, Hub ani viewer nejsou součástí balíčku. {sdk_requirement}
+SHA256 hlavičky SDK musí být `{config['sdk_header_sha256']}`. Hlavičku a runtime
+v instalovaném SDK neměň; plugin ověří shodu před spuštěním.
 
 Nativní Windows sestavení a core testy prošly; pluginy byly ověřeny na Linuxu.
 **Přenos přes NVIDIA/Hub do headsetu ještě není ověřený.** Prototyp přenáší jeden
@@ -112,7 +121,7 @@ povrchový model, zatím bez CT/MR volume renderingu a kompletní hostitelské s
 
 - Native build: [{config['native']['commit'][:8]}]({provenance['native_run']})
 - Plugins: [{config['plugins']['commit'][:8]}]({provenance['plugins_run']})
-- [Instalační postup]({REPO}/blob/main/docs/WINDOWS_QUICKSTART.txt)
+- [Instalační postup]({REPO}/blob/main/{config.get('quickstart', 'docs/WINDOWS_QUICKSTART.txt')})
 '''
     (output / 'release-notes.md').write_text(notes, encoding='utf-8')
     print(target)
