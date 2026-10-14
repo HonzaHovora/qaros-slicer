@@ -1,13 +1,13 @@
 {
-  "tag": "windows-start-2026-10-14-session022c40b6r7",
+  "tag": "windows-start-2026-10-14-session022c40b6r8",
   "date": "2026-10-14",
-  "title": "Windows starter \u2014 vertical orientation and frame timings r7",
-  "filename": "QAROS_VTK_Windows_session_022c40b6_2026-10-14_r7.zip",
+  "title": "Windows starter \u2014 detailed frame-wait diagnostics r8",
+  "filename": "QAROS_VTK_Windows_session_022c40b6_2026-10-14_r8.zip",
   "native": {
-    "run_id": 38584695970,
-    "artifact_id": 11905146113,
-    "commit": "c50e71d2ca8c463f9c4d6624b3ab40c02147c25b",
-    "sha256": "0914a5b9b94db4fb4eb6abc97bd3d0bf58a343ba423e2c81d0de9f218d5e2c0c"
+    "run_id": 38588060847,
+    "artifact_id": 11906895586,
+    "commit": "4920d06ed70d8f237fc27ed3db3b635c1ff09c3f",
+    "sha256": "0f1d010db12344295ee62e96f6346141b69383437ac9e4dd33388232cb91be1a"
   },
   "plugins": {
     "run_id": 38135146417,

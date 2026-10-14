@@ -42,18 +42,24 @@ a odpovídá přesné hlavičce z existujícího SDK:
 Plugin tuto shodu ověřuje automaticky. Toto SDK neposkytuje nové Hub párování;
 pole Hub identity se nepoužívá. SDK runtime a viewer nejsou součástí balíčku.
 
-Balíček odpovídá testovacímu vydání `windows-start-2026-10-14-session022c40b6r7`.
-R6 už zobrazila kostku ve Visualizeru. R7 opravuje svislou orientaci snímku
-včetně hloubky; kamera i model zůstávají ve stejných souřadnicích.
-Po startu zkus pohled nahoru/dolů a vlevo/vpravo: kostka má držet své místo
-v pracovním volume.
+Balíček odpovídá testovacímu vydání `windows-start-2026-10-14-session022c40b6r8`.
+R7 už má na testovacím PC potvrzené správné transformace. R8 podrobněji měří
+čekání: zatímco Visualizer ukazuje asi 44 FPS, sender skutečně předává přibližně
+19,7 celých stereo snímků za sekundu. Tato dvě čísla měří různé části přenosu.
+Samotné VTK vykreslení obou očí trvá v dodaném logu průměrně 4,6 ms.
 
-Kvůli cíli alespoň 60 FPS nech přenos běžet 30 až 60 sekund, pak stiskni
-**Stop streaming** a spusť `COLLECT-LOGS.cmd`. Sender zapisuje každých pět sekund
-řádek `PERF` s FPS a časy vykreslení, kopírování, čekání na GPU a volání SDK.
-Jde o časy na straně senderu, nikoli o přímé měření asynchronního enkodéru
-nebo obnovování obrazu ve vieweru. Zrychlení ani výkon pro dvoje brýle zatím
-nejsou ověřené.
+Po aktualizaci spusť přenos stejné kostky. Nech Visualizer viditelný v popředí
+asi minutu, několikrát otoč kamerou, potom stiskni **Stop streaming** a spusť
+`COLLECT-LOGS.cmd`. Přilož vytvořený ZIP. Není třeba kopírovat jednotlivé řádky.
+
+Sender každých pět sekund zapisuje `PERF` s oddělenými časy vykreslení,
+uspávání, převzetí textur, údržby smyčky a dalších operací. Řádek `PACING`
+doplňuje celkové čekání od první žádosti o snímek do jeho připravenosti a
+skutečnou průměrnou/maximální délku krátkého uspání. Toto celkové čekání se
+překrývá s některými položkami PERF, proto je nesčítej. Jde o časy na straně
+senderu, nikoli přímé měření asynchronního enkodéru nebo práce mixeru.
+Tato diagnostická verze ještě není ověřená optimalizace na 60 FPS. Výkon pro
+dvoje brýle nebyl změřený.
 
 ## Když po zobrazení volume přenos spadne
 

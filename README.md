@@ -11,12 +11,14 @@ ověří, rozbalí a otevře zelenou kostku. [Postup pro D:\QAROS_VTK](docs/WIND
 Aktuální balíček pro GitHub Desktop používá session API a přesně odpovídá
 hlavičce `022c40b6…` ze stávajícího SDK v `D:\install`. Použij **Legacy viewer →
 visualizer**; Hub pairing code nech prázdný. Podrobnosti jsou v uvedeném postupu.
-R6 už zobrazila kostku ve Visualizeru. Aktualizace r7 opravuje svislou orientaci
-obrazu i hloubky a přidává pětisekundové přehledy výkonu (`PERF`). Cíl je alespoň
-60 FPS; zatím naměřený údaj uživatele je přibližně 36 FPS ve Visualizeru.
-Zachovává opravený start Visualizeru i WGL připojení. Před rozbalením zavři Slicer i Visualizer;
+R7 už má na testovacím PC potvrzené správné transformace. Visualizer ukazuje
+přibližně 44 FPS, ale log senderu měří asi 19,7 nových stereo snímků za sekundu.
+Vykreslení obou očí trvá průměrně 4,6 ms; většina zbývajícího času zatím není
+přesně přiřazená. Diagnostická verze r8 rozlišuje čekání na snímek, skutečné
+uspání smyčky a převzetí textur (`PERF` a `PACING`). Dosažení cíle 60 FPS ještě
+není potvrzené. Před rozbalením zavři Slicer i Visualizer;
 cesty k pluginu a senderu zůstávají stejné. Logy lze zabalit pomocí `COLLECT-LOGS.cmd`.
-Samostatné stažení je také v [GitHub Release](https://github.com/HonzaHovora/QAROS_VTK/releases/tag/windows-start-2026-10-14-session022c40b6r7).
+Samostatné stažení je také v [GitHub Release](https://github.com/HonzaHovora/QAROS_VTK/releases/tag/windows-start-2026-10-14-session022c40b6r8).
 Původní [moderní Hub varianta](https://github.com/HonzaHovora/QAROS_VTK/releases/tag/windows-start-2026-10-14)
 zůstává dostupná pro jiné SDK. Každý sender vyžaduje odpovídající kompletní runtime.
 

@@ -1,5 +1,5 @@
 ﻿QAROS VTK — test s existujícím SDK v D:\install
-Varianta session-022c40b6 r7, svislá orientace obrazu a měření výkonu.
+Varianta session-022c40b6 r8, podrobné měření čekání mezi snímky.
 
 1. AKTUALIZACE PŘES GITHUB DESKTOP
 
@@ -58,15 +58,19 @@ Sleduj pole Sender log dole v levém panelu. Pro první test nech až 60 sekund
 na připojení vieweru. Řádek Submitted 1 stereo frames znamená, že sender
 vykreslil a předal první stereo snímek SDK; ve vieweru pak ověř viditelnou kostku.
 Samotný stav Sender process running ještě neznamená funkční přenos.
-R7 převádí svislou orientaci obrazu i hloubky z VTK do QAROS. Při naklánění
-kamery musí kostka držet své místo vůči pracovnímu volume. Vyzkoušej pohyb
-kamery nahoru/dolů i vlevo/vpravo.
+Správné transformace jsou potvrzené na r7. Při naklánění kamery má kostka
+držet své místo vůči pracovnímu volume. R8 zachovává tuto opravu.
 
-Pro měření výkonu nech běžet přenos 30 až 60 sekund. Každých pět sekund se
-v logu objeví PERF stereo_fps a časy jednotlivých etap. Jde o počet celých
-stereo snímků senderu; údaj ve Visualizeru může měřit jinou část přenosu.
-Potom klikni Stop streaming a spusť COLLECT-LOGS.cmd podle postupu níže.
-Tyto údaje potřebujeme k cíli 60 FPS; tato verze ještě neslibuje jeho dosažení.
+Pro měření výkonu nech běžet stejnou kostku asi minutu a několikrát otoč kamerou.
+Visualizer nech viditelný v popředí. Každých pět sekund se v logu objeví PERF
+a PACING: rozlišují vykreslení, skutečné uspávání smyčky, čekání na připravený
+snímek a převzetí GPU textur. Potom klikni Stop streaming a spusť COLLECT-LOGS.cmd
+podle postupu níže. Přilož vytvořený ZIP; jednotlivé řádky nekopíruj ručně.
+
+V dosavadním měření ukazuje Visualizer asi 44 FPS, sender asi 19,7 nových
+stereo snímků za sekundu. Jde o různé části přenosu. VTK vykreslení obou očí
+trvá průměrně 4,6 ms; novým měřením hledáme zbytek času. R8 je diagnostická
+verze, ještě ne ověřené zrychlení na 60 FPS.
 
 Po testu klikni Stop streaming. Když změníš geometrii nebo rodičovskou
 transformaci modelu ve Sliceru, tlačítko Update surface ji znovu vyexportuje.
@@ -88,8 +92,8 @@ CO BYLO OVĚŘENO
 Windows CI sestavuje sender proti přesné dodané hlavičce a kontroluje otisk
 vložený do EXE. Podrobnosti o původu binárek jsou v BUILD_INFO.json.
 Pluginy byly ověřeny na Linuxu; zelený lokální náhled už funguje na tomto PC.
-R6 už na tomto PC zobrazila kostku ve Visualizeru. Tímto testem ověřujeme
-svislou orientaci a měříme výkon. Přenos do dvou brýlí ještě ověřený není.
+R7 už na tomto PC zobrazila kostku se správnými transformacemi. Tímto testem
+měříme jednotlivé příčiny čekání. Přenos do dvou brýlí ještě ověřený není.
 
 Prototyp přenáší jeden neprůhledný povrch, v backendu zelený. Přenáší geometrii,
 nikoli celou obrazovku Sliceru. CT/MR volume rendering, barvy, popisky a ovládání

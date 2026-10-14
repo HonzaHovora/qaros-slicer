@@ -38,6 +38,15 @@ This is a diagnostic build, not a verified 60 FPS optimization. The next on-devi
 run must identify which waiting phase dominates; two-headset throughput remains
 unmeasured.
 
+Code commit `4920d06ed70d8f237fc27ed3db3b635c1ff09c3f` passed both Windows SDK
+builds, core/peer/frame-wait/WGL tests and exact header fingerprint verification in
+[run 38588060847](https://github.com/HonzaHovora/QAROS_VTK/actions/runs/38588060847).
+[Run 38588060990](https://github.com/HonzaHovora/QAROS_VTK/actions/runs/38588060990)
+passed Linux and Windows core/process checks, both Linux SDK compile branches,
+surface interchange, ParaView and both VTK/Mesa GPU tests (including orientation).
+An isolated C++17 formatter/accounting probe also checked seeded phase totals;
+its numbers are synthetic and are not a performance result.
+
 ## Vertical raster orientation and performance measurement: 2026-10-14, r7
 
 The user confirmed that r6 streams a visible cube into Visualizer on the NVIDIA
