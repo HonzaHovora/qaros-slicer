@@ -1,13 +1,13 @@
 {
-  "tag": "windows-start-2026-10-14-session022c40b6r4",
+  "tag": "windows-start-2026-10-14-session022c40b6r5",
   "date": "2026-10-14",
-  "title": "Windows starter \u2014 primary-transfer startup retry r4",
-  "filename": "QAROS_VTK_Windows_session_022c40b6_2026-10-14_r4.zip",
+  "title": "Windows starter \u2014 initial viewer pose wait r5",
+  "filename": "QAROS_VTK_Windows_session_022c40b6_2026-10-14_r5.zip",
   "native": {
-    "run_id": 38574633107,
-    "artifact_id": 11899272772,
-    "commit": "7a065af10cdccc4354941df60c6687f6d2ff2c44",
-    "sha256": "f6587a41437f355de84007b5c1f313c043950f53bff65ee646363bdfe961ea31"
+    "run_id": 38577206824,
+    "artifact_id": 11901796120,
+    "commit": "185b217cde955fb4ade99fa49e0f35f1bab9caac",
+    "sha256": "01fa1d065f0a28058a61ecf0bcd316f741d5091de3f14836bad932328da44583"
   },
   "plugins": {
     "run_id": 38135146417,

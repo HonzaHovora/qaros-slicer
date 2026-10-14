@@ -11,11 +11,11 @@ ověří, rozbalí a otevře zelenou kostku. [Postup pro D:\QAROS_VTK](docs/WIND
 Aktuální balíček pro GitHub Desktop používá session API a přesně odpovídá
 hlavičce `022c40b6…` ze stávajícího SDK v `D:\install`. Použij **Legacy viewer →
 visualizer**; Hub pairing code nech prázdný. Podrobnosti jsou v uvedeném postupu.
-Aktualizace r4 řeší dočasně pozastavený přenos při prvním snímku: krátce počká
-a zkusí snímek znovu, místo aby ukončila sender a jeho pracovní volume.
+Aktualizace r5 při startu počká i na první údaje o pohledu z Visualizeru,
+s původním limitem 60 sekund. Log rozlišuje čekání, vykreslení a předání snímku.
 Zachovává opravený start Visualizeru i WGL připojení. Před rozbalením zavři Slicer i Visualizer;
 cesty k pluginu a senderu zůstávají stejné. Logy lze zabalit pomocí `COLLECT-LOGS.cmd`.
-Samostatné stažení je také v [GitHub Release](https://github.com/HonzaHovora/QAROS_VTK/releases/tag/windows-start-2026-10-14-session022c40b6r4).
+Samostatné stažení je také v [GitHub Release](https://github.com/HonzaHovora/QAROS_VTK/releases/tag/windows-start-2026-10-14-session022c40b6r5).
 Původní [moderní Hub varianta](https://github.com/HonzaHovora/QAROS_VTK/releases/tag/windows-start-2026-10-14)
 zůstává dostupná pro jiné SDK. Každý sender vyžaduje odpovídající kompletní runtime.
 

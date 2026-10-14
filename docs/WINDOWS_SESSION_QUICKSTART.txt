@@ -1,5 +1,5 @@
 ﻿QAROS VTK — test s existujícím SDK v D:\install
-Varianta session-022c40b6 r4, oprava pozastaveného přenosu z 14. 10. 2026.
+Varianta session-022c40b6 r5, čekání na první údaje o pohledu z 14. 10. 2026.
 
 1. AKTUALIZACE PŘES GITHUB DESKTOP
 
@@ -51,8 +51,9 @@ a součástí potřebných pro Visualizer. VTK DLL ve složce Release nech vedle
 
 Klikni Start streaming. Sender vytvoří session a pozve Visualizer.
 Pracovní volume se může objevit několik sekund před samotnou kostkou.
-Verze r4 při hlášení Primary transfer is paused přenos hned neukončí:
-krátce počká a zkusí snímek znovu. Během čekání znovu nemačkej Start streaming.
+Visualizer nech viditelný v popředí. R5 čeká i na první údaje o poloze pohledu.
+Pokud se v logu objeví Waiting for first viewer pose, běží toto čekání; stav
+se opakuje každých pět sekund. Během čekání znovu nemačkej Start streaming.
 Sleduj pole Sender log dole v levém panelu. Pro první test nech až 60 sekund
 na připojení vieweru. Řádek Submitted 1 stereo frames znamená, že sender
 vykreslil a předal první stereo snímek SDK; ve vieweru pak ověř viditelnou kostku.

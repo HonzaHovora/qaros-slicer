@@ -22,6 +22,14 @@ allows the next on-device attempt to tell a delayed initial pose from a persiste
 receiver/runtime problem. The existing regression test now covers both captured
 startup errors, the post-start pose-loss restriction and unrelated causes.
 
+Code commit `185b217cde955fb4ade99fa49e0f35f1bab9caac` passed both Windows SDK
+builds, core/peer/frame-wait/WGL tests and exact header fingerprint verification in
+[run 38577206824](https://github.com/HonzaHovora/QAROS_VTK/actions/runs/38577206824).
+[Run 38577206477](https://github.com/HonzaHovora/QAROS_VTK/actions/runs/38577206477)
+passed Windows core/process tests, Linux core/peer/frame-wait/process/Mesa GPU
+tests, both Linux SDK builds, surface interchange and ParaView host tests.
+These checks do not determine whether the user's runtime will supply pose data.
+
 ## Primary-transfer startup pause: 2026-10-14, r4
 
 The r3 diagnostics confirm the WGL fix on the user's RTX 2070 Max-Q: the worker
