@@ -26,6 +26,7 @@
 #include <vtkCamera.h>
 #include <vtkCommand.h>
 #include <vtkCubeSource.h>
+#include <vtkCullerCollection.h>
 #include <vtkGenericOpenGLRenderWindow.h>
 #include <vtkMatrix4x4.h>
 #include <vtkNew.h>
@@ -116,6 +117,9 @@ Renderer::Renderer(bool visible):impl_(std::make_unique<Impl>()) {
   for(auto e:{vtkCommand::WindowMakeCurrentEvent,vtkCommand::WindowIsCurrentEvent,
               vtkCommand::WindowSupportsOpenGLEvent,vtkCommand::WindowIsDirectEvent}) w->AddObserver(e,observer);
   impl_->renderer=vtkSmartPointer<vtkRenderer>::New();
+  // Always execute the ray caster, including when the volume is out of view:
+  // its offscreen textures must be cleared for each eye, never reused stale.
+  impl_->renderer->GetCullers()->RemoveAllItems();
   impl_->renderer->SetBackground(0,0,0);impl_->renderer->SetBackgroundAlpha(0);
   w->AddRenderer(impl_->renderer);
   impl_->mapper=vtkSmartPointer<vtkPolyDataMapper>::New();

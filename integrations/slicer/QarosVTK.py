@@ -33,6 +33,7 @@ class QarosVTKWidget(ScriptedLoadableModuleWidget):
         self._cleaned_up = False
         self.backend = Backend(slicer.util.startupEnvironment(), scene_suffix=".vtm")
         self.settings = qt.QSettings()
+        self._last_signature = None
         form = qt.QFormLayout()
         self.layout.addLayout(form)
         self.scope = qt.QComboBox()
@@ -141,7 +142,30 @@ class QarosVTKWidget(ScriptedLoadableModuleWidget):
         self.autoUpdate.enabled = not bool(volumes)
         self.sceneInfo.text = "{} objects, {} CT/MR volume. {}".format(objects, volumes,
             "Use Update scene after changing the volume preset or data." if volumes else "Lighting and model colors enabled.")
+        self._last_signature = self.scene_signature()
         return result
+
+    def scene_signature(self):
+        nodes = ([n for cls in ("vtkMRMLModelNode", "vtkMRMLSegmentationNode", "vtkMRMLScalarVolumeNode")
+                  for n in slicer.util.getNodesByClass(cls)] if self.scope.currentIndex == 1 else [self.node.currentNode()])
+        signature = [self.scope.currentIndex, self.segment.currentIndex, self.fit.checked]
+        for node in nodes:
+            if node is None:
+                continue
+            signature.append((node.GetID(), node.GetMTime()))
+            display = node.GetDisplayNode()
+            if display:
+                signature.append(display.GetMTime())
+            for method in ("GetPolyData", "GetImageData", "GetSegmentation"):
+                if hasattr(node, method):
+                    data = getattr(node, method)()
+                    if data:
+                        signature.append(data.GetMTime())
+            parent = node.GetParentTransformNode()
+            while parent:
+                signature.append((parent.GetID(), parent.GetMTime()))
+                parent = parent.GetParentTransformNode()
+        return tuple(signature)
 
     def export(self):
         try:
@@ -179,7 +203,8 @@ class QarosVTKWidget(ScriptedLoadableModuleWidget):
         self.startButton.enabled = not self.backend.running
         self.stopButton.enabled = self.backend.running
         self.log.setPlainText(self.backend.log_tail())
-        if self.autoUpdate.checked and self.backend.running:
+        if (self.autoUpdate.checked and self.backend.running
+                and self.scene_signature() != self._last_signature):
             self.publish_surface()
 
     def on_scene_close(self, caller=None, event=None):

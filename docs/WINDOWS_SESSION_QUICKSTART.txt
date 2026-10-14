@@ -1,100 +1,81 @@
-﻿QAROS VTK — test s existujícím SDK v D:\install
-Varianta session-022c40b6 r8, podrobné měření čekání mezi snímky.
+﻿QAROS VTK — osvětlené modely a CT/MR, session-022c40b6 r9
 
-1. AKTUALIZACE PŘES GITHUB DESKTOP
+AKTUALIZACE
 
-Ve Sliceru nejdřív použij Stop streaming, pokud nějaký sender běží.
-Zavři Slicer, Visualizer i okno náhledu zelené kostky.
-V GitHub Desktop otevři QAROS_VTK, větev main, klikni Fetch origin a Pull origin.
-V Průzkumníku otevři D:\QAROS_VTK a dvakrát klikni na START-PREVIEW.cmd.
-Skript ověří nový ZIP, rozbalí ho do package\windows-start a otevře náhled.
-Po zobrazení zelené kostky náhled zavři. Potom znovu spusť Slicer.
-Samostatný ZIP ani přihlášení do GitHubu v prohlížeči nejsou potřeba.
+1. Ve Sliceru klikni Stop streaming. Zavři Slicer, Visualizer i preview.
+2. GitHub Desktop → QAROS_VTK / main → Fetch origin → Pull origin.
+3. V D:\QAROS_VTK spusť START-PREVIEW.cmd. Ověří a rozbalí nový balíček.
+4. Zavři náhled kostky a spusť Slicer. Modul zůstává QAROS → QAROS Streaming.
 
-2. CESTA K PLUGINU
-
-Pokud už v nabídce modulů vidíš QAROS → QAROS Streaming, pokračuj bodem 3.
-Jinak otevři Edit → Application Settings → Modules. V části Additional module
-paths přidej složku D:/QAROS_VTK/package/windows-start/plugins/slicer.
-Potvrď OK a restartuj Slicer. Nepřidávej další kopii stejného modulu.
-
-3. NAČTENÍ KOSTKY
-
-Pokud už máš v modelové scéně cube-200mm, pokračuj bodem 4.
-Jinak nahoře otevři File → Add Data, klikni Choose File(s) a vyber:
-D:\QAROS_VTK\package\windows-start\sample\cube-200mm.vtp
-Potvrď Open a potom OK. Pokud Slicer nabízí typ dat, vyber Model.
-
-4. VÝBĚR MODELU A NASTAVENÍ
-
-V horním výběru Modules najdi QAROS → QAROS Streaming.
-V levém panelu nastav následující pole; cesty můžeš přímo zkopírovat:
-
-Model or segmentation: cube-200mm
-Segment: pro tento model se nepoužívá, nech beze změny
+Cesty zůstávají stejné:
+Additional module paths: D:/QAROS_VTK/package/windows-start/plugins/slicer
 Sender executable: D:/QAROS_VTK/package/windows-start/Release/qarvtk-sender.exe
 QAROS SDK folder: D:/install
-Legacy invite (optional): prázdné
 Legacy viewer: visualizer
-Hub pairing code: prázdné
-Hub host (optional): prázdné
-Hub identity file: ponech výchozí hodnotu; tato varianta ho nepoužívá
+Hub pairing code, Hub host a Legacy invite: prázdné
 
-Tento sender je sestavený přímo pro hlavičku z tvého SDK v D:\install:
-SHA256 022c40b670f87a066664c37daeb06da525db37fffdf5810e72cff8a5b81e677d
-Jde o session API s pozváním vieweru. Nové Hub párování toto SDK neposkytuje.
-Hlavičku ani DLL v D:\install ničím nenahrazuj. Plugin před startem ověří shodu.
-SDK musí obsahovat include\qar_streaming.h a celé původní bin\ včetně runtime
-a součástí potřebných pro Visualizer. VTK DLL ve složce Release nech vedle EXE.
+Pokud modul instaluješ poprvé, jeho složku přidej v Edit → Application Settings
+→ Modules → Additional module paths a restartuj Slicer.
+Hlavičku ani DLL v D:\install nenahrazuj. Sender ověřuje přesný otisk SDK:
+022c40b670f87a066664c37daeb06da525db37fffdf5810e72cff8a5b81e677d
+Nové pluginy pro scény potřebují sender s plugin_protocol 2. Aktualizuj celý balíček.
 
-5. PRVNÍ PŘENOS
+MODEL / SEGMENTACE
 
-Klikni Start streaming. Sender vytvoří session a pozve Visualizer.
-Pracovní volume se může objevit několik sekund před samotnou kostkou.
-Visualizer nech viditelný v popředí. Sender čeká i na první údaje o poloze pohledu.
-Pokud se v logu objeví Waiting for first viewer pose, běží toto čekání; stav
-se opakuje každých pět sekund. Během čekání znovu nemačkej Start streaming.
-Sleduj pole Sender log dole v levém panelu. Pro první test nech až 60 sekund
-na připojení vieweru. Řádek Submitted 1 stereo frames znamená, že sender
-vykreslil a předal první stereo snímek SDK; ve vieweru pak ověř viditelnou kostku.
-Samotný stav Sender process running ještě neznamená funkční přenos.
-Správné transformace jsou potvrzené na r7. Při naklánění kamery má kostka
-držet své místo vůči pracovnímu volume. R8 zachovává tuto opravu.
+1. Načti anatomický model ve Sliceru (například vyhlazený jaterní cévní strom).
+2. V QAROS Streaming nech Stream → Selected object a vyber model nebo segmentaci.
+   U segmentace vyber konkrétní segment.
+3. Nech zapnuté Center and fit into 65 cm workspace.
+4. Klikni Start streaming. Model má mít barvu ze Sliceru a viditelné stínování.
+5. Po změně barvy, geometrie nebo transformace klikni Update scene.
 
-Pro měření výkonu nech běžet stejnou kostku asi minutu a několikrát otoč kamerou.
-Visualizer nech viditelný v popředí. Každých pět sekund se v logu objeví PERF
-a PACING: rozlišují vykreslení, skutečné uspávání smyčky, čekání na připravený
-snímek a převzetí GPU textur. Potom klikni Stop streaming a spusť COLLECT-LOGS.cmd
-podle postupu níže. Přilož vytvořený ZIP; jednotlivé řádky nekopíruj ručně.
+Pro více objektů zvol Stream → Visible 3D scene (first view). Posílají se viditelné
+modely a segmenty z prvního 3D pohledu, včetně jejich vzájemných poloh. Skryj
+pomocnou testovací kostku, pokud ji ve scéně nechceš. Popisky, řezy a ovladače
+Sliceru se nepřenášejí.
 
-V dosavadním měření ukazuje Visualizer asi 44 FPS, sender asi 19,7 nových
-stereo snímků za sekundu. Jde o různé části přenosu. VTK vykreslení obou očí
-trvá průměrně 4,6 ms; novým měřením hledáme zbytek času. R8 je diagnostická
-verze, ještě ne ověřené zrychlení na 60 FPS.
+CT / MR OBJEM
 
-Po testu klikni Stop streaming. Když změníš geometrii nebo rodičovskou
-transformaci modelu ve Sliceru, tlačítko Update surface ji znovu vyexportuje.
-Kostka má hranu 200 mm ve Sliceru a 0,2 m v QAROS.
+1. Načti CT/MR a v modulu Volume Rendering zapni jeho zobrazení.
+2. Vyber vhodný preset a nastav vzhled tak, aby tkáň byla vidět už ve Sliceru.
+3. Použij Composite vykreslování. Crop / ROI ořez musí být vypnutý.
+4. V QAROS Streaming vyber CT/MR jako Selected object, nebo použij Visible 3D scene.
+5. Klikni Start streaming. Přenesou se voxelová data, barvy, průhlednost a stínování
+   z Volume Rendering. Po změně presetu klikni Update scene.
 
-Pokud se přenos zastaví nebo Visualizer neukáže model, spusť v checkoutu
-D:\QAROS_VTK\COLLECT-LOGS.cmd a přilož vytvořený ZIP z adresáře diagnostics.
-Skript otevře Průzkumníka a vybere ho. Slicer může zůstat otevřený.
-Případně přilož celý sender.log:
-Pole Sender log ukazuje jen konec souboru a při obnovování se špatně kopíruje.
-Stiskni Windows+R, napiš %TEMP% a potvrď Enter. Najdi nejnovější složku začínající
-qarvtk-; v ní je sender.log. Přetáhni tento soubor do chatu. Přesná cesta je také
-ve stavové zprávě pluginu po ukončení senderu.
-Chybu neopravuj výměnou jednotlivých DLL. Neposílej session invite ani párovací
-kódy. Pro první pokus používej jeden sender a jeden viewer.
+První export většího CT může chvíli trvat. Celé CT se neexportuje každou sekundu;
+aktualizace objemů je ruční. Automatické aktualizace jsou určené jen pro povrchy
+a bez změny dat znovu neexportují.
 
-CO BYLO OVĚŘENO
+V této verzi lze zobrazit jeden skalární CT/MR objem. Současně lze přidat
+neprůhledné modely/segmenty. U kombinace s objemem nastav jejich opacity na 100 %.
+MIP/MinIP, ROI ořez, více objemů, nelineární transformace objemu a interakce zpět
+do Sliceru zatím nejsou podporované. Nelineární transformaci lze předem Harden.
+ParaView používá dosavadní přenos povrchu; objemový přenos v r9 zapíná Slicer.
 
-Windows CI sestavuje sender proti přesné dodané hlavičce a kontroluje otisk
-vložený do EXE. Podrobnosti o původu binárek jsou v BUILD_INFO.json.
-Pluginy byly ověřeny na Linuxu; zelený lokální náhled už funguje na tomto PC.
-R7 už na tomto PC zobrazila kostku se správnými transformacemi. Tímto testem
-měříme jednotlivé příčiny čekání. Přenos do dvou brýlí ještě ověřený není.
+VELIKOST A POLOHA
 
-Prototyp přenáší jeden neprůhledný povrch, v backendu zelený. Přenáší geometrii,
-nikoli celou obrazovku Sliceru. CT/MR volume rendering, barvy, popisky a ovládání
-Sliceru z headsetu ještě nejsou implementované. SDK ani Visualizer nejsou v ZIPu.
+Center and fit vycentruje celou scénu a přizpůsobí nejdelší rozměr na 65 cm,
+se zachováním vzájemných pozic objektů. V tomto režimu nejde o původní fyzickou
+velikost. Pro skutečné rozměry a world RAS polohu volbu vypni a klikni Update scene.
+Model mimo počátek pak může být mimo pracovní prostor Visualizeru.
+
+PŘIPOJENÍ A UKONČENÍ
+
+Po Start streaming nech Visualizer viditelný. První připojení může trvat několik
+sekund. Sender log ukáže Submitted 1 stereo frames po předání prvního snímku SDK.
+Sender process running samo o sobě nepotvrzuje zobrazení modelu.
+Stop streaming ukončí přenos. Po zavření Sliceru se dočasné exporty odstraní;
+po pádu aplikace mohou zůstat ve složce %TEMP%/qarvtk-*.
+
+Při chybě použij D:\QAROS_VTK\COLLECT-LOGS.cmd a přilož výsledný ZIP.
+Screenshot není k diagnostice nutný. Nastavení přenosu a diagnostika FPS z r8
+zůstávají zachované; r9 přidává obsah a vykreslování, neměří zvýšení FPS.
+
+OVĚŘENÍ
+
+Původní přenos a transformace byly potvrzené na r7/r8. Nové osvětlení, CT/MR,
+překryv a aktualizace scény se kontrolují automatickými testy; výsledky sestavení
+jsou v GitHub Actions a původ binárek v BUILD_INFO.json. Novou scénu je ještě
+potřeba zkontrolovat ve Visualizeru na cílovém PC. Přenos do dvou brýlí neověřen.
+SDK ani Visualizer nejsou součástí ZIPu.

@@ -93,6 +93,15 @@ def export_scene(blocks, destination, fit=True):
         raise ValueError("No visible models, segments or rendered scalar volume to send")
     if sum(bool(b.IsA("vtkImageData")) for b in blocks) > 1:
         raise ValueError("This version supports one rendered volume per scene; hide the other volumes")
+    if any(b.IsA("vtkImageData") for b in blocks):
+        for block in blocks:
+            if not block.IsA("vtkPolyData"):
+                continue
+            material = block.GetFieldData().GetArray("qarvtk.material")
+            colors = block.GetPointData().GetScalars() or block.GetCellData().GetScalars()
+            if (material.GetComponent(0, 3) < 1 or
+                    (colors and colors.GetNumberOfComponents() == 4 and colors.GetRange(3)[0] < 255)):
+                raise ValueError("A volume can currently be combined with opaque surfaces only; set model/segment opacity to 100% or stream it separately")
     scene = vtk.vtkMultiBlockDataSet()
     for index, block in enumerate(blocks):
         if not all(math.isfinite(x) for x in block.GetBounds()):

@@ -28,7 +28,7 @@ def package(native_archive, plugins_archive, output):
     date = datetime.date.fromisoformat(config['date'])
     payload = {}
     native_exes = {'qarvtk-preview.exe', 'qarvtk-sender.exe',
-                   'qarvtk-core-test.exe', 'qarvtk-gpu-test.exe'}
+                   'qarvtk-core-test.exe', 'qarvtk-gpu-test.exe', 'qarvtk-volume-test.exe'}
     with verified_zip(native_archive, config['native']['sha256']) as archive:
         for name in archive.namelist():
             path = PurePosixPath(name)
@@ -59,6 +59,7 @@ def package(native_archive, plugins_archive, output):
                     payload['plugins/' + '/'.join(path.parts[1:])] = archive.read(name)
     for name in ('plugins/slicer/QarosVTK.py',
                  'plugins/slicer/QarosVTKLib/qarvtk_runtime.py',
+                 'plugins/slicer/QarosVTKLib/qarvtk_scene.py',
                  'plugins/paraview/QarosVTKPlugin.py'):
         if name not in payload:
             raise ValueError(f'Missing plugin file: {name}')
@@ -116,8 +117,11 @@ SHA256 hlavičky SDK musí být `{config['sdk_header_sha256']}`. Hlavičku a run
 v instalovaném SDK neměň; plugin ověří shodu před spuštěním.
 
 Nativní Windows sestavení a core testy prošly; pluginy byly ověřeny na Linuxu.
-**Přenos přes NVIDIA/Hub do headsetu ještě není ověřený.** Prototyp přenáší jeden
-povrchový model, zatím bez CT/MR volume renderingu a kompletní hostitelské scény.
+**Novou verzi je ještě potřeba ověřit ve Visualizeru na cílovém PC.**
+Slicer podporuje osvětlené modely, viditelné segmenty a jeden CT/MR objem
+s nastavením z Volume Rendering, automatickým vycentrováním a přizpůsobením velikosti.
+Objem používá Composite režim bez ROI ořezu; kombinace s modely vyžaduje neprůhledné
+povrchy. ParaView zatím přenáší povrchy. FPS diagnostika z r8 je zachována.
 
 - Native build: [{config['native']['commit'][:8]}]({provenance['native_run']})
 - Plugins: [{config['plugins']['commit'][:8]}]({provenance['plugins_run']})

@@ -19,7 +19,7 @@ QAROS/mixeru/přijímače; podrobnosti jsou v [VALIDATION.md](docs/VALIDATION.md
 Údaj přibližně 44 FPS ve Visualizeru měří jinou část přenosu. Dosažení cíle
 60 FPS ještě není potvrzené. Před rozbalením zavři Slicer i Visualizer;
 cesty k pluginu a senderu zůstávají stejné. Logy lze zabalit pomocí `COLLECT-LOGS.cmd`.
-Samostatné stažení je také v [GitHub Release](https://github.com/HonzaHovora/QAROS_VTK/releases/tag/windows-start-2026-10-14-session022c40b6r8).
+Samostatné stažení je také v [GitHub Release](https://github.com/HonzaHovora/QAROS_VTK/releases/tag/windows-start-2026-10-14-session022c40b6r9).
 Původní [moderní Hub varianta](https://github.com/HonzaHovora/QAROS_VTK/releases/tag/windows-start-2026-10-14)
 zůstává dostupná pro jiné SDK. Každý sender vyžaduje odpovídající kompletní runtime.
 
@@ -36,16 +36,19 @@ transportu ani výsledného obrazu v headsetu. Aktuální sestavení a jejich v�
 - VTK/OpenGL renderer a samostatný náhled bez QAROS SDK.
 - GPU kopírování barvy a hloubky do textur QAROS bez čtení obrazu na CPU.
 - Odesílač pro Windows/WGL a Linux/GLX: nový Hub onboarding i starší SDK 2540.
-- Slicer plugin: výběr modelu/segmentu, Start/Stop, pairing, aktualizace a log.
+- Slicer plugin: model/segment/CT/MR nebo viditelná 3D scéna, barvy, osvětlení,
+  volume transfer funkce, automatické vystředění, Start/Stop, aktualizace a log.
 - ParaView Python plugin přes Plugin Manager: filtr QAROS Streaming, Start/Stop
   a publikování změn pipeline. První Hub pairing se provede ve Sliceru nebo terminálu.
 - Samostatné složky pluginů, ZIP balíček a základ CMake extension pro Slicer.
 - Znovunačtení exportu za běhu (`--watch`), kontrola shody SDK, skripty pro build a CI.
 
-Pluginy předávají geometrii přes atomicky zapsaný `.vtp`; video snímky zůstávají
-na GPU backendu. Tím jsou jeho knihovny oddělené od VTK/Qt hostitele. První verze
-podporuje jeden povrch; kompletní scény, volume rendering, barevné mapy a interakce
-z headsetu zpět do aplikace zbývá implementovat.
+Slicer předává scénu přes atomicky publikovaný `.vtm` a neměnné VTP/VTI soubory;
+ParaView používá `.vtp`. Video i hloubka zůstávají na GPU backendu. VTK/Qt
+hostitele se nemíchá s knihovnami senderu. R9 podporuje jeden skalární objem
+(Composite, bez ROI ořezu) a neprůhledné modely/segmenty. CT/MR převezme nastavení
+ze Slicer Volume Rendering. Popisky, řezy a interakce z headsetu zbývají.
+[Krátký postup pro modely a CT/MR](docs/WINDOWS_SESSION_QUICKSTART.txt).
 
 ## Rychlé spuštění na Linuxu
 

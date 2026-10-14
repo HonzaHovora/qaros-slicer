@@ -1,12 +1,14 @@
 # Instalace a první spuštění QAROS VTK
 
-**Pro první pokus použij [hotový Windows ZIP](https://github.com/HonzaHovora/QAROS_VTK/releases/tag/windows-start-2026-10-14)
-a [krátký postup](WINDOWS_QUICKSTART.txt).** Windows sestavení i core testy už prošly.
+**Pro první pokus použij [hotový Windows ZIP](https://github.com/HonzaHovora/QAROS_VTK/releases/tag/windows-start-2026-10-14-session022c40b6r9)
+a [krátký postup pro r9](WINDOWS_SESSION_QUICKSTART.txt).** Windows sestavení i core testy už prošly.
 Níže je plný postup ze zdrojů, potřebný například pro jiné SDK.
 
 Tento návod je pro první pokus na Windows po návratu. Projekt se od začátku instaluje jako **plugin do Sliceru a ParaView**. Oba pluginy spouštějí stejný C++ backend v samostatném procesu. Není potřeba přestavovat Slicer ani ParaView.
 
-První verze přenáší **jeden povrchový model nebo jeden segment**, jeho změny a prostorovou polohu. Backend renderuje stereo barvu a hloubku pro QAROS. Celá hostitelská scéna, CT/MR volume rendering, materiály, barevné mapy a výběr objektů z headsetu ještě nejsou implementované. Běžící proces sám o sobě neznamená připojený headset.
+Slicer v r9 přenáší vybraný objekt nebo viditelné modely/segmenty a jeden skalární CT/MR objem z prvního 3D pohledu. Zachová barvy, voxelová data a nastavení z Volume Rendering. Povrchy mají osvětlení, backend renderuje stereo barvu i hloubku. ParaView zatím používá dosavadní přenos povrchu. Popisky, řezy, ovladače a výběr objektů z headsetu nejsou součástí scény.
+
+Objem používá Composite režim bez ROI ořezu, podporuje lineární transformace a lze jej kombinovat s neprůhlednými povrchy. Více objemů a MIP/MinIP zatím nejsou podporované. Nový Slicer plugin potřebuje sender s `plugin_protocol: 2`.
 
 ## 1. Co si připravit
 
@@ -70,7 +72,7 @@ ctest --test-dir build-windows-release -C Release --output-on-failure
 
 Po každém příkazu zkontroluj, že skončil bez chyby. První kompilace VTK může trvat přes hodinu a potřebuje dost místa na disku; další buildy využijí cache. Triplet sestavuje pouze Release. Původní Windows CI vypršelo při kompilaci Debug VTK; aktuální stav plného buildu je v [GitHub Actions](https://github.com/HonzaHovora/QAROS_VTK/actions/workflows/windows-native.yml).
 
-Preview má zobrazit zelenou kostku. Nevyžaduje Hub ani SDK runtime. GPU test vyžaduje funkční OpenGL 3.3, proto ho spouštěj v místní grafické relaci. `--sdk-info` vypíše fingerprint hlavičky, typ API a `plugin_protocol: 1`.
+Preview má zobrazit zelenou kostku. Nevyžaduje Hub ani SDK runtime. GPU test vyžaduje funkční OpenGL 3.3, proto ho spouštěj v místní grafické relaci. `--sdk-info` vypíše fingerprint hlavičky, typ API a `plugin_protocol: 2`.
 
 Při přesunu backendu zkopíruj **celou složku `Release` s DLL**, ne samotné EXE. SDK ponech zvlášť a kompletní. Binárky z CI sestavené jen s veřejnou hlavičkou nemusí odpovídat tvému SDK; plugin nesoulad odmítne.
 
@@ -78,15 +80,15 @@ Při přesunu backendu zkopíruj **celou složku `Release` s DLL**, ne samotné 
 
 1. Spusť Slicer. V **Edit → Application Settings → Modules → Additional module paths** přidej `C:/dev/QAROS_VTK/package/QAROS-VTK-plugins/slicer` a restartuj Slicer.
 2. Vyber modul **QAROS → QAROS Streaming**.
-3. Načti model nebo segmentaci a vyber ji. U segmentace vyber jeden segment. Pro první pokus použij malý model poblíž počátku souřadnic.
+3. Načti model/segmentaci nebo CT/MR. Pro CT/MR zapni **Volume Rendering**, vyber preset a vypni Crop. V QAROS vyber **Selected object**, nebo **Visible 3D scene (first view)**. U vybrané segmentace vyber segment. **Center and fit** je zapnuté jako výchozí.
 4. **Sender executable** nastav na `C:/dev/QAROS_VTK/build-windows-release/Release/qarvtk-sender.exe`. **QAROS SDK folder** nastav na svou složku SDK.
 5. U nového Hub SDK zadej **Hub pairing code** při prvním spojení. Identita se uloží mimo repozitář do `%LOCALAPPDATA%/QAROS_VTK/onboarding-id.txt`. Kód se po pokusu vymaže z políčka a plugin ho neukládá do nastavení. Volitelně vyplň Hub host.
 6. U staršího SDK 2540 se používá session invite: případně vyber **Legacy invite**, zvol **Legacy viewer** (`visualizer` nebo `quest`). Pole Hub identity/kód se u něj nepoužívají.
 7. Klikni **Start streaming**. U nového API otevři aplikaci/volume v Hub vieweru. Sleduj **Sender log**; chyba GPU, SDK nebo připojení je vidět zde.
-8. Po změně modelu stiskni **Update surface**. Volitelně zapni aktualizaci každou sekundu; u velkých segmentací může export zdržovat UI.
+8. Po změně modelu, barvy nebo presetu objemu stiskni **Update scene**. Automatická aktualizace je jen pro změněné povrchy; objemy se exportují ručně.
 9. **Stop streaming** požádá backend o ukončení. Během blokujícího SDK připojení to může trvat až přibližně 65 sekund. Při zavření Sliceru se neukončený proces po krátkém čekání ukončí vynuceně.
 
-Transformace rodičů MRML se aplikují automaticky; jednotky jsou RAS milimetry a převod do QAROS metrů provádí backend. Nastavení scénu automaticky nevystředí. Model mimo počátek může být mimo záběr/app volume.
+Transformace rodičů MRML se aplikují automaticky; jednotky jsou RAS milimetry a převod do QAROS metrů provádí backend. **Center and fit** standardně vycentruje scénu a přizpůsobí nejdelší rozměr na 65 cm. Pro původní fyzické rozměry a světovou polohu tuto volbu vypni; model mimo počátek pak může být mimo pracovní prostor.
 
 Bez SDK můžeš ověřit načtení pluginu a **Export surface to file**. Export má fungovat i bez senderu. Vzniklý VTP lze otevřít lokálně:
 
@@ -132,13 +134,13 @@ Pro streaming je potřeba Linuxové SDK s `bin/libqar-streaming-c.so`, podporova
 
 První test je úspěšný, až když uvidíš správně velký model ve vieweru, reaguje na pohyb hlavy, **Update surface** změní geometrii a **Stop streaming** ukončí sender bez pádu hostitele. Zvlášť ověř hloubku/okluzi a polohu na skutečném zařízení.
 
-Při chybě pošli: verzi Sliceru/ParaView, commit repozitáře, výstup `--sdk-info`, poslední chybu z logu a typ GPU/ovladače. Log je v dočasné složce `qarvtk-*`, kterou ukazuje stav pluginu. Neukládej do Gitu pairing kódy, onboarding identitu, pozvánky ani pacientská data. Soukromý pracovní VTP plugin odstraní při úklidu; po pádu aplikace může zůstat v dočasné složce.
+Při chybě pošli: verzi Sliceru/ParaView, commit repozitáře, výstup `--sdk-info`, poslední chybu z logu a typ GPU/ovladače. Log je v dočasné složce `qarvtk-*`, kterou ukazuje stav pluginu. Neukládej do Gitu pairing kódy, onboarding identitu, pozvánky ani pacientská data. Soukromé pracovní VTP/VTM a voxelové exporty plugin odstraní při úklidu; po pádu aplikace může zůstat v dočasné složce.
 
 | Projev | Co zkontrolovat |
 | --- | --- |
 | Plugin není v nabídce | Správná složka s celým balíčkem, restart Sliceru / načtení `.py` v Plugin Manageru ParaView. |
 | SDK does not match | Překonfigurovat a sestavit sender proti hlavičce z téhož SDK jako runtime. |
-| Sender is too old | Znovu sestavit backend z aktuálního checkoutu; plugin potřebuje protokol 1. |
+| Sender is too old | Znovu sestavit backend z aktuálního checkoutu; plugin potřebuje protokol 2 pro scény/objemy. |
 | Missing runtime / DLL | Kompletní SDK a kompletní složka Release s DLL; ne míchat verze. |
 | OpenGL/GPU identity chyba | Ovladač, podporovaná GPU, stejný adaptér pro OpenGL a QAROS; Linux X11. |
 | No viewer request / timeout | Spuštěný Hub/viewer, správné párování/invite, otevřená app volume, síť. |

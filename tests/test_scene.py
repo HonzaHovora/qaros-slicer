@@ -12,7 +12,7 @@ from qarvtk_scene import export_scene, surface, volume
 class SceneTests(unittest.TestCase):
     def test_material_volume_and_atomic_generations(self):
         cube = vtk.vtkCubeSource(); cube.Update()
-        model = surface(cube.GetOutput(), color=(1, 0.25, 0), opacity=0.7)
+        model = surface(cube.GetOutput(), color=(1, 0.25, 0), opacity=1.0)
         image = vtk.vtkImageData(); image.SetDimensions(4, 5, 6); image.SetSpacing(0.7, 0.8, 2)
         image.AllocateScalars(vtk.VTK_SHORT, 1); image.GetPointData().GetScalars().Fill(1200)
         matrix = vtk.vtkMatrix4x4(); matrix.SetElement(0, 3, 123)
@@ -31,13 +31,15 @@ class SceneTests(unittest.TestCase):
             reader = vtk.vtkXMLMultiBlockDataReader(); reader.SetFileName(str(path)); reader.Update()
             self.assertEqual(reader.GetOutput().GetNumberOfBlocks(), 2)
             m, v = [reader.GetOutput().GetBlock(i) for i in range(2)]
-            self.assertEqual(m.GetFieldData().GetArray("qarvtk.material").GetTuple(0)[:4], (1, .25, 0, .7))
+            self.assertEqual(m.GetFieldData().GetArray("qarvtk.material").GetTuple(0)[:4], (1, .25, 0, 1.0))
             self.assertEqual(v.GetSpacing(), image.GetSpacing())
             self.assertEqual(v.GetScalarRange(), (1200, 1200))
             self.assertEqual(v.GetFieldData().GetArray("qarvtk.matrix").GetComponent(0, 3), 123)
             self.assertEqual(v.GetFieldData().GetArray("qarvtk.opacity").GetTuple(1), (1200, .8, .3, .1))
             self.assertEqual(v.GetFieldData().GetArray("qarvtk.volume").GetComponent(0, 0), .75)
             self.assertIsNone(image.GetFieldData().GetArray("qarvtk.matrix"))
+            with self.assertRaisesRegex(ValueError, "opaque surfaces"):
+                export_scene([surface(cube.GetOutput(), opacity=.5), vol], path)
             with self.assertRaisesRegex(ValueError, "one rendered volume"):
                 export_scene([vol, vol], path)
             self.assertEqual(path.read_bytes(), original)
