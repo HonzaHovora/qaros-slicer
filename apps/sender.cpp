@@ -39,6 +39,9 @@
 #if !QARVTK_MODERN_SDK
 #include "legacy_peer_observer.hpp"
 #endif
+#if defined(_WIN32) && !QARVTK_SPLIT_OPENGL_PARAMS
+#include "wgl_callbacks.hpp"
+#endif
 
 QAR_IMPLEMENT_DYNAMIC_LOADING()
 namespace fs = std::filesystem;
@@ -143,6 +146,7 @@ struct NativeContext {
   QarStreamParamsOpenGlWgl params=qar_stream_params_opengl_wgl_default();
 #else
   QarStreamParamsOpenGl params=qar_stream_params_opengl_default();
+  std::unique_ptr<qarvtk::WglCallbacks> callbacks;
 #endif
   explicit NativeContext(qarvtk::Renderer& renderer) {
     window=glfwGetWin32Window(renderer.sdk_window()); dc=GetDC(window);
@@ -153,7 +157,19 @@ struct NativeContext {
     params.display_or_device_context=dc;
 #endif
     params.context=glfwGetWGLContext(renderer.sdk_window());
-    if (!dc || !params.context) throw std::runtime_error("WGL shared context unavailable");
+    try {
+      if (!dc || !params.context) throw std::runtime_error("WGL shared context unavailable");
+#if !QARVTK_SPLIT_OPENGL_PARAMS
+      callbacks=std::make_unique<qarvtk::WglCallbacks>(dc,static_cast<HGLRC>(params.context));
+      callbacks->configure(params);
+      const auto probe=callbacks->probe_on_worker();
+      std::cout << "WGL worker probe: GL " << probe.version
+                << "; glGetStringi=" << probe.get_string_i
+                << "; Win32 memory import=" << probe.memory_import
+                << "; semaphore import=" << probe.semaphore_import << '\n';
+      if (!probe.get_string_i) throw std::runtime_error("Shared WGL worker context cannot resolve glGetStringi");
+#endif
+    } catch (...) { if (dc) { ReleaseDC(window,dc); dc=nullptr; } throw; }
   }
   ~NativeContext() { if (dc) ReleaseDC(window,dc); }
 #else
@@ -175,6 +191,11 @@ struct NativeContext {
       throw std::runtime_error("GLX shared context unavailable; run in an X11 session");
   }
 #endif
+  void report_callbacks() const {
+#if defined(_WIN32) && !QARVTK_SPLIT_OPENGL_PARAMS
+    callbacks->report();
+#endif
+  }
 };
 
 #if QARVTK_MODERN_SDK
@@ -430,7 +451,7 @@ int main(int argc,char** argv) { try {
   if (!options.scene.empty()) renderer.load_vtp(options.scene.string(),options.scale,options.ras);
   auto adapter=graphics_device();
   qarvtk::GlCopy copy;
-  NativeContext native(renderer); // Outlives SDK; SDK context is never current on this thread.
+  NativeContext native(renderer); // Outlives SDK; shared context belongs to worker threads.
   Sdk sdk; sdk.open(options); sdk.connect(options,adapter);
 #if QARVTK_MODERN_SDK
   sdk.create_volume(); // Hub viewers request an existing volume.
@@ -456,7 +477,9 @@ int main(int argc,char** argv) { try {
   }
   sdk.deadline(options.timeout);
   std::cout << "Creating OpenGL sender...\n";
-  checked(qar_render_sender_create(sdk.session,&init,sdk.operation,&sdk.sender),"create OpenGL sender");
+  const auto created=qar_render_sender_create(sdk.session,&init,sdk.operation,&sdk.sender);
+  native.report_callbacks();
+  checked(created,"create OpenGL sender");
   if (!sdk.sender) throw std::runtime_error("SDK returned a null sender");
   std::cout << "OpenGL sender created; waiting for the viewer's first frame request...\n";
   const qarvtk::Clip clip{.05,20};
