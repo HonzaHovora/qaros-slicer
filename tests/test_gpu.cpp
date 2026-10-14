@@ -36,7 +36,7 @@ int main(){try{
     frame.views={{Eye::right,Plane::depth,3,width,height,0,0,0},{Eye::left,Plane::color,0,0,0,width,height,0},
                  {Eye::right,Plane::color,2,width,height,0,0,0},{Eye::left,Plane::depth,1,0,0,width,height,0}};
     auto views=validate_stereo(frame);Clip clip{.1,10};Fov fov{-.6,.6,.6,-.6};
-    for(int eye=0;eye<2;++eye){Pose p;p.position.z=2;p.position.x=eye==0?-.032:.032;
+    for(int eye=0;eye<2;++eye){Pose p;p.position.z=2;p.position.x=eye==0?-.032:.032;p.position.y=.12;
       auto s=renderer.render(p,fov,clip,width,height);
       // The copy must survive and restore a non-default host GL state.
       glEnable(GL_BLEND);glEnable(GL_SCISSOR_TEST);glScissor(0,0,1,1);
@@ -67,13 +67,15 @@ int main(){try{
       std::vector<unsigned char> rgba(width*height*4);std::vector<float> depth(width*height);
       glBindTexture(target,owned.ids[eye*2]);glGetTexImage(target,0,GL_RGBA,GL_UNSIGNED_BYTE,rgba.data());
       glBindTexture(target,owned.ids[eye*2+1]);glGetTexImage(target,0,floatColorDepth?GL_RED:GL_DEPTH_COMPONENT,GL_FLOAT,depth.data());
-      double xsum=0;unsigned count=0;
+      double xsum=0,ysum=0;unsigned count=0;
       for(unsigned y=0;y<height;++y)for(unsigned x=0;x<width;++x){const auto i=y*width+x;
         check(std::isfinite(depth[i])&&depth[i]>=0&&depth[i]<=1,"invalid depth range");
-        if(rgba[i*4+3]>128){check(rgba[i*4+1]>100,"cube color missing");xsum+=x+.5;++count;
+        if(rgba[i*4+3]>128){check(rgba[i*4+1]>100,"cube color missing");xsum+=x+.5;ysum+=y+.5;++count;
           check(std::abs(depth[i]-depth_from_distance(1.8,clip))<.005,"front depth differs from analytic projection");}
       }
       check(count>100,"no visible cube pixels");centroids[eye]=xsum/count;
+      const double streamY=eye==0?ysum/count:height-ysum/count;
+      check(streamY>height*.53,"camera above cube must place it below centre in the top-down stream");
       check(depth.front()>.999F&&rgba[3]==0,"background depth or transparency corrupted");
     }
     // Undo the deliberate horizontal flip before comparing stereo disparity.

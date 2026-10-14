@@ -1,5 +1,43 @@
 # Validation and next work
 
+## Vertical raster orientation and performance measurement: 2026-10-14, r7
+
+The user confirmed that r6 streams a visible cube into Visualizer on the NVIDIA
+PC. Horizontal camera motion is correct, but vertical motion makes the cube move
+within its volume in the opposite direction. Reported viewer performance is
+approximately 36 FPS; the requested target is at least 60 FPS, eventually with
+two headsets. This is the first confirmed end-to-end Visualizer display, not a
+headset or two-client throughput measurement.
+
+The SDK coordinate guide specifies right-handed, +Y-up, -Z-forward view poses in
+app content space. Our camera follows that convention. The official Vulkan cube
+renderer uses a negative-height viewport with the same projection signs, placing
+the upper image row at texture row zero. VTK's OpenGL framebuffer starts at the
+bottom. Our copy composed the SDK view flips without converting this source
+origin, vertically mirroring both image and depth relative to the view metadata.
+
+R7 composes the bottom-to-top raster conversion with each view's existing flips
+for both color and depth. Pose, projection, horizontal orientation and scene
+coordinates are unchanged. First-frame diagnostics also report the view rectangle
+and origin conversion. The existing GPU test now uses an elevated camera; a new
+GPU test compares color and depth against an independent ray/box intersection
+oracle for pitch, yaw, roll, translations, stereo, asymmetric FOV, padded view
+rectangles, independently flipped planes, 2D/array destinations and D32F/R32F.
+The local GL 3.3 copy test fails on r6's row order and passes with r7.
+
+Every five seconds after the first frame, the sender records `PERF stereo_fps`,
+average frame time, SDK begin-frame time, VTK rendering, GPU copy calls, blocking
+`glFinish`, SDK submission and remaining time, plus idle polls and eye resolution.
+These are CPU wall times per complete stereo frame, including driver stalls at
+the measured calls; asynchronous encoding and receiver display are not measured.
+The synchronization baseline remains in place until timings justify a change.
+No 60-FPS or two-headset result is claimed. A 30-60 second on-device run will
+identify which part exceeds the 16.67 ms frame budget.
+
+Primary references inspected: QAROS
+[coordinate systems](https://github.com/Quaternar/qaros/blob/main/docs/website/docs/developer-guide/coordinate-systems.md)
+and [Vulkan cube renderer](https://github.com/Quaternar/qaros/blob/main/qar-streaming-c/examples/vulkan_cube/renderer.cpp).
+
 ## Destination framebuffer: 2026-10-14, r6
 
 The r5 diagnostics reach a successful begin-frame, four textures/four views and

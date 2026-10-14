@@ -109,7 +109,9 @@ void GlCopy::plane(unsigned source,const Texture& t,const View& v,bool depth,boo
   glGetTexParameteriv(target,GL_TEXTURE_BASE_LEVEL,&base);glGetTexParameteriv(target,GL_TEXTURE_MAX_LEVEL,&max);
   checked_gl("Query destination: "+context.str());
   context<<"; target="<<(target==GL_TEXTURE_2D?"GL_TEXTURE_2D":"GL_TEXTURE_2D_ARRAY")
-    <<"; format="<<hex(internal)<<"; GL size="<<w<<'x'<<h<<'x'<<layers<<"; mip range="<<base<<".."<<max;
+    <<"; format="<<hex(internal)<<"; GL size="<<w<<'x'<<h<<'x'<<layers<<"; mip range="<<base<<".."<<max
+    <<"; view=("<<v.x0<<','<<v.y0<<")->("<<v.x1<<','<<v.y1<<")"
+    <<"; source origin=bottom-left; stream origin=top-left";
   if(report)std::cout<<"GPU copy destination: "<<context.str()<<'\n';
   if(w!=static_cast<int>(t.width)||h!=static_cast<int>(t.height)||layers!=static_cast<int>(t.layers))
     throw std::runtime_error("SDK texture dimensions disagree with OpenGL: "+context.str());
@@ -134,7 +136,10 @@ void GlCopy::plane(unsigned source,const Texture& t,const View& v,bool depth,boo
   if(nativeDepth){glEnable(GL_DEPTH_TEST);glDepthFunc(GL_ALWAYS);glDepthMask(GL_TRUE);}else{glDisable(GL_DEPTH_TEST);glDepthMask(GL_FALSE);}
   glViewport(std::min(v.x0,v.x1),std::min(v.y0,v.y1),width(v),height(v));
   glBindTexture(GL_TEXTURE_2D,source);
-  glUniform2i(glGetUniformLocation(program_,"flipAxis"),v.x1<v.x0,v.y1<v.y0);
+  // VTK's framebuffer has row zero at the bottom. QAROS view pixels run
+  // top-to-bottom (as in its CPU/D3D/Vulkan renderers). Convert that origin
+  // for BOTH color and depth, then compose with each view's optional flips.
+  glUniform2i(glGetUniformLocation(program_,"flipAxis"),v.x1<v.x0,v.y1>v.y0);
   glUniform1i(glGetUniformLocation(program_,"isDepth"),depth?1:0);
   glDrawArrays(GL_TRIANGLES,0,3);
   checked_gl("Draw GPU copy: "+context.str());

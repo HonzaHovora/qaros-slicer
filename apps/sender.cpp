@@ -28,10 +28,12 @@
 #include <cstring>
 #include <filesystem>
 #include <fstream>
+#include <iomanip>
 #include <iostream>
 #include <memory>
 #include <mutex>
 #include <optional>
+#include <sstream>
 #include <stdexcept>
 #include <string>
 #include <thread>
@@ -50,6 +52,29 @@ using Clock = std::chrono::steady_clock;
 namespace {
 volatile std::sig_atomic_t stop_requested = 0;
 void on_signal(int) { stop_requested = 1; }
+
+double elapsed_ms(Clock::time_point start){
+  return std::chrono::duration<double,std::milli>(Clock::now()-start).count();
+}
+struct Performance {
+  Clock::time_point since=Clock::now();
+  unsigned frames{},polls{};
+  double begin{},render{},copy{},finish{},show{};
+  void reset(){*this=Performance{};}
+  void report(unsigned width,unsigned height){
+    const double wall=elapsed_ms(since);
+    if(!frames||wall<5000)return;
+    const double other=std::max(0.0,wall-begin-render-copy-finish-show);
+    std::ostringstream line;line<<std::fixed<<std::setprecision(2)
+      <<"PERF stereo_fps="<<frames*1000.0/wall<<"; frame_ms="<<wall/frames
+      <<"; sdk_begin_ms="<<begin/frames<<"; vtk_render_ms="<<render/frames
+      <<"; gpu_copy_ms="<<copy/frames<<"; gpu_finish_ms="<<finish/frames
+      <<"; sdk_show_ms="<<show/frames<<"; other_ms="<<other/frames
+      <<"; idle_polls="<<polls<<"; eye_size="<<width<<'x'<<height
+      <<"; frames="<<frames<<"; target60_frame_ms=16.67\n";
+    std::cout<<line.str();reset();
+  }
+};
 
 void checked(QarResult result, const char* operation) {
   if (qar_result_is_success(result)) return;
@@ -498,6 +523,9 @@ int main(int argc,char** argv) { try {
   auto last_wait_report=last_frame;
 #endif
   auto scene_time=options.scene.empty()?fs::file_time_type{}:fs::last_write_time(options.scene);
+  Performance performance;
+  std::cout<<"Performance logging every 5 seconds after warm-up; CPU wall times per stereo frame. "
+      "GPU stalls can appear in render/copy/finish; asynchronous encoding is not timed here.\n";
   int sent=0;
   while (!stop_requested && !shutdown.requested() && !renderer.closing() && (!options.frames || sent<options.frames)) {
     renderer.poll();
@@ -516,7 +544,10 @@ int main(int argc,char** argv) { try {
       throw std::runtime_error("No frame received before timeout; check viewer and GPU adapter");
     }
     QarRenderFrameInfo* raw{}; bool ready=false;
+    const auto begin_started=Clock::now();
     const auto result=qar_render_sender_try_begin_frame(sdk.sender,&raw,&ready);
+    performance.begin+=elapsed_ms(begin_started);
+    if(!ready)++performance.polls;
     std::unique_ptr<QarRenderFrameInfo,decltype(&qar_render_frame_info_handle_destroy)> info(raw,qar_render_frame_info_handle_destroy);
 #if !QARVTK_MODERN_SDK
     const auto wait=qarvtk::legacy_begin_frame_wait(result,sent==0);
@@ -559,15 +590,26 @@ int main(int argc,char** argv) { try {
           {pose.orientation.x,pose.orientation.y,pose.orientation.z,pose.orientation.w}};
       const qarvtk::Fov angles{fov.angle_left,fov.angle_right,fov.angle_up,fov.angle_down};
       const auto& view=frame.views[eye.color];
+      const auto render_started=Clock::now();
       auto source=renderer.render(camera,angles,clip,qarvtk::width(view),qarvtk::height(view));
+      performance.render+=elapsed_ms(render_started);
+      const auto copy_started=Clock::now();
       copy.copy(source,frame,eye,!sent);
+      performance.copy+=elapsed_ms(copy_started);
     }
+    const auto finish_started=Clock::now();
     copy.finish(); // glFinish: correctness baseline before SDK's graphics thread consumes textures.
+    performance.finish+=elapsed_ms(finish_started);
     if (!sent) std::cout << "First stereo frame rendered and copied; submitting to SDK...\n";
     auto show=qar_render_frame_show_default();
     show.rendered_near_far={static_cast<float>(clip.near_plane),static_cast<float>(clip.far_plane)}; show.depth_scale=1;
+    const auto show_started=Clock::now();
     checked(qar_render_sender_show_frame(sdk.sender,&show),"show frame");
+    performance.show+=elapsed_ms(show_started);
     last_frame=Clock::now(); ++sent;
+    if(sent==1)performance.reset(); // Exclude context/shader/encoder startup.
+    else {++performance.frames;const auto& view=frame.views[views[0].color];
+      performance.report(qarvtk::width(view),qarvtk::height(view));}
     if (options.preview) renderer.present();
     if (sent==1 || sent%300==0) std::cout<<"Submitted "<<sent<<" stereo frames\n";
   }

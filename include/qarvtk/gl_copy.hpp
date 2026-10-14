@@ -2,7 +2,8 @@
 #include "qarvtk/layout.hpp"
 #include "qarvtk/renderer.hpp"
 namespace qarvtk {
-// Two shader copies per eye. No pixel readback, no PBO/CPU fallback.
+// Copy VTK's bottom-left raster into QAROS's top-left raster for both planes,
+// composing with the SDK view flips. No pixel readback, no PBO/CPU fallback.
 // Destruction requires the render context to be current.
 class GlCopy {
 public:
