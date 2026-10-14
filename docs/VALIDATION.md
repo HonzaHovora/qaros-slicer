@@ -1,5 +1,27 @@
 # Validation and next work
 
+## Initial viewer pose wait: 2026-10-14, r5
+
+The r4 log confirms the installed EXE fingerprint, successful OpenGL setup and
+connected transfer. Its first begin-frame attempt then failed with 803 wrapping
+`RenderingProducerMissingPoseData` (801), about 1.6 seconds after sender creation.
+No frame was submitted. The earlier paused-transfer failure did not recur in this
+attempt. This alone does not establish that pose data will arrive on a later call.
+
+The declared view order (left color/depth, right color/depth, distinct textures)
+matches the official QAROS `vulkan_cube/main.cpp` example; we do not change it.
+The r5 compatibility policy retries this exact 803/801 diagnostic only before
+the first submitted frame, with 100 ms backoff inside the existing 60-second
+default deadline. It reports the wait every five seconds and preserves the
+missing-pose condition in a timeout error. Pose loss after streaming has started
+and unrelated errors remain fatal. No synthetic pose or FOV is substituted.
+
+First-frame phase messages distinguish a successful begin-frame, validated
+texture layout, fetched pose/FOV, rendering/copy and actual submission. This
+allows the next on-device attempt to tell a delayed initial pose from a persistent
+receiver/runtime problem. The existing regression test now covers both captured
+startup errors, the post-start pose-loss restriction and unrelated causes.
+
 ## Primary-transfer startup pause: 2026-10-14, r4
 
 The r3 diagnostics confirm the WGL fix on the user's RTX 2070 Max-Q: the worker

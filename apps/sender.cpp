@@ -494,7 +494,8 @@ int main(int argc,char** argv) { try {
          Clock::now()<settle_until && Clock::now()-last_frame<std::chrono::seconds(options.timeout)) {
     renderer.poll(); std::this_thread::sleep_for(std::chrono::milliseconds(20));
   }
-  bool pause_reported=false;
+  auto reported_wait=qarvtk::LegacyFrameWait::none;
+  auto last_wait_report=last_frame;
 #endif
   auto scene_time=options.scene.empty()?fs::file_time_type{}:fs::last_write_time(options.scene);
   int sent=0;
@@ -507,16 +508,28 @@ int main(int argc,char** argv) { try {
         catch (const std::exception& e) { std::cerr<<"Keeping previous scene: "<<e.what()<<'\n'; }
       }
     }
-    if (Clock::now()-last_frame>std::chrono::seconds(options.timeout)) throw std::runtime_error("No frame received before timeout; check viewer and GPU adapter");
+    if (Clock::now()-last_frame>std::chrono::seconds(options.timeout)) {
+#if !QARVTK_MODERN_SDK
+      if (reported_wait==qarvtk::LegacyFrameWait::first_pose)
+        throw std::runtime_error("No first frame before timeout; observed SDK condition: RenderingProducerMissingPoseData (801). No stereo frame was submitted.");
+#endif
+      throw std::runtime_error("No frame received before timeout; check viewer and GPU adapter");
+    }
     QarRenderFrameInfo* raw{}; bool ready=false;
     const auto result=qar_render_sender_try_begin_frame(sdk.sender,&raw,&ready);
     std::unique_ptr<QarRenderFrameInfo,decltype(&qar_render_frame_info_handle_destroy)> info(raw,qar_render_frame_info_handle_destroy);
 #if !QARVTK_MODERN_SDK
-    if (qarvtk::legacy_begin_frame_paused(result)) {
-      if (!pause_reported) {
-        std::cout << "Primary transfer is paused; retrying every 100 ms (frame timeout "
-                  << options.timeout << " seconds remains active)...\n";
-        pause_reported=true;
+    const auto wait=qarvtk::legacy_begin_frame_wait(result,sent==0);
+    if (wait!=qarvtk::LegacyFrameWait::none) {
+      const auto now=Clock::now();
+      if (wait!=reported_wait || now-last_wait_report>=std::chrono::seconds(5)) {
+        const char* reason=wait==qarvtk::LegacyFrameWait::first_pose
+            ? "Waiting for first viewer pose (RenderingProducerMissingPoseData, 801)"
+            : "Primary transfer is paused";
+        std::cout << reason << "; retrying every 100 ms, "
+                  << std::chrono::duration_cast<std::chrono::seconds>(now-last_frame).count()
+                  << "/" << options.timeout << " seconds since last submitted frame/start...\n";
+        reported_wait=wait; last_wait_report=now;
       }
       std::this_thread::sleep_for(std::chrono::milliseconds(100)); continue;
     }
@@ -526,17 +539,22 @@ int main(int argc,char** argv) { try {
     }
     checked(result,"begin frame"); if (!info) throw std::runtime_error("Ready frame has no view metadata");
 #if !QARVTK_MODERN_SDK
-    if (pause_reported) {
-      std::cout << "Primary transfer resumed; received a frame request.\n";
-      pause_reported=false;
+    if (reported_wait!=qarvtk::LegacyFrameWait::none) {
+      std::cout << "Viewer frame data is ready; continuing.\n";
+      reported_wait=qarvtk::LegacyFrameWait::none;
     }
 #endif
+    if (!sent) std::cout << "First frame request received; reading OpenGL frame layout...\n";
     auto access=qar_video_frame_opengl_default(); checked(qar_render_sender_frame_opengl(sdk.sender,&access),"get OpenGL frame");
     const auto frame=frame_layout(access); const auto views=qarvtk::validate_stereo(frame);
+    if (!sent) std::cout << "First frame layout validated: " << frame.textures.size()
+                         << " textures, " << frame.views.size() << " views.\n";
     for (const auto& eye:views) {
       QarPose pose=qar_pose_default(); QarFov fov=qar_fov_default();
       checked(qar_render_frame_info_get_view_pose(info.get(),eye.color,&pose),"get view pose");
       checked(qar_render_frame_info_get_view_fov(info.get(),eye.color,&fov),"get view FOV");
+      if (!sent) std::cout << "First frame color view " << eye.color
+                           << ": pose/FOV received; rendering and copying color/depth...\n";
       const qarvtk::Pose camera{{pose.position.x,pose.position.y,pose.position.z},
           {pose.orientation.x,pose.orientation.y,pose.orientation.z,pose.orientation.w}};
       const qarvtk::Fov angles{fov.angle_left,fov.angle_right,fov.angle_up,fov.angle_down};
@@ -545,6 +563,7 @@ int main(int argc,char** argv) { try {
       copy.copy(source,frame,eye);
     }
     copy.finish(); // glFinish: correctness baseline before SDK's graphics thread consumes textures.
+    if (!sent) std::cout << "First stereo frame rendered and copied; submitting to SDK...\n";
     auto show=qar_render_frame_show_default();
     show.rendered_near_far={static_cast<float>(clip.near_plane),static_cast<float>(clip.far_plane)}; show.depth_scale=1;
     checked(qar_render_sender_show_frame(sdk.sender,&show),"show frame");
