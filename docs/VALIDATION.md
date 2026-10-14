@@ -14,7 +14,7 @@
 | Legacy 2540 SDK sender | PASS: Linux C++ syntax check against actual package header; no link/runtime claim |
 | Surface interchange | PASS: real VTK round-trip, baked world transform, triangulation, input unchanged, invalid export preserves previous file |
 | ParaView host smoke | PASS in ParaView 5.11.2 on Ubuntu: export, display transform and original active source |
-| Windows native VTK/sender | Original Debug + Release build timed out; Release-only rebuild in progress (not an end-to-end runtime test) |
+| Windows native VTK/sender | PASS: Release build and core tests in run 37986750101, commit d16e50cb (2026-10-09). No Windows GPU/Hub/headset test |
 | Packaged Slicer plugin | PASS in official Slicer 5.12.4 on Ubuntu: module discovery, model/segment transforms, Start/Update/Stop with process fixture, cleanup without module-load/shutdown errors |
 | Packaged ParaView plugin | PASS in official ParaView 5.12.1: real plugin loader, pipeline update, Start/Stop/restart with process fixture; locally and in Linux CI |
 | Slicer CMake extension/CPack route | Entry point prepared; not built against a Slicer development tree. Tested installation is the packaged scripted module via Additional module paths |
@@ -42,7 +42,7 @@ The full Windows build is [run 37952481497](https://github.com/HonzaHovora/QAROS
 it was cancelled after the 60-minute limit while vcpkg was compiling Debug VTK.
 The workflow now builds Release only, with a 180-minute cold-build limit.
 Runs [37985668990](https://github.com/HonzaHovora/QAROS_VTK/actions/runs/37985668990)
-and [37986750101](https://github.com/HonzaHovora/QAROS_VTK/actions/runs/37986750101) track the replacement builds.
+and [37986750101](https://github.com/HonzaHovora/QAROS_VTK/actions/runs/37986750101) both completed successfully. The 2026-10-14 Windows starter uses the latter run's unchanged binaries.
 See [all runs](https://github.com/HonzaHovora/QAROS_VTK/actions) for the current commit;
 these historic passes must not be read as proof for later untested changes.
 
@@ -50,6 +50,11 @@ Inspected SDK header fingerprints:
 
 - Modern pinned public header: `00f96316f50ad9c7e1e94daaf9a229e704fffb1acf89aa2a585af32dde000069`
 - Package 2540 header: `c709c479cc6a1acc0040fb61a071cc7bc16e65bf5acb90d624d9d6b0a6fcd3c1`
+
+The packaged Windows build reports header SHA-256
+`eed88c1e4a6c8038a96038e1850deee3241e3f3c460fd24a10c3706f1df599d9`.
+For that binary, use its `--sdk-info` / bundled `qarvtk-sdk.json` rather than a
+fingerprint from a different build. Exact header byte matching is required.
 
 ## Reproduce
 
@@ -91,3 +96,4 @@ prototype validated.
 The file/CPU scene exchange is intentional for this first stage; the per-frame
 pixel path stays on the GPU. A future in-process adapter must match its host's
 exact VTK/Qt ABI and adopt the host's render-thread lifecycle.
+

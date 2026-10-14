@@ -1,5 +1,9 @@
 # Instalace a první spuštění QAROS VTK
 
+**Pro první pokus použij [hotový Windows ZIP](https://github.com/HonzaHovora/QAROS_VTK/releases/tag/windows-start-2026-10-14)
+a [krátký postup](WINDOWS_QUICKSTART.txt).** Windows sestavení i core testy už prošly.
+Níže je plný postup ze zdrojů, potřebný například pro jiné SDK.
+
 Tento návod je pro první pokus na Windows po návratu. Projekt se od začátku instaluje jako **plugin do Sliceru a ParaView**. Oba pluginy spouštějí stejný C++ backend v samostatném procesu. Není potřeba přestavovat Slicer ani ParaView.
 
 První verze přenáší **jeden povrchový model nebo jeden segment**, jeho změny a prostorovou polohu. Backend renderuje stereo barvu a hloubku pro QAROS. Celá hostitelská scéna, CT/MR volume rendering, materiály, barevné mapy a výběr objektů z headsetu ještě nejsou implementované. Běžící proces sám o sobě neznamená připojený headset.
@@ -141,3 +145,4 @@ Při chybě pošli: verzi Sliceru/ParaView, commit repozitáře, výstup `--sdk-
 | Model není vidět | Jednotky, poloha vůči počátku, platný polygonální povrch, velikost vůči app volume. |
 
 Aktuální stav ověření a známé mezery: [VALIDATION.md](https://github.com/HonzaHovora/QAROS_VTK/blob/main/docs/VALIDATION.md). Pluginy nejsou zatím publikované v oficiálních katalozích. Toto je instalovatelný vývojový prototyp, nikoli hotová medicínská aplikace.
+

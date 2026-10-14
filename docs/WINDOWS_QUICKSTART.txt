@@ -1,0 +1,114 @@
+﻿QAROS VTK — první test na Windows
+Balíček připraven 14. 10. 2026. Vývojový prototyp.
+
+1. NAINSTALUJ A ROZBAL
+
+• 3D Slicer 5.12.4, Windows x64, Stable Release:
+  https://download.slicer.org/
+• Microsoft Visual C++ Redistributable x64:
+  https://aka.ms/vc14/vc_redist.x64.exe
+• Tento ZIP rozbal tak, aby existovaly tyto cesty:
+  C:\QAROS-VTK\01-Preview.cmd
+  C:\QAROS-VTK\Release\qarvtk-sender.exe
+  C:\QAROS-VTK\plugins\slicer\QarosVTK.py
+
+Použij Windows x64 s NVIDIA GPU podporovanou tvým QAROS SDK a jejím ovladačem.
+Pro tuto předkompilovanou variantu nepotřebuješ Git, CMake, Visual Studio,
+vcpkg ani samostatnou instalaci Pythonu/VTK. SDK/runtime a Hub nejsou v ZIPu.
+Všechny DLL ve složce Release ponech vedle EXE.
+
+2. NEJDŘÍV VYKRESLOVÁNÍ BEZ HUBU
+
+Spusť 01-Preview.cmd. Má se otevřít okno se zelenou kostkou.
+V konzoli se vypíše použitý OpenGL renderer. Okno zavři běžným křížkem.
+Tento krok nepotřebuje QAROS SDK ani Hub. Pokud nefunguje, další krok odlož
+a pošli text chyby a označení GPU. Spouštěj v místní grafické relaci.
+
+3. OVĚŘ SHODU SDK
+
+Pro párování s Hubem je potřeba kompletní moderní SDK odpovídající této
+binárce. Nestačí instalace samotného Hubu. SDK adresář musí obsahovat
+include\qar_streaming.h a kompletní bin\ s qar-streaming-c.dll a launcherem.
+Hlavička a runtime musí pocházet ze stejného balíku.
+
+V běžném PowerShellu vlož následující blok. D:\install nahraď skutečnou
+cestou ke svému SDK, nikoli cestou k instalaci Sliceru nebo samotného Hubu:
+
+$kit = 'C:\QAROS-VTK'
+$sdk = 'D:\install'
+$info = Get-Content "$kit\qarvtk-sdk.json" -Raw | ConvertFrom-Json
+$hash = (Get-FileHash "$sdk\include\qar_streaming.h" -Algorithm SHA256).Hash
+"SDK header match: " + ($hash -ieq $info.header_sha256)
+"Runtime DLL exists: " + (Test-Path "$sdk\bin\qar-streaming-c.dll")
+
+Obě kontroly mají vrátit True. První porovnává hlavičku použitou při sestavení,
+druhá jen existenci DLL; ani jedna neprokazuje funkční přenos nebo správnost
+ručně smíchaných DLL. Při False nic nepřepisuj: potřebujeme zjistit verzi SDK
+a připravit odpovídající build. Stejnou kontrolu provádí plugin před spuštěním.
+
+Starší SDK 0.9.0-dev.2540 s touto binárkou nefunguje. V repozitáři je jeho
+samostatná implementace, ale používá staré session invites, nikoli nové
+Hub onboarding. Do balíku 2540 nevkládej novou hlavičku ani DLL z jiného SDK.
+
+4. PŘIDEJ PLUGIN DO SLICERU
+
+Edit → Application Settings → Modules → Additional module paths:
+přidej C:/QAROS-VTK/plugins/slicer a restartuj Slicer.
+Pak v nabídce modulů najdi QAROS → QAROS Streaming.
+Tento ZIP se neinstaluje přes Extensions Manager.
+
+5. NAČTI TESTOVACÍ MODEL
+
+File → Add Data → Choose File(s):
+C:/QAROS-VTK/sample/cube-200mm.vtp
+Pokud je potřeba zvolit typ, vyber Model. Potvrď načtení a vycentruj 3D pohled.
+Je to kostka o hraně 200 mm, se středem v počátku RAS souřadnic.
+V modulu QAROS Streaming ji vyber v Model or segmentation.
+
+6. SPUSŤ PŘENOS
+
+Spusť kompatibilní QAROS Hub a viewer. V modulu nastav:
+• Sender executable: C:/QAROS-VTK/Release/qarvtk-sender.exe
+• QAROS SDK folder: skutečný adresář SDK z bodu 3
+• Hub pairing code: aktuální kód z Hubu pro první spojení
+• Hub identity file: ponech výchozí hodnotu
+• Hub host: ponech prázdné, pokud používáš výchozí konfiguraci
+
+Klikni Start streaming. Ve vieweru otevři nově vytvořený obsah/aplikaci,
+aby viewer požádal o snímky. Stav a chyby jsou v Sender log.
+Kostka má mít v QAROS hranu 0,2 m. Slicer plugin převádí RAS mm do metrů.
+Zkontroluj obě oči, perspektivu při pohybu hlavy a ukončení přes Stop streaming.
+Když změníš skutečnou geometrii nebo rodičovskou transformaci ve Sliceru,
+Update surface ji znovu odešle. Změna barvy či kamery na monitoru se nepřenáší.
+První test spouštěj s jedním senderem a jedním viewerem.
+
+Bez SDK lze načíst plugin, model a použít Export surface to file.
+Načtený plugin ani běžící proces ještě neznamenají funkční stream.
+
+CO JE OVĚŘENÉ A CO JEŠTĚ NE
+
+Windows nativní build a core test prošly 9. 10. 2026. Balíček obsahuje
+nezměněné binárky z tohoto úspěšného běhu. Novější změny v main se netýkají
+nativního C++ backendu. Pluginy jsou z úspěšného běhu 11. 10. 2026.
+Slicer 5.12.4 a ParaView 5.12.1 s pluginy byly ověřeny na Linuxu.
+Windows grafický test, NVIDIA přenos, Hub a headset se musí ověřit na tvém PC.
+
+Tato verze přenáší jeden neprůhledný povrch, v backendu pevně zelený,
+a změny geometrie. Celý nativní pohled, CT/MR objemy, barevné mapy, popisky
+a interakce z headsetu zpět do aplikace ještě nejsou implementovány.
+Aktuální cílová kontrola: Slicer model → náš VTK/OpenGL backend → Hub/viewer.
+
+POZDĚJI PARAVIEW
+
+Plugin je přiložen v plugins/paraview. V oficiálním ParaView načti přes
+Tools → Manage Plugins → Local Plugins → Load New soubor QarosVTKPlugin.py.
+Nech vedle něj všechny pomocné soubory. Přidej Sphere a filtr QAROS Streaming.
+Pro párování využij identitu vytvořenou ve Sliceru. Pro tento první test
+se drž lokálního built-in připojení, bez pvserver/MPI.
+
+PŘI CHYBĚ
+
+Pošli přesný text ze Sender log nebo z preview, verzi SDK/Hubu/vieweru,
+označení GPU a ovladače. Neposílej párovací kódy ani onboarding-id.txt.
+Podrobný zdrojový návod a cesta pro překlad proti jinému SDK:
+https://github.com/HonzaHovora/QAROS_VTK/blob/main/docs/INSTALLATION.md
