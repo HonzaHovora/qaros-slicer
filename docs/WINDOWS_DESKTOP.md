@@ -42,24 +42,15 @@ a odpovídá přesné hlavičce z existujícího SDK:
 Plugin tuto shodu ověřuje automaticky. Toto SDK neposkytuje nové Hub párování;
 pole Hub identity se nepoužívá. SDK runtime a viewer nejsou součástí balíčku.
 
-Balíček odpovídá testovacímu vydání `windows-start-2026-10-14-session022c40b6r8`.
-R7 už má na testovacím PC potvrzené správné transformace. R8 podrobněji měří
-čekání: zatímco Visualizer ukazuje asi 44 FPS, sender skutečně předává přibližně
-19,7 celých stereo snímků za sekundu. Tato dvě čísla měří různé části přenosu.
-Samotné VTK vykreslení obou očí trvá v dodaném logu průměrně 4,6 ms.
+Balíček odpovídá testovacímu vydání `windows-start-2026-10-14-session022c40b6r9`.
+R9 přidává osvětlení, barvy, viditelné modely/segmenty a jeden CT/MR objem ze Sliceru.
+V modulu zvol **Selected object** nebo **Visible 3D scene (first view)** a nech
+zapnuté **Center and fit**. Pro CT/MR nejdřív nastav preset ve **Volume Rendering**;
+po změnách použij **Update scene**. Podrobnosti a omezení jsou v krátkém postupu výše.
 
-Po aktualizaci spusť přenos stejné kostky. Nech Visualizer viditelný v popředí
-asi minutu, několikrát otoč kamerou, potom stiskni **Stop streaming** a spusť
-`COLLECT-LOGS.cmd`. Přilož vytvořený ZIP. Není třeba kopírovat jednotlivé řádky.
-
-Sender každých pět sekund zapisuje `PERF` s oddělenými časy vykreslení,
-uspávání, převzetí textur, údržby smyčky a dalších operací. Řádek `PACING`
-doplňuje celkové čekání od první žádosti o snímek do jeho připravenosti a
-skutečnou průměrnou/maximální délku krátkého uspání. Toto celkové čekání se
-překrývá s některými položkami PERF, proto je nesčítej. Jde o časy na straně
-senderu, nikoli přímé měření asynchronního enkodéru nebo práce mixeru.
-Tato diagnostická verze ještě není ověřená optimalizace na 60 FPS. Výkon pro
-dvoje brýle nebyl změřený.
+R7/r8 mají na testovacím PC potvrzený přenos a transformace. Nové scény a objemy
+je ještě potřeba ověřit v cílovém Visualizeru. Diagnostika `PERF`/`PACING` z r8
+zůstává zachovaná; toto vydání nepředstavuje ověřené zvýšení FPS.
 
 ## Když po zobrazení volume přenos spadne
 

@@ -7,13 +7,15 @@ controller. They do not load QAROS SDK libraries inside the host.
 
 | Host | Plugin entry point | Geometry and update behavior |
 | --- | --- | --- |
-| Slicer | `integrations/slicer/QarosVTK.py` | Model or one segmentation surface; baked MRML world transforms; world RAS mm. Update button or optional one-second publication. |
+| Slicer | `integrations/slicer/QarosVTK.py` | Selected model/segment/CT/MR, or visible models/segments and one volume in the first 3D view. Colors, linear volume transforms, transfer functions, optional scene fit. Manual volume updates; optional automatic changed-surface updates. |
 | ParaView | `integrations/paraview/QarosVTKPlugin.py` | Pipeline filter; surface extraction from dataset/composite input; geometry republishes when the pipeline updates. Local built-in connection only. |
 
-The backend watches a private VTP file. It preserves the previous scene if a new
-file cannot be read. This is a snapshot of surface geometry, not of all host
-rendering settings. Colors are currently fixed green. No CT/MR voxels, overlays,
-annotations, material properties, transfer functions or picking are transferred.
+The backend watches a private VTP or VTM manifest. It preserves the previous scene
+if a new file cannot be read. Slicer snapshots carry materials and scalar CT/MR
+voxels with RGB, scalar-opacity and gradient-opacity transfer functions. Annotations,
+slice planes, overlays and picking are not transferred. ParaView remains surface-only.
+One volume is supported, in Composite mode without ROI cropping, combined only
+with opaque surfaces. The plugin rejects unsupported combinations with a message.
 
 ## Optional ParaView Python helper
 
@@ -58,6 +60,18 @@ File coordinates remain world RAS mm. For a manual launch:
 ```powershell
 py -3 scripts/run_sender.py --exe build-windows-release/Release/qarvtk-sender.exe --sdk D:/install --scene C:/data/slicer-surface.vtp --ras --meters-per-unit 0.001 --watch --preview
 ```
+
+For a scene snapshot with the Slicer bridge (requires protocol 2 sender):
+
+```python
+qarvtk_slicer.export_selection(node, r"C:/data/scene.vtm", fit=True)
+qarvtk_slicer.export_selection(None, r"C:/data/scene.vtm", visible_scene=True, fit=False)
+```
+
+Keep the adjacent `scene-data-*` folders with the manifest. The selected scalar
+volume must have a configured Volume Rendering display/property node. `fit=False`
+preserves world RAS mm; launch with `--ras --meters-per-unit 0.001`. `fit=True`
+centers the whole scene and sets its maximum dimension to 0.65 m.
 
 ## Reproduce host tests
 

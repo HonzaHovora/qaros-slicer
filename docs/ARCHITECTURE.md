@@ -6,10 +6,12 @@ Host path: a Slicer scripted module or a ParaView Python pipeline plugin control
 one child sender through `integrations/qarvtk_runtime.py`. The plugins and backend
 are separate installable components from the start.
 
-Scene path: Slicer model/segment with baked MRML world transforms, or a ParaView
-pipeline surface → triangulated `.vtp` written atomically → standalone VTK scene.
-This is a CPU/file geometry transfer only on export or reload, not on every video
-frame. Host appearance and volume rendering are not transferred.
+Scene path: Slicer exports lit models/segments and one scalar CT/MR volume as
+an atomic `.vtm` manifest with immutable VTP/VTI payloads. Surface transforms
+are baked in world RAS mm; volume physical spacing and its image-to-world
+matrix are retained. Colors, opacity and transfer-function nodes are explicit
+field data. ParaView retains its surface-only `.vtp` path. CPU/file work happens
+on publication/reload, never per video frame.
 
 Frame path: QAROS begin-frame → SDK camera pose/FOV for each eye → VTK color/depth
 FBO → two shader copies per eye to SDK-owned textures → `glFinish` → show-frame.
@@ -38,8 +40,10 @@ blit is optional and not part of the stream.
   bakes the active view's display transform. The sender assumes Y-up unless
   `--ras` is selected.
 
-The scene is one opaque green surface at its original position; it is not
-silently centered or resized. The demo cube is centered at the content origin.
+Slicer defaults to the explicitly labelled Center and fit option: one common
+transform centers all scene objects and maps the longest bound to 0.65 m.
+Disabling it preserves physical size and world position. Original `.vtp` imports
+keep their original position and command-line unit scale.
 
 ## Texture contract
 
@@ -58,9 +62,17 @@ multisampled targets are not supported.
 
 Copy operations restore the GL state they modify. VTK's normal framebuffer and
 shader state remain intact. The output background is transparent with depth 1.
-The current unlit surface emits fixed RGB values; tone mapping, color-space
-conversion, translucent surfaces, clinical transfer functions and multi-layer
-occlusion need separate design and validation.
+Surfaces use camera-relative key/fill/back lights and Phong normals. The volume
+uses vtkOpenGLGPUVolumeRayCastMapper in RenderToImage mode. Its color and
+first nonzero-opacity sample depth are GPU textures; GlComposite combines them
+with the surface framebuffer without CPU readback. Opaque surface depth terminates
+rays. Empty rays have depth 1. Culling is disabled so each eye's offscreen image
+is cleared even when a volume is outside the view.
+
+One depth sample approximates a translucent volume; it cannot encode every
+contributing tissue layer. One scalar volume with opaque surfaces is supported;
+translucent surface/volume combinations are rejected by the exporter. ROI/MIP,
+multiple volumes, tone mapping and color-space calibration remain future work.
 
 ## Plugin boundary and process protocol
 
@@ -70,12 +82,13 @@ Python host plugins control the existing renderer without loading the SDK or
 another VTK into the host. The C++ `Renderer::set_polydata` entry point is available
 for a later native adapter but is not ABI-safe across unrelated VTK builds.
 
-Protocol 1 consists of:
+Protocol 2 adds scene/volume snapshots; protocol 1 remains readable for the
+legacy ParaView/VTP route. The process contract consists of:
 
 - `--sdk-info`: JSON with exact header SHA-256, `modern_api` and `plugin_protocol`.
   The plugin checks these and the presence of the platform runtime before launch.
-- A private working directory per instance, atomically updated `scene.vtp`, and
-  `--watch`. Only geometry updates use CPU/files; every video frame stays on GPU.
+- A private working directory per instance, atomically updated `scene.vtp` or `scene.vtm`, and
+  `--watch`. Only scene updates use CPU/files; every video frame stays on GPU.
 - `--stop-file`: the owner requests cooperative shutdown by creating its own file.
   `--parent-pid` terminates the render/wait loop if the host disappears. Windows
   holds a process handle; Linux checks whether the parent PID still exists.
@@ -91,10 +104,13 @@ requests shutdown without blocking the UI; polling enforces a 65-second deadline
 Cleanup/ParaView Stop waits up to three seconds before killing an unresponsive
 child. That fallback cannot guarantee SDK-side cleanup. Private geometry is
 deleted on cleanup, logs are retained for diagnosis. A host crash can leave a
-temporary VTP; no patient data belongs in the repository.
+temporary VTP/VTI generations; no patient data belongs in the repository.
 
 Slicer settings hold paths and host name, not pairing codes. Its optional one-second
-publication is intentionally opt-in because large surfaces can block the GUI.
+publication is intentionally opt-in and skips unchanged surfaces. Volumes update
+only on Start/Update scene. Immutable generations are kept until cleanup to avoid
+racing an in-progress reader; repeated manual CT updates use additional disk.
+All generation folders are removed when the owning backend closes.
 ParaView publishes on pipeline updates, supports only the local built-in session,
 and rejects pvserver/MPI execution before writing a scene or starting a process.
 
@@ -108,7 +124,8 @@ is a portable manual-install bundle, not an Extensions Manager package.
 1. Validate end-to-end WGL → QAROS → viewer with known cube dimensions/depth.
 2. Repeat the Linux-validated ParaView/Slicer host smoke scripts on the target
    Windows installations and verify the resulting stream in the viewer.
-3. Add a scene abstraction for actors, colors, transforms and volumes.
+3. Extend scenes with ROI clipping, translucent surface/volume composition,
+   multiple volumes and bounded acknowledged snapshot retention.
 4. Build a native ParaView view plugin against a pinned ParaView version, using
    render requests and host pipeline updates instead of VTP snapshots.
 5. Extend the Slicer plugin with debounced MRML change observation, medical

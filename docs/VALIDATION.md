@@ -1,5 +1,32 @@
 # Validation and next work
 
+## Lit scenes and CT/MR volumes: r9, 2026-10-14
+
+Source commit `e92a9f964e42ec596b4bcf9edac6f20cb97a8eea` passed:
+
+- [Windows native run 38600700083](https://github.com/HonzaHovora/QAROS_VTK/actions/runs/38600700083): modern and session SDK builds, core/peer/frame-wait/WGL checks and exact session header fingerprint, plugin protocol 2. Windows runners do not execute the GPU rendering tests.
+- [Build and test run 38600700191](https://github.com/HonzaHovora/QAROS_VTK/actions/runs/38600700191): all seven CTest cases, including VTK/Mesa volume rendering, the existing texture-copy and orientation tests, both Linux SDK branches, Python XML interchange, ParaView pipeline/plugin lifecycle and Windows core/process checks.
+- [Slicer 5.12.4 run 38600700041](https://github.com/HonzaHovora/QAROS_VTK/actions/runs/38600700041): actual packaged module discovery, transformed models/segments, scalar CT export with physical spacing and world matrix, visible-scene selection, unsupported ROI rejection and Start/Update/Stop.
+
+The new GPU oracle checks transfer-function color and updates, tissue depth rather
+than bounding-box depth, transparent/far background, out-of-view clearing, stereo
+disparity, resize, opaque surface occlusion, failed-reload retention and curved
+surface lighting. Readback is test-only. The first test revision exposed a VTK
+appended-XML rewrite issue in its fixture; the fixture now uses the same inline
+binary XML mode as the production exporter, and the complete test passes.
+
+The Windows starter includes vtkRenderingVolume and vtkRenderingVolumeOpenGL2
+9.3 DLLs, the volume test executable and the matching new Slicer scene module.
+Assembled ZIP SHA-256: `12f3001e2209f4876adc3607d5e459aa4b2e9fed796dd52acc1f473253223335`.
+Session sender SHA-256: `415af46214722e4442364ec6306a3114dd4a494664dc85eb7f550283643bf80f`.
+
+This is not an FPS fix. QAROS frame pacing, WGL context handling, SDK layout and
+color/depth origin conversion from r8 are retained. New scenes have not yet been
+observed on the target NVIDIA/Visualizer or in two headsets. Scope: Slicer,
+one scalar volume, Composite mode, no ROI cropping, linear volume transforms,
+opaque surfaces when combined with a volume. ParaView remains surface-only.
+Center/fit is explicit and defaults to 0.65 m; disable it for physical size.
+
 ## On-device r8 result: SDK readiness dominates, 2026-10-14
 
 `QAROS-VTK-diagnostics-20261014-172918-472.zip` verifies the exact r8 sender

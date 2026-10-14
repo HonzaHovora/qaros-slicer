@@ -1,19 +1,19 @@
 {
-  "tag": "windows-start-2026-10-14-session022c40b6r8",
+  "tag": "windows-start-2026-10-14-session022c40b6r9",
   "date": "2026-10-14",
-  "title": "Windows starter \u2014 detailed frame-wait diagnostics r8",
-  "filename": "QAROS_VTK_Windows_session_022c40b6_2026-10-14_r8.zip",
+  "title": "Windows starter — lighting, scenes and CT/MR volumes r9",
+  "filename": "QAROS_VTK_Windows_session_022c40b6_2026-10-14_r9.zip",
   "native": {
-    "run_id": 38588060847,
-    "artifact_id": 11906895586,
-    "commit": "4920d06ed70d8f237fc27ed3db3b635c1ff09c3f",
-    "sha256": "0f1d010db12344295ee62e96f6346141b69383437ac9e4dd33388232cb91be1a"
+    "run_id": 38600700083,
+    "artifact_id": 11912284114,
+    "commit": "e92a9f964e42ec596b4bcf9edac6f20cb97a8eea",
+    "sha256": "49a507d2e30ea086682d30a6bbf3390313de92cfbc1f0fca5868a892927c6755"
   },
   "plugins": {
-    "run_id": 38135146417,
-    "artifact_id": 11700637532,
-    "commit": "10f589420e29405f9bb8a41f207018b4a17384e9",
-    "sha256": "2ee77f4ccbe6c7a0af38da6c003ea47e07215a2bc7b6b6a4ce2d911cd1e5594f"
+    "run_id": 38600700191,
+    "artifact_id": 11913701117,
+    "commit": "e92a9f964e42ec596b4bcf9edac6f20cb97a8eea",
+    "sha256": "45662a6b2972234ee4752aa11fe9ddb1956f12375d4f200f3f63ed7f4c62b9c9"
   },
   "sdk_header_sha256": "022c40b670f87a066664c37daeb06da525db37fffdf5810e72cff8a5b81e677d",
   "modern_api": 0,
