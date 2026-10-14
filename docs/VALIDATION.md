@@ -31,6 +31,14 @@ shared contexts, retaining its analytic depth, alpha and stereo assertions.
 These are runtime-free graphics tests; the specific NVIDIA/QAROS texture and
 end-to-end display still require an on-device attempt.
 
+Code commit `d37a2617c4998e0fa1f73423445b76c97d814616` passed both Windows SDK
+builds, core/peer/frame-wait/WGL tests and exact header fingerprint verification in
+[run 38581274978](https://github.com/HonzaHovora/QAROS_VTK/actions/runs/38581274978).
+[Run 38581275009](https://github.com/HonzaHovora/QAROS_VTK/actions/runs/38581275009)
+passed the expanded VTK/Mesa GPU test (4.35 seconds), Linux and Windows
+core/process tests, both Linux SDK branches, surface interchange and ParaView.
+The local isolated copy regression also passed with the Mesa GL 3.3 override.
+
 ## Initial viewer pose wait: 2026-10-14, r5
 
 The r4 log confirms the installed EXE fingerprint, successful OpenGL setup and

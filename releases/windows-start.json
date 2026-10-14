@@ -1,13 +1,13 @@
 {
-  "tag": "windows-start-2026-10-14-session022c40b6r5",
+  "tag": "windows-start-2026-10-14-session022c40b6r6",
   "date": "2026-10-14",
-  "title": "Windows starter \u2014 initial viewer pose wait r5",
-  "filename": "QAROS_VTK_Windows_session_022c40b6_2026-10-14_r5.zip",
+  "title": "Windows starter \u2014 GL array copy and framebuffer diagnostics r6",
+  "filename": "QAROS_VTK_Windows_session_022c40b6_2026-10-14_r6.zip",
   "native": {
-    "run_id": 38577206824,
-    "artifact_id": 11901796120,
-    "commit": "185b217cde955fb4ade99fa49e0f35f1bab9caac",
-    "sha256": "01fa1d065f0a28058a61ecf0bcd316f741d5091de3f14836bad932328da44583"
+    "run_id": 38581274978,
+    "artifact_id": 11903536021,
+    "commit": "d37a2617c4998e0fa1f73423445b76c97d814616",
+    "sha256": "c9f8ad527b2473d401f329fe64203eeff08d197090aa73768b653a594ee1ecec"
   },
   "plugins": {
     "run_id": 38135146417,

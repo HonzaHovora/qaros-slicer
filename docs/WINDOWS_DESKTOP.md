@@ -42,16 +42,17 @@ a odpovídá přesné hlavičce z existujícího SDK:
 Plugin tuto shodu ověřuje automaticky. Toto SDK neposkytuje nové Hub párování;
 pole Hub identity se nepoužívá. SDK runtime a viewer nejsou součástí balíčku.
 
-Balíček odpovídá testovacímu vydání `windows-start-2026-10-14-session022c40b6r5`.
-R4 spojila přenos, ale první pokus o snímek skončil na chybějících údajích
-o pohledu (RenderingProducerMissingPoseData, 801). R5 dá těmto údajům čas dorazit:
-čeká nejvýše do původního limitu 60 sekund a každých pět sekund vypíše stav.
-Tlačítko Stop streaming funguje i během čekání. Visualizer nech viditelný v popředí.
-Log rozliší úspěšný požadavek na snímek, údaje o pohledu, vykreslení a předání SDK.
-Zachovává předchozí opravy startu a WGL kontextu. První odeslaný snímek zatím
-není potvrzený; pokud údaje o pohledu nedorazí, nový log to ukáže při timeoutu.
-CI ověřuje kompilaci a vložený otisk hlavičky; skutečný NVIDIA/QAROS přenos
-zůstává k ověření na tomto PC. První verze přenáší jeden povrchový model.
+Balíček odpovídá testovacímu vydání `windows-start-2026-10-14-session022c40b6r6`.
+R5 už přijala požadavek na snímek i údaje o pohledu, ale zastavila se na
+`Destination framebuffer is incomplete`. R6 opravuje kopírování do jednovrstvé
+textury typu 2D array. Se starým kódem tento případ vyvolal stejnou chybu v testu;
+typ textury na tomto PC dosavadní log ještě nezaznamenával. Nový log vypíše typ,
+formát, rozměry, barvu/hloubku a při chybě přesný stav framebufferu.
+Zachovává předchozí opravy startu a čekání na údaje o pohledu. Visualizer nech
+viditelný v popředí. První odeslaný snímek a zobrazení kostky zatím nejsou potvrzené.
+CI ověřuje kompilaci, otisk hlavičky a GPU kopírování přes sdílené kontexty;
+skutečný NVIDIA/QAROS přenos zůstává k ověření na tomto PC.
+První verze přenáší jeden povrchový model.
 
 ## Když po zobrazení volume přenos spadne
 

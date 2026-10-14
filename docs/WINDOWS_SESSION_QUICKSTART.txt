@@ -1,5 +1,5 @@
 ﻿QAROS VTK — test s existujícím SDK v D:\install
-Varianta session-022c40b6 r5, čekání na první údaje o pohledu z 14. 10. 2026.
+Varianta session-022c40b6 r6, oprava GPU kopírování a diagnostika framebufferu.
 
 1. AKTUALIZACE PŘES GITHUB DESKTOP
 
@@ -51,13 +51,15 @@ a součástí potřebných pro Visualizer. VTK DLL ve složce Release nech vedle
 
 Klikni Start streaming. Sender vytvoří session a pozve Visualizer.
 Pracovní volume se může objevit několik sekund před samotnou kostkou.
-Visualizer nech viditelný v popředí. R5 čeká i na první údaje o poloze pohledu.
+Visualizer nech viditelný v popředí. Sender čeká i na první údaje o poloze pohledu.
 Pokud se v logu objeví Waiting for first viewer pose, běží toto čekání; stav
 se opakuje každých pět sekund. Během čekání znovu nemačkej Start streaming.
 Sleduj pole Sender log dole v levém panelu. Pro první test nech až 60 sekund
 na připojení vieweru. Řádek Submitted 1 stereo frames znamená, že sender
 vykreslil a předal první stereo snímek SDK; ve vieweru pak ověř viditelnou kostku.
 Samotný stav Sender process running ještě neznamená funkční přenos.
+R6 při prvním kopírování vypíše GPU copy destination s typem a formátem textury.
+Případná chyba framebufferu nyní obsahuje přesný stav a označení barvy/hloubky.
 
 Po testu klikni Stop streaming. Když změníš geometrii nebo rodičovskou
 transformaci modelu ve Sliceru, tlačítko Update surface ji znovu vyexportuje.
