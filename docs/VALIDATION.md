@@ -1,5 +1,34 @@
 # Validation and next work
 
+## Legacy Visualizer startup: 2026-10-14
+
+The supplied session SDK header has SHA-256
+`022c40b670f87a066664c37daeb06da525db37fffdf5810e72cff8a5b81e677d`.
+The local Windows preview worked on the user's NVIDIA RTX 2070 Max-Q. The first
+streaming attempt opened a blank Visualizer and ended with `Invited viewer did
+not reach RUNNING before timeout`, before the OpenGL sender was created.
+Its log also reported a session without persistent storage.
+
+Commit `f290dca3784b7af499f0ed2af5a70b3124f86071` follows the startup sequence
+already used in the BANC bridge: subscribe to peer updates before invitation,
+accept an observation of the exact invited id even when its state is UNKNOWN,
+wait two seconds for receiver subscriptions, and create the volume with its
+initial viewer assigned. Other peers cannot satisfy this wait. A shutting-down
+viewer aborts startup. Legacy session teardown now leaves the session explicitly.
+
+The `legacy-peer` regression test covers early UNKNOWN observations, unrelated
+RUNNING peers and later state changes without loading QAROS. Runtime-free tests
+and compilation cannot verify Visualizer display or NVIDIA frame transport.
+The updated starter still requires a real streaming test on the user's PC.
+
+Both SDK branches compiled successfully on Windows in
+[run 38568711354](https://github.com/HonzaHovora/QAROS_VTK/actions/runs/38568711354).
+The session EXE reported the exact header hash above and `modern_api: 0`.
+Core and legacy-peer tests passed there. In
+[run 38568710889](https://github.com/HonzaHovora/QAROS_VTK/actions/runs/38568710889),
+Linux core/peer/process/GPU tests, preview smoke, both SDK compile branches,
+surface interchange, Windows core/process tests and ParaView host tests passed.
+
 ## Evidence recorded on 2026-10-09
 
 | Check | Result / scope |
@@ -96,4 +125,5 @@ prototype validated.
 The file/CPU scene exchange is intentional for this first stage; the per-frame
 pixel path stays on the GPU. A future in-process adapter must match its host's
 exact VTK/Qt ABI and adopt the host's render-thread lifecycle.
+
 

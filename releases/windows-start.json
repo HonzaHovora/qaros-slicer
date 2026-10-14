@@ -1,13 +1,13 @@
 {
-  "tag": "windows-start-2026-10-14-session022c40b6",
+  "tag": "windows-start-2026-10-14-session022c40b6r2",
   "date": "2026-10-14",
-  "title": "Windows starter \u2014 session SDK 022c40b6",
-  "filename": "QAROS_VTK_Windows_session_022c40b6_2026-10-14.zip",
+  "title": "Windows starter \u2014 Visualizer startup fix r2",
+  "filename": "QAROS_VTK_Windows_session_022c40b6_2026-10-14_r2.zip",
   "native": {
-    "run_id": 38564098141,
-    "artifact_id": 11895315042,
-    "commit": "353d7e6fc162456c9f55b2be9941caba47f5cbf1",
-    "sha256": "31f001b71e6bb29efc3966f1bdafa2cfaba313388da1a3a781432bef59eea196"
+    "run_id": 38568711354,
+    "artifact_id": 11897020274,
+    "commit": "f290dca3784b7af499f0ed2af5a70b3124f86071",
+    "sha256": "421d2ec5d8f2acddfdb7e03c9fa923adc2ae3d2a6962d4190aa7e0d0e72a1741"
   },
   "plugins": {
     "run_id": 38135146417,

@@ -1,10 +1,10 @@
 ﻿QAROS VTK — test s existujícím SDK v D:\install
-Varianta session-022c40b6, připravena 14. 10. 2026.
+Varianta session-022c40b6 r2, oprava startu Visualizeru z 14. 10. 2026.
 
 1. AKTUALIZACE PŘES GITHUB DESKTOP
 
 Ve Sliceru nejdřív použij Stop streaming, pokud nějaký sender běží.
-Zavři Slicer i okno náhledu zelené kostky.
+Zavři Slicer, Visualizer i okno náhledu zelené kostky.
 V GitHub Desktop otevři QAROS_VTK, větev main, klikni Fetch origin a Pull origin.
 V Průzkumníku otevři D:\QAROS_VTK a dvakrát klikni na START-PREVIEW.cmd.
 Skript ověří nový ZIP, rozbalí ho do package\windows-start a otevře náhled.
@@ -50,6 +50,9 @@ a součástí potřebných pro Visualizer. VTK DLL ve složce Release nech vedle
 5. PRVNÍ PŘENOS
 
 Klikni Start streaming. Sender vytvoří session a pozve Visualizer.
+Opravený start přijme i stav UNKNOWN pozvaného Visualizeru. Po jeho připojení
+počká dvě sekundy na odběr zpráv a teprve potom vytvoří pracovní volume.
+V logu se objeví Invited viewer observed a Creating app volume.
 Sleduj pole Sender log dole v levém panelu. Pro první test nech až 60 sekund
 na připojení vieweru. Řádek Submitted 1 stereo frames znamená, že sender
 vykreslil a předal první stereo snímek SDK; ve vieweru pak ověř viditelnou kostku.
@@ -59,9 +62,13 @@ Po testu klikni Stop streaming. Když změníš geometrii nebo rodičovskou
 transformaci modelu ve Sliceru, tlačítko Update surface ji znovu vyexportuje.
 Kostka má hranu 200 mm ve Sliceru a 0,2 m v QAROS.
 
-Pokud se přenos zastaví nebo Visualizer neukáže model, zkopíruj text ze Sender
-log. Chybu neopravuj výměnou jednotlivých DLL. Neposílej session invite ani
-párovací kódy. Pro první pokus používej jeden sender a jeden viewer.
+Pokud se přenos zastaví nebo Visualizer neukáže model, přilož celý sender.log.
+Pole Sender log ukazuje jen konec souboru a při obnovování se špatně kopíruje.
+Stiskni Windows+R, napiš %TEMP% a potvrď Enter. Najdi nejnovější složku začínající
+qarvtk-; v ní je sender.log. Přetáhni tento soubor do chatu. Přesná cesta je také
+ve stavové zprávě pluginu po ukončení senderu.
+Chybu neopravuj výměnou jednotlivých DLL. Neposílej session invite ani párovací
+kódy. Pro první pokus používej jeden sender a jeden viewer.
 
 CO BYLO OVĚŘENO
 

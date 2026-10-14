@@ -3,7 +3,7 @@
 Tento postup používá již přihlášený GitHub Desktop a checkout `D:\QAROS_VTK`.
 Slicer je nainstalovaný v `D:\3D Slicer 5.12.4`.
 
-Při aktualizaci nejdřív zastav stream a zavři Slicer i náhled kostky.
+Při aktualizaci nejdřív zastav stream a zavři Slicer, Visualizer i náhled kostky.
 
 1. V GitHub Desktop otevři repozitář QAROS_VTK na větvi main.
 2. Klikni **Fetch origin**, potom **Pull origin**, pokud se nabízí.
@@ -42,7 +42,11 @@ a odpovídá přesné hlavičce z existujícího SDK:
 Plugin tuto shodu ověřuje automaticky. Toto SDK neposkytuje nové Hub párování;
 pole Hub identity se nepoužívá. SDK runtime a viewer nejsou součástí balíčku.
 
-Balíček odpovídá testovacímu vydání `windows-start-2026-10-14-session022c40b6`.
+Balíček odpovídá testovacímu vydání `windows-start-2026-10-14-session022c40b6r2`.
+Opravuje čekání na stav RUNNING a příliš časné vytvoření pracovního volume.
+Sender nyní nejdřív zaznamená přesně pozvaný viewer (přijme i UNKNOWN), počká
+dvě sekundy na jeho odběr zpráv a vytvoří volume rovnou přiřazené tomuto vieweru.
 CI ověřuje kompilaci a vložený otisk hlavičky; skutečný NVIDIA/QAROS přenos
 zůstává k ověření na tomto PC. První verze přenáší jeden povrchový model.
+
 
