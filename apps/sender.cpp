@@ -560,7 +560,7 @@ int main(int argc,char** argv) { try {
       const qarvtk::Fov angles{fov.angle_left,fov.angle_right,fov.angle_up,fov.angle_down};
       const auto& view=frame.views[eye.color];
       auto source=renderer.render(camera,angles,clip,qarvtk::width(view),qarvtk::height(view));
-      copy.copy(source,frame,eye);
+      copy.copy(source,frame,eye,!sent);
     }
     copy.finish(); // glFinish: correctness baseline before SDK's graphics thread consumes textures.
     if (!sent) std::cout << "First stereo frame rendered and copied; submitting to SDK...\n";

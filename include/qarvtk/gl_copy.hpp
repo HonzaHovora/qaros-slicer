@@ -8,10 +8,10 @@ class GlCopy {
 public:
   GlCopy();~GlCopy();
   GlCopy(const GlCopy&)=delete;GlCopy& operator=(const GlCopy&)=delete;
-  void copy(const RenderedEye& source,const Frame& target,const EyeViews& views);
+  void copy(const RenderedEye& source,const Frame& target,const EyeViews& views,bool report=false);
   void finish(); // Conservative cross-context completion before SDK show_frame.
 private:
   unsigned program_{},vao_{},fbo_{};
-  void plane(unsigned source,const Texture& texture,const View& view,bool depth);
+  void plane(unsigned source,const Texture& texture,const View& view,bool depth,bool report);
 };
 }

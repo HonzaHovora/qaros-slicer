@@ -1,5 +1,36 @@
 # Validation and next work
 
+## Destination framebuffer: 2026-10-14, r6
+
+The r5 diagnostics reach a successful begin-frame, four textures/four views and
+the first eye's pose/FOV. The sender then exits at our generic `Destination
+framebuffer is incomplete` check, before submitting a frame. `ChannelIsClosed`
+warnings occur before this point without preventing negotiation. The r5 log
+does not record the failing plane, actual GL target or framebuffer status, so
+it cannot establish the exact on-device framebuffer cause.
+
+The copy code incorrectly assumed that `array_layers == 1` implies
+`GL_TEXTURE_2D`. The SDK C structure supplies no GL target. A one-layer
+`GL_TEXTURE_2D_ARRAY` fails the old unchecked bind; queries then inspect the
+previously bound 2D texture, and the attachment subsequently fails. A local
+Mesa/EGL regression using the actual unmodified r5 `GlCopy` reproduced the exact
+generic error with an array destination and a same-sized stale 2D binding.
+
+The r6 copy distinguishes ordinary 2D and single-layer array destinations,
+attaches the requested array layer with `glFramebufferTextureLayer`, checks GL
+errors at each stage and restores both texture bindings. It keeps the existing
+single-layer layout restriction and GPU-only production path. Attachments are
+detached on failure too. The first frame reports each destination's eye, plane,
+object, target, format, dimensions and mip range; errors include the named and
+numeric framebuffer status and GL error. It does not change SDK texture storage.
+
+The local actual-code GPU regression passed 2D and one-layer array destinations
+with D32F and R32F depth, exact color/depth comparison, flips and state restoration.
+The repository GPU test now covers both targets at 128 x 128 and 1920 x 1080 in
+shared contexts, retaining its analytic depth, alpha and stereo assertions.
+These are runtime-free graphics tests; the specific NVIDIA/QAROS texture and
+end-to-end display still require an on-device attempt.
+
 ## Initial viewer pose wait: 2026-10-14, r5
 
 The r4 log confirms the installed EXE fingerprint, successful OpenGL setup and
