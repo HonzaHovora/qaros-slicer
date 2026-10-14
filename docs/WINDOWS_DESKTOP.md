@@ -42,8 +42,11 @@ a odpovídá přesné hlavičce z existujícího SDK:
 Plugin tuto shodu ověřuje automaticky. Toto SDK neposkytuje nové Hub párování;
 pole Hub identity se nepoužívá. SDK runtime a viewer nejsou součástí balíčku.
 
-Balíček odpovídá testovacímu vydání `windows-start-2026-10-14-session022c40b6r2`.
-Opravuje čekání na stav RUNNING a příliš časné vytvoření pracovního volume.
+Balíček odpovídá testovacímu vydání `windows-start-2026-10-14-session022c40b6r3`.
+Přidává explicitní WGL připojení kontextu a načítání funkcí, protože dodaný
+runtime při vytváření senderu nedokázal načíst `glGetStringi`. Před startem
+session prověří kontext na pracovním vlákně a výsledek zapíše do logu.
+Zachovává opravu čekání na RUNNING a příliš časného vytvoření volume z r2.
 Sender nyní nejdřív zaznamená přesně pozvaný viewer (přijme i UNKNOWN), počká
 dvě sekundy na jeho odběr zpráv a vytvoří volume rovnou přiřazené tomuto vieweru.
 CI ověřuje kompilaci a vložený otisk hlavičky; skutečný NVIDIA/QAROS přenos

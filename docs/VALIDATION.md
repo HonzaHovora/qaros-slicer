@@ -1,5 +1,36 @@
 # Validation and next work
 
+## WGL context callbacks: 2026-10-14, r3
+
+The r2 diagnostics from the user's Windows PC confirmed that the exact invited
+Visualizer was observed in UNKNOWN state and its volume was created. The runtime
+then received a 1920 x 1080 stream request, but `qar_render_sender_create` failed:
+`BackendTransformNotSupported` during OpenGL/Vulkan setup, with the nested error
+`Could not load OpenGL function: glGetStringi`. The sender caught this error and
+closed its volume/session. No frame was submitted. The collector found no Windows
+Application crash event. That absence alone is not proof that no viewer crashed.
+
+Commit `3b560c184f34fa124cc204c11dfdc03e21f1b13e` supplies the exact legacy
+header's optional WGL callbacks: bind, unbind, capture/restore and function
+resolution. The resolver uses `wglGetProcAddress` with the supplied context
+current, and `opengl32.dll` exports for OpenGL 1.1 functions. It never relies on
+GLFW's current-window state on a runtime-owned thread. Callback data and handles
+outlive the SDK. Before session startup a separate worker checks GL_VERSION,
+glGetStringi availability and Win32 import entry points, then restores its binding.
+After sender creation the log records whether the SDK actually used these callbacks.
+
+The Windows `wgl-callback` test uses real basic WGL contexts, without QAROS or VTK,
+to exercise worker binding, export resolution, rejection of another context and
+restoration of both an existing and empty binding. It does not require OpenGL 3.3
+or claim NVIDIA/Vulkan interoperability. The r3 live SDK result remains to be
+verified on the user's PC; failure may require a runtime loader fix.
+
+Windows native [run 38572186047](https://github.com/HonzaHovora/QAROS_VTK/actions/runs/38572186047)
+passed both SDK builds, core/legacy-peer/WGL callback tests and exact SDK fingerprint
+verification. [Run 38572186585](https://github.com/HonzaHovora/QAROS_VTK/actions/runs/38572186585)
+also passed Windows core/process/WGL tests, Linux core/peer/process/Mesa GPU tests,
+both Linux SDK compile branches, surface interchange and ParaView host tests.
+
 ## Legacy Visualizer startup: 2026-10-14
 
 The supplied session SDK header has SHA-256

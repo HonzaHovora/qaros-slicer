@@ -1,13 +1,13 @@
 {
-  "tag": "windows-start-2026-10-14-session022c40b6r2",
+  "tag": "windows-start-2026-10-14-session022c40b6r3",
   "date": "2026-10-14",
-  "title": "Windows starter \u2014 Visualizer startup fix r2",
-  "filename": "QAROS_VTK_Windows_session_022c40b6_2026-10-14_r2.zip",
+  "title": "Windows starter \u2014 explicit WGL callbacks r3",
+  "filename": "QAROS_VTK_Windows_session_022c40b6_2026-10-14_r3.zip",
   "native": {
-    "run_id": 38568711354,
-    "artifact_id": 11897020274,
-    "commit": "f290dca3784b7af499f0ed2af5a70b3124f86071",
-    "sha256": "421d2ec5d8f2acddfdb7e03c9fa923adc2ae3d2a6962d4190aa7e0d0e72a1741"
+    "run_id": 38572186047,
+    "artifact_id": 11896974774,
+    "commit": "3b560c184f34fa124cc204c11dfdc03e21f1b13e",
+    "sha256": "e0a6982c6ffacf673b90276e8f429829f681214d0a9d553f07d2b0dacdd7a3ae"
   },
   "plugins": {
     "run_id": 38135146417,
