@@ -8,6 +8,7 @@ is not a promise of compatibility with arbitrary future V0 headers.
 | API generation | Source inspected | Connection path |
 | --- | --- | --- |
 | Legacy | QAROS `0.9.0-dev.2540+1ed038e4` package | Create/serialize/join session, invite target, add volume |
+| Supplied session SDK | Exact header `022c40b670f87a066664c37daeb06da525db37fffdf5810e72cff8a5b81e677d` | Same session branch; Windows sender compiled separately for these exact bytes |
 | Modern | [Quaternar/qaros at 678e5463](https://github.com/Quaternar/qaros/blob/678e5463bb14a9d4d1f681fcdb9dfab9fe61e77e/qar-streaming-c/include/qar_streaming.h) | Hub onboarding/rejoin, get-or-create volume, subscribe to render requests |
 
 Both use `QAR_ENABLE_OPENGL`, dynamic loading, an adopted shared WGL/GLX context,
@@ -54,5 +55,9 @@ volume identity across runs. Rejoin identity is persisted separately.
 Use `scripts/run_sender.py`: it compares the header hash against `--sdk-info`.
 Never replace the header without the matching runtime binaries. The check
 cannot detect a manually mixed set of DLLs with an unchanged header.
-No SDK headers, runtime binaries or invite files are vendored here. CI downloads
-only the pinned public header for compilation, never for a runtime claim.
+No SDK runtime binaries or invite files are vendored here. Modern CI downloads
+the pinned public header for compilation. The user-supplied session header is
+preserved unchanged in `ci/sdk-headers/session-022c40b6/include/qar_streaming.h`
+so CI can reproduce a sender for the installed SDK. Git preserves its exact
+bytes, including LF line endings, on Windows. This header alone does not install
+an SDK or establish a runtime test result.

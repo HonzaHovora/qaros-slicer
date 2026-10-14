@@ -66,7 +66,7 @@ void usage() {
       "Pairing code is read from stdin on first run; later runs rejoin.\n"
 #else
       "  [--invite-file invite.json] [--target visualizer|quest|hololens:HOST]\n"
-      "Legacy SDK 2540: join supplied session or create one, then invite a viewer.\n"
+      "Legacy session API: join supplied session or create one, then invite a viewer.\n"
 #endif
       "--sdk-info prints the build's header fingerprint without loading the runtime.\n";
 }
