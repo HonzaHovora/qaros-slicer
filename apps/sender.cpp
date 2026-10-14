@@ -58,21 +58,59 @@ double elapsed_ms(Clock::time_point start){
 }
 struct Performance {
   Clock::time_point since=Clock::now();
-  unsigned frames{},polls{};
+  unsigned frames{},polls{},retries{},scene_reloads{};
   double begin{},render{},copy{},finish{},show{};
+  double housekeeping{},frame_access{},metadata{},release{},present{};
+  double poll_sleep{},retry_sleep{},poll_sleep_max{},frame_access_max{};
+  double acquire{},acquire_max{};
+  std::optional<Clock::time_point> acquire_started;
   void reset(){*this=Performance{};}
+  void sleep(std::chrono::milliseconds duration,bool retry){
+    const auto started=Clock::now();
+    std::this_thread::sleep_for(duration);
+    const double actual=elapsed_ms(started);
+    if(retry){++retries;retry_sleep+=actual;}
+    else {++polls;poll_sleep+=actual;poll_sleep_max=std::max(poll_sleep_max,actual);}
+  }
+  void ready(){
+    if(acquire_started){
+      const double wait=elapsed_ms(*acquire_started);
+      acquire+=wait;acquire_max=std::max(acquire_max,wait);acquire_started.reset();
+    }
+  }
   void report(unsigned width,unsigned height){
     const double wall=elapsed_ms(since);
     if(!frames||wall<5000)return;
-    const double other=std::max(0.0,wall-begin-render-copy-finish-show);
+    // Exclusive phase totals. acquire is a separate, overlapping wall-time
+    // observation from the first begin-frame poll until a ready frame arrives.
+    const double other=std::max(0.0,wall-begin-render-copy-finish-show
+        -housekeeping-frame_access-metadata-release-present-poll_sleep-retry_sleep);
     std::ostringstream line;line<<std::fixed<<std::setprecision(2)
       <<"PERF stereo_fps="<<frames*1000.0/wall<<"; frame_ms="<<wall/frames
       <<"; sdk_begin_ms="<<begin/frames<<"; vtk_render_ms="<<render/frames
       <<"; gpu_copy_ms="<<copy/frames<<"; gpu_finish_ms="<<finish/frames
-      <<"; sdk_show_ms="<<show/frames<<"; other_ms="<<other/frames
+      <<"; sdk_show_ms="<<show/frames<<"; sdk_frame_access_ms="<<frame_access/frames
+      <<"; layout_pose_ms="<<metadata/frames<<"; frame_release_ms="<<release/frames
+      <<"; housekeeping_ms="<<housekeeping/frames<<"; preview_ms="<<present/frames
+      <<"; poll_sleep_ms="<<poll_sleep/frames<<"; retry_sleep_ms="<<retry_sleep/frames
+      <<"; other_ms="<<other/frames
       <<"; idle_polls="<<polls<<"; eye_size="<<width<<'x'<<height
-      <<"; frames="<<frames<<"; target60_frame_ms=16.67\n";
+      <<"; frames="<<frames<<"; target60_frame_ms=16.67\n"
+      <<"PACING acquire_wall_ms="<<acquire/frames<<"; acquire_max_ms="<<acquire_max
+      <<"; poll_sleep_requested_ms=2.00; poll_sleep_avg_ms="<<(polls?poll_sleep/polls:0)
+      <<"; poll_sleep_max_ms="<<poll_sleep_max<<"; sdk_frame_access_max_ms="<<frame_access_max
+      <<"; retry_polls="<<retries<<"; scene_reloads="<<scene_reloads
+      <<"; acquire_overlaps_PERF_phases=true\n";
     std::cout<<line.str();reset();
+  }
+};
+
+struct FrameInfoDeleter {
+  Performance* performance;
+  void operator()(QarRenderFrameInfo* info) const {
+    const auto started=Clock::now();
+    qar_render_frame_info_handle_destroy(info);
+    performance->release+=elapsed_ms(started);
   }
 };
 
@@ -525,14 +563,17 @@ int main(int argc,char** argv) { try {
   auto scene_time=options.scene.empty()?fs::file_time_type{}:fs::last_write_time(options.scene);
   Performance performance;
   std::cout<<"Performance logging every 5 seconds after warm-up; CPU wall times per stereo frame. "
-      "GPU stalls can appear in render/copy/finish; asynchronous encoding is not timed here.\n";
+      "PERF phases are exclusive; PACING acquire_wall overlaps polling/sleep/housekeeping. "
+      "GPU stalls can appear in render/copy/finish/frame_access; asynchronous encoding is not timed here.\n";
   int sent=0;
-  while (!stop_requested && !shutdown.requested() && !renderer.closing() && (!options.frames || sent<options.frames)) {
+  while (!options.frames || sent<options.frames) {
+    const auto housekeeping_started=Clock::now();
+    if(stop_requested || shutdown.requested() || renderer.closing())break;
     renderer.poll();
     if (options.watch && Clock::now()-last_watch>std::chrono::milliseconds(250)) {
       last_watch=Clock::now(); std::error_code ec; const auto changed=fs::last_write_time(options.scene,ec);
       if (!ec && changed!=scene_time) {
-        try { renderer.load_vtp(options.scene.string(),options.scale,options.ras); scene_time=changed; std::cout<<"Scene reloaded\n"; }
+        try { renderer.load_vtp(options.scene.string(),options.scale,options.ras); scene_time=changed; ++performance.scene_reloads; std::cout<<"Scene reloaded\n"; }
         catch (const std::exception& e) { std::cerr<<"Keeping previous scene: "<<e.what()<<'\n'; }
       }
     }
@@ -543,12 +584,13 @@ int main(int argc,char** argv) { try {
 #endif
       throw std::runtime_error("No frame received before timeout; check viewer and GPU adapter");
     }
+    performance.housekeeping+=elapsed_ms(housekeeping_started);
     QarRenderFrameInfo* raw{}; bool ready=false;
     const auto begin_started=Clock::now();
+    if(!performance.acquire_started)performance.acquire_started=begin_started;
     const auto result=qar_render_sender_try_begin_frame(sdk.sender,&raw,&ready);
     performance.begin+=elapsed_ms(begin_started);
-    if(!ready)++performance.polls;
-    std::unique_ptr<QarRenderFrameInfo,decltype(&qar_render_frame_info_handle_destroy)> info(raw,qar_render_frame_info_handle_destroy);
+    std::unique_ptr<QarRenderFrameInfo,FrameInfoDeleter> info(raw,FrameInfoDeleter{&performance});
 #if !QARVTK_MODERN_SDK
     const auto wait=qarvtk::legacy_begin_frame_wait(result,sent==0);
     if (wait!=qarvtk::LegacyFrameWait::none) {
@@ -562,13 +604,15 @@ int main(int argc,char** argv) { try {
                   << "/" << options.timeout << " seconds since last submitted frame/start...\n";
         reported_wait=wait; last_wait_report=now;
       }
-      std::this_thread::sleep_for(std::chrono::milliseconds(100)); continue;
+      performance.sleep(std::chrono::milliseconds(100),true); continue;
     }
 #endif
-    if (transient(result) || (qar_result_is_success(result) && !ready)) {
-      std::this_thread::sleep_for(std::chrono::milliseconds(2)); continue;
+    const bool retry=transient(result);
+    if (retry || (qar_result_is_success(result) && !ready)) {
+      performance.sleep(std::chrono::milliseconds(2),retry); continue;
     }
     checked(result,"begin frame"); if (!info) throw std::runtime_error("Ready frame has no view metadata");
+    performance.ready();
 #if !QARVTK_MODERN_SDK
     if (reported_wait!=qarvtk::LegacyFrameWait::none) {
       std::cout << "Viewer frame data is ready; continuing.\n";
@@ -576,11 +620,17 @@ int main(int argc,char** argv) { try {
     }
 #endif
     if (!sent) std::cout << "First frame request received; reading OpenGL frame layout...\n";
+    const auto access_started=Clock::now();
     auto access=qar_video_frame_opengl_default(); checked(qar_render_sender_frame_opengl(sdk.sender,&access),"get OpenGL frame");
+    const double access_ms=elapsed_ms(access_started);
+    performance.frame_access+=access_ms;performance.frame_access_max=std::max(performance.frame_access_max,access_ms);
+    const auto layout_started=Clock::now();
     const auto frame=frame_layout(access); const auto views=qarvtk::validate_stereo(frame);
+    performance.metadata+=elapsed_ms(layout_started);
     if (!sent) std::cout << "First frame layout validated: " << frame.textures.size()
                          << " textures, " << frame.views.size() << " views.\n";
     for (const auto& eye:views) {
+      const auto pose_started=Clock::now();
       QarPose pose=qar_pose_default(); QarFov fov=qar_fov_default();
       checked(qar_render_frame_info_get_view_pose(info.get(),eye.color,&pose),"get view pose");
       checked(qar_render_frame_info_get_view_fov(info.get(),eye.color,&fov),"get view FOV");
@@ -590,6 +640,7 @@ int main(int argc,char** argv) { try {
           {pose.orientation.x,pose.orientation.y,pose.orientation.z,pose.orientation.w}};
       const qarvtk::Fov angles{fov.angle_left,fov.angle_right,fov.angle_up,fov.angle_down};
       const auto& view=frame.views[eye.color];
+      performance.metadata+=elapsed_ms(pose_started);
       const auto render_started=Clock::now();
       auto source=renderer.render(camera,angles,clip,qarvtk::width(view),qarvtk::height(view));
       performance.render+=elapsed_ms(render_started);
@@ -607,10 +658,16 @@ int main(int argc,char** argv) { try {
     checked(qar_render_sender_show_frame(sdk.sender,&show),"show frame");
     performance.show+=elapsed_ms(show_started);
     last_frame=Clock::now(); ++sent;
+    // Include release and optional presentation in the same measurement window
+    // as their frame. The SDK has already accepted show_frame at this point.
+    info.reset();
+    if (options.preview) {
+      const auto present_started=Clock::now();renderer.present();
+      performance.present+=elapsed_ms(present_started);
+    }
     if(sent==1)performance.reset(); // Exclude context/shader/encoder startup.
     else {++performance.frames;const auto& view=frame.views[views[0].color];
       performance.report(qarvtk::width(view),qarvtk::height(view));}
-    if (options.preview) renderer.present();
     if (sent==1 || sent%300==0) std::cout<<"Submitted "<<sent<<" stereo frames\n";
   }
   std::cout<<"Stopped after "<<sent<<" stereo frames\n";

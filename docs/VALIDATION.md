@@ -1,5 +1,43 @@
 # Validation and next work
 
+## Confirmed orientation and source throughput: 2026-10-14, r8 diagnostics
+
+The user confirmed that r7's transformations are now correct and that Visualizer
+shows about 44 FPS. The supplied `QAROS-VTK-diagnostics-20261014-170715-742.zip`
+contains the exact r7 sender EXE (SHA-256
+`2f5b74e79c6dd34ec7a4ca3016168e1973b7c0065a50bbdb6d1446801821de13`).
+It completed 1202 stereo frames and stopped normally. Its 12 complete five-second
+measurement windows contain 1188 frames over about 60.28 seconds: **19.71 source
+stereo FPS**, at 1920 x 1080 per eye. Viewer FPS is a separate measurement; the
+log does not establish that source throughput improved from r6.
+
+Weighted CPU wall times per stereo frame are approximately 4.59 ms for VTK,
+0.83 ms for GPU copy, 0.40 ms for glFinish, 1.40 ms for SDK submission and 0.11 ms
+for all begin-frame polls. The remaining 43.42 ms is not attributed in r7. There
+are about 14.66 pending polls per frame, each followed by a nominal 2 ms sleep.
+This does not prove either a slow renderer or a fixed SDK frame-rate cap. Actual
+sleep duration, request pacing, frame texture acquisition, scene checks and
+metadata destruction must be distinguished before changing the rendering path.
+The Slicer plugin publishes geometry to a separate sender process; Slicer's own
+viewport is not captured each frame.
+
+R8 extends the existing five-second measurements. Exclusive `PERF` totals now
+include actual pending-poll sleep, error-retry sleep, lifecycle/event/file checks,
+OpenGL texture acquisition, layout/pose access, frame-info destruction and
+optional preview presentation. `PACING` adds the wall time from the first
+begin-frame poll through successful readiness, the actual mean/max pending-poll
+sleep, maximum frame-texture acquisition, retry count and scene reload count.
+**Acquisition wall time overlaps the exclusive phase totals; do not add it to
+PERF.** All times are wall time on the sender thread, not GPU timestamps or a
+measurement of asynchronous encoding or compositor work.
+
+Frame metadata is released immediately after successful submission so its cost
+belongs to the same measurement window. Poll/backoff durations, rendering,
+texture conversion, GPU synchronization and startup behavior remain the same.
+This is a diagnostic build, not a verified 60 FPS optimization. The next on-device
+run must identify which waiting phase dominates; two-headset throughput remains
+unmeasured.
+
 ## Vertical raster orientation and performance measurement: 2026-10-14, r7
 
 The user confirmed that r6 streams a visible cube into Visualizer on the NVIDIA
