@@ -49,4 +49,16 @@ dvě sekundy na jeho odběr zpráv a vytvoří volume rovnou přiřazené tomuto
 CI ověřuje kompilaci a vložený otisk hlavičky; skutečný NVIDIA/QAROS přenos
 zůstává k ověření na tomto PC. První verze přenáší jeden povrchový model.
 
+## Když po zobrazení volume přenos spadne
+
+Po pádu spusť `D:\QAROS_VTK\COLLECT-LOGS.cmd`. Slicer může zůstat otevřený.
+Skript vytvoří ZIP v `D:\QAROS_VTK\diagnostics` a vybere ho v Průzkumníku.
+Přilož tento ZIP do chatu. Obsahuje poslední tři logy senderu, informace o
+nainstalované verzi a související záznamy pádů z Windows. Modely ani pozvánky
+do balíčku nekopíruje. Nic automaticky neodesílá a nepotřebuje správce.
+
+Napiš také, zda zmizí celé okno Visualizeru, nebo jen pracovní volume. Pokud
+Slicer zůstane otevřený, připiš číslo z hlášení `Sender exited with code ...`
+nad polem Sender log. To rozliší chybu senderu od pádu vieweru.
+
 
