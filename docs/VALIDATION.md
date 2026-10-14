@@ -34,6 +34,14 @@ The synchronization baseline remains in place until timings justify a change.
 No 60-FPS or two-headset result is claimed. A 30-60 second on-device run will
 identify which part exceeds the 16.67 ms frame budget.
 
+Code commit `c50e71d2ca8c463f9c4d6624b3ab40c02147c25b` passed both Windows SDK
+builds, core/peer/frame-wait/WGL tests and exact header verification in
+[run 38584695970](https://github.com/HonzaHovora/QAROS_VTK/actions/runs/38584695970).
+[Run 38584696083](https://github.com/HonzaHovora/QAROS_VTK/actions/runs/38584696083)
+passed Linux core/process tests, GPU copy (2.49 s), GPU orientation (0.25 s),
+both SDK compile branches, surface interchange, Windows core and ParaView tests.
+Those test durations are CI wall times, not NVIDIA streaming performance.
+
 Primary references inspected: QAROS
 [coordinate systems](https://github.com/Quaternar/qaros/blob/main/docs/website/docs/developer-guide/coordinate-systems.md)
 and [Vulkan cube renderer](https://github.com/Quaternar/qaros/blob/main/qar-streaming-c/examples/vulkan_cube/renderer.cpp).

@@ -42,17 +42,18 @@ a odpovídá přesné hlavičce z existujícího SDK:
 Plugin tuto shodu ověřuje automaticky. Toto SDK neposkytuje nové Hub párování;
 pole Hub identity se nepoužívá. SDK runtime a viewer nejsou součástí balíčku.
 
-Balíček odpovídá testovacímu vydání `windows-start-2026-10-14-session022c40b6r6`.
-R5 už přijala požadavek na snímek i údaje o pohledu, ale zastavila se na
-`Destination framebuffer is incomplete`. R6 opravuje kopírování do jednovrstvé
-textury typu 2D array. Se starým kódem tento případ vyvolal stejnou chybu v testu;
-typ textury na tomto PC dosavadní log ještě nezaznamenával. Nový log vypíše typ,
-formát, rozměry, barvu/hloubku a při chybě přesný stav framebufferu.
-Zachovává předchozí opravy startu a čekání na údaje o pohledu. Visualizer nech
-viditelný v popředí. První odeslaný snímek a zobrazení kostky zatím nejsou potvrzené.
-CI ověřuje kompilaci, otisk hlavičky a GPU kopírování přes sdílené kontexty;
-skutečný NVIDIA/QAROS přenos zůstává k ověření na tomto PC.
-První verze přenáší jeden povrchový model.
+Balíček odpovídá testovacímu vydání `windows-start-2026-10-14-session022c40b6r7`.
+R6 už zobrazila kostku ve Visualizeru. R7 opravuje svislou orientaci snímku
+včetně hloubky; kamera i model zůstávají ve stejných souřadnicích.
+Po startu zkus pohled nahoru/dolů a vlevo/vpravo: kostka má držet své místo
+v pracovním volume.
+
+Kvůli cíli alespoň 60 FPS nech přenos běžet 30 až 60 sekund, pak stiskni
+**Stop streaming** a spusť `COLLECT-LOGS.cmd`. Sender zapisuje každých pět sekund
+řádek `PERF` s FPS a časy vykreslení, kopírování, čekání na GPU a volání SDK.
+Jde o časy na straně senderu, nikoli o přímé měření asynchronního enkodéru
+nebo obnovování obrazu ve vieweru. Zrychlení ani výkon pro dvoje brýle zatím
+nejsou ověřené.
 
 ## Když po zobrazení volume přenos spadne
 

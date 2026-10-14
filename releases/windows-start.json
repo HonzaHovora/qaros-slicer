@@ -1,13 +1,13 @@
 {
-  "tag": "windows-start-2026-10-14-session022c40b6r6",
+  "tag": "windows-start-2026-10-14-session022c40b6r7",
   "date": "2026-10-14",
-  "title": "Windows starter \u2014 GL array copy and framebuffer diagnostics r6",
-  "filename": "QAROS_VTK_Windows_session_022c40b6_2026-10-14_r6.zip",
+  "title": "Windows starter \u2014 vertical orientation and frame timings r7",
+  "filename": "QAROS_VTK_Windows_session_022c40b6_2026-10-14_r7.zip",
   "native": {
-    "run_id": 38581274978,
-    "artifact_id": 11903536021,
-    "commit": "d37a2617c4998e0fa1f73423445b76c97d814616",
-    "sha256": "c9f8ad527b2473d401f329fe64203eeff08d197090aa73768b653a594ee1ecec"
+    "run_id": 38584695970,
+    "artifact_id": 11905146113,
+    "commit": "c50e71d2ca8c463f9c4d6624b3ab40c02147c25b",
+    "sha256": "0914a5b9b94db4fb4eb6abc97bd3d0bf58a343ba423e2c81d0de9f218d5e2c0c"
   },
   "plugins": {
     "run_id": 38135146417,
