@@ -1,0 +1,46 @@
+name: Store Windows starter in Git
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/store-windows-starter.yml'
+permissions:
+  contents: read
+concurrency:
+  group: store-windows-starter
+  cancel-in-progress: false
+jobs:
+  store:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    permissions:
+      contents: write
+    env:
+      GH_TOKEN: ${{ github.token }}
+      GH_REPO: ${{ github.repository }}
+    steps:
+      - uses: actions/checkout@v4
+      - name: Download the published and verified starter
+        run: |
+          mkdir -p downloads
+          gh release download windows-start-2026-10-14 --pattern QAROS_VTK_Windows_start_2026-10-14.zip --dir downloads --clobber
+          python3 - <<'PY'
+          import hashlib
+          from pathlib import Path
+          archive = Path('downloads/QAROS_VTK_Windows_start_2026-10-14.zip')
+          expected = 'ec6527bd5ca3d354feb7becef8586ae8c66474676073f66db68391930bfc0435'
+          actual = hashlib.sha256(archive.read_bytes()).hexdigest()
+          if actual != expected:
+              raise ValueError('Published starter checksum mismatch: ' + actual)
+          archive.with_suffix('.zip.sha256').write_text(expected + '  ' + archive.name + '\n')
+          PY
+      - name: Make the starter available through normal GitHub Desktop pull
+        run: |
+          git add -- downloads/QAROS_VTK_Windows_start_2026-10-14.zip downloads/QAROS_VTK_Windows_start_2026-10-14.zip.sha256
+          if git diff --cached --quiet; then
+            echo "The checked-out starter already matches the release."
+            exit 0
+          fi
+          git -c user.name='github-actions[bot]' -c user.email='41898282+github-actions[bot]@users.noreply.github.com' commit -m "Include verified Windows starter for GitHub Desktop checkout"
+          git push origin HEAD:main

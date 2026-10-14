@@ -4,10 +4,12 @@ Pluginy pro **ParaView a 3D Slicer** se společným VTK/OpenGL backendem pro QAR
 Instalují se do běžných hostitelských aplikací; backend renderuje v samostatném
 procesu. QAROS už OpenGL podporuje; Vulkan není součástí této implementace.
 
-**Hotový Windows balíček:** [stáhnout ZIP z GitHub Release](https://github.com/HonzaHovora/QAROS_VTK/releases/tag/windows-start-2026-10-14).
-Obsahuje EXE, DLL, oba pluginy, testovací model a `ZACNI_ZDE.txt`.
-Po rozbalení spusť `01-Preview.cmd`; pro Hub musí souhlasit tvoje kompletní SDK.
-[Krátký postup bez kompilace](docs/WINDOWS_QUICKSTART.txt).
+**První test přes GitHub Desktop:** po Fetch/Pull spusť `START-PREVIEW.cmd`
+v kořeni checkoutu. Hotový Windows ZIP se stáhne spolu s repozitářem; skript ho
+ověří, rozbalí a otevře zelenou kostku. [Postup pro D:\QAROS_VTK](docs/WINDOWS_DESKTOP.md).
+
+Samostatné stažení balíčku je také v [GitHub Release](https://github.com/HonzaHovora/QAROS_VTK/releases/tag/windows-start-2026-10-14).
+Pro přenos do Hubu je nutné odpovídající kompletní SDK.
 
 **Začni zde: [instalace na Windows, instalace pluginů a první pokus](docs/INSTALLATION.md).**
 
