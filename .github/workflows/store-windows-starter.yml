@@ -21,7 +21,7 @@ jobs:
       GH_REPO: ${{ github.repository }}
     steps:
       - uses: actions/checkout@v4
-      - name: Download the published and verified starter
+      - name: Download published r16 starter and verify SHA-256
         run: |
           mkdir -p downloads
           gh release download windows-start-2026-10-15-session022c40b6r16 --pattern QAROS_VTK_Windows_session_022c40b6_2026-10-15_r16.zip --dir downloads --clobber
