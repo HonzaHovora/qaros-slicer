@@ -68,7 +68,8 @@ def package(native_archive, plugins_archive, output):
     if config.get('host_bridge'):
         for name in ('plugins/slicer/QarosLive.py', 'plugins/slicer/QarosVTKLib/qarvtk_host_view.py',
                      'plugins/slicer/QarosVTKLib/qarvtk_host_runtime.py',
-                     'plugins/slicer/QarosVTKLib/qarvtk_host_gpu.py'):
+                     'plugins/slicer/QarosVTKLib/qarvtk_host_gpu.py',
+                     'plugins/slicer/QarosVTKLib/qarvtk_host_diagnostics.py'):
             if name not in payload:
                 raise ValueError(f'Missing live host plugin: {name}')
     for target, source in {

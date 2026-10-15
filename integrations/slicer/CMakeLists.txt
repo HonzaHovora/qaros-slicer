@@ -18,6 +18,7 @@ configure_file(qarvtk_slicer.py ${library_dir}/qarvtk_slicer.py COPYONLY)
 configure_file(qarvtk_host_view.py ${library_dir}/qarvtk_host_view.py COPYONLY)
 configure_file(qarvtk_host_gpu.py ${library_dir}/qarvtk_host_gpu.py COPYONLY)
 configure_file(qarvtk_host_runtime.py ${library_dir}/qarvtk_host_runtime.py COPYONLY)
+configure_file(qarvtk_host_diagnostics.py ${library_dir}/qarvtk_host_diagnostics.py COPYONLY)
 configure_file(../qarvtk_scene.py ${library_dir}/qarvtk_scene.py COPYONLY)
 configure_file(../qarvtk_bridge.py ${library_dir}/qarvtk_bridge.py COPYONLY)
 configure_file(../qarvtk_runtime.py ${library_dir}/qarvtk_runtime.py COPYONLY)
@@ -27,6 +28,7 @@ install(FILES
   ${library_dir}/qarvtk_host_view.py
   ${library_dir}/qarvtk_host_gpu.py
   ${library_dir}/qarvtk_host_runtime.py
+  ${library_dir}/qarvtk_host_diagnostics.py
   ${library_dir}/qarvtk_scene.py
   ${library_dir}/qarvtk_bridge.py
   ${library_dir}/qarvtk_runtime.py

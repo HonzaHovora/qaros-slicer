@@ -4,7 +4,7 @@ The consumer must copy the supplied GPU textures before returning. Texture names
 are borrowed from the host context, not handles that can be sent to a process.
 """
 import math
-from time import perf_counter
+from time import perf_counter, thread_time
 from contextlib import contextmanager, nullcontext
 
 import vtk
@@ -222,7 +222,33 @@ class HostView:
 
     def _render_window(self):
         self.last_timings["host_render_calls"] = self.last_timings.get("host_render_calls", 0.) + 1
-        self.window.Render()
+        cpu = thread_time()
+        try:
+            self.window.Render()
+        finally:
+            self.last_timings["host_render_thread_cpu_ms"] = (
+                self.last_timings.get("host_render_thread_cpu_ms", 0.) + (thread_time() - cpu) * 1000)
+
+    def diagnostic_state(self):
+        """Read existing settings once per second; never update a VTK pipeline."""
+        result = dict(desired_update_rate=self.window.GetDesiredUpdateRate(),
+                      view_visible=bool(self.view.isVisible()))
+        volume = next((v for v in _items(self.renderer.GetVolumes()) if v.GetVisibility()), None)
+        if volume:
+            mapper = volume.GetMapper()
+            image = mapper.GetInput()
+            result["volume"] = dict(
+                mapper=mapper.GetClassName(), sample_distance=mapper.GetSampleDistance(),
+                image_sample_distance=mapper.GetImageSampleDistance(),
+                auto_adjust=bool(mapper.GetAutoAdjustSampleDistances()),
+                lock_sample_to_spacing=bool(mapper.GetLockSampleDistanceToInputSpacing()),
+                cropping=bool(mapper.GetCropping()), crop_planes=mapper.GetCroppingRegionPlanes(),
+                property_mtime=volume.GetProperty().GetMTime(),
+                input_mtime=image.GetMTime() if image else None,
+                spacing=image.GetSpacing() if image else None,
+                dimensions=image.GetDimensions() if image else None,
+                matrix=[volume.GetMatrix().GetElement(r, c) for r in range(4) for c in range(4)])
+        return result
 
     def _textures(self):
         framebuffer = self.window.GetDisplayFramebuffer()

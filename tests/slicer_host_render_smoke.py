@@ -107,6 +107,12 @@ def run():
     render_events = []
     render_observer = window.AddObserver(vtk.vtkCommand.StartEvent, lambda *args: render_events.append(1))
     host.render(eyes, oracle)
+    diagnostic_state = host.diagnostic_state()
+    assert diagnostic_state["volume"]["dimensions"] == (32, 32, 32)
+    assert diagnostic_state["volume"]["spacing"] == (3., 3., 3.)
+    assert diagnostic_state["volume"]["image_sample_distance"] == old_mapper[1]
+    assert host.last_timings["host_render_thread_cpu_ms"] >= 0
+    print("PASS: read-only live diagnostic state and render thread CPU time", flush=True)
     print("HOST initial timing", host.last_timings, "flags",
           renderer.GetUseDepthPeeling(), renderer.GetUseDepthPeelingForVolumes(), renderer.GetUseSSAO(),
           mapper.GetUseDepthPass(), "keys", original_keys, "renders", len(render_events), flush=True)

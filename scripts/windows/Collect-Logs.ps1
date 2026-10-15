@@ -65,6 +65,13 @@ if (Test-Path -LiteralPath $liveRoot -PathType Container) {
                     Set-Content -LiteralPath (Join-Path $folder ("host-python-" + $liveIndex + '.log')) -Encoding UTF8
             } catch { $notes.Add("Cannot read live Python log: $_") }
         }
+        $systemLog = Join-Path $log.DirectoryName 'host-system.log'
+        if (Test-Path -LiteralPath $systemLog -PathType Leaf) {
+            try {
+                Get-Content -LiteralPath $systemLog -Encoding UTF8 -Tail 10000 |
+                    Set-Content -LiteralPath (Join-Path $folder ("host-system-" + $liveIndex + '.log')) -Encoding UTF8
+            } catch { $notes.Add("Cannot read live system log: $_") }
+        }
     }
 }
 
