@@ -52,15 +52,15 @@ def run():
         camera.SetFocalPoint(center)
         camera.SetViewUp(up)
         host = HostView(view)
-        assert host.scale == .001, "Fit leaked into the renderer's unit conversion"
-        assert np.isclose(host.app_scale, .65/.320)
+        assert np.isclose(host.app_scale, .65/320.)
         assert np.isclose(np.linalg.det(rotation(host.app_orientation)), 1), "Placement mirrors the scene"
         for orientation in ((0, 0, 0, 1), (.1, .2, -.05, .97)):
             for x in (-.032, .032):
                 pose = np.array([x, .05, 1.2])
                 eye = sdk_eye(host, pose, orientation)
                 host._camera_for_eye(eye, *host.clip)
-                assert np.allclose(camera.GetPosition(), center + basis @ pose / (host.app_scale*.001))
+                assert np.allclose(camera.GetPosition(), center + basis @ pose / host.app_scale)
+                assert np.allclose(camera.GetPosition(), eye["position"]), "Eye pose was transformed again in the renderer"
                 assert np.allclose(camera.GetDirectionOfProjection(), basis @ rotation(orientation) @ [0, 0, -1])
                 assert np.allclose(camera.GetViewUp(), basis @ rotation(orientation) @ [0, 1, 0])
         def screen(point, translation):

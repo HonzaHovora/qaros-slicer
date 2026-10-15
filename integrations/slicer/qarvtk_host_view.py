@@ -46,14 +46,6 @@ def camera_basis(camera):
     return right, _cross(right, forward), tuple(-x for x in forward)
 
 
-def app_vector(ras):
-    return (ras[0], ras[2], -ras[1])
-
-
-def ras_vector(app):
-    return (app[0], -app[2], app[1])
-
-
 def projection(fov, near, far):
     if not (0 < near < far) or not all(math.isfinite(x) for x in (*fov, near, far)):
         raise ValueError("Invalid clipping or eye FOV")
@@ -89,8 +81,9 @@ class HostView:
         self._busy = False
         self.last_timings = {}
         self.desktop = DesktopTextures(self.window)
-        self.scale = .001
-        self.app_scale = 1.
+        # One app coordinate unit is one native Slicer RAS millimetre. The SDK
+        # alone maps these units into the room, including the mm -> m scale.
+        self.app_scale = .001
         self.center = (0., 0., 0.)
         # Placement is fixed at Start. Live changes never unexpectedly refit it.
         if fit:
@@ -100,20 +93,19 @@ class HostView:
             extent = max(bounds[2*i+1] - bounds[2*i] for i in range(3))
             if extent <= 0:
                 raise ValueError("The visible content has empty bounds")
-            self.app_scale = .65 / (extent * self.scale)
+            self.app_scale = .65 / extent
             self.center = tuple((bounds[2*i] + bounds[2*i+1]) * .5 for i in range(3))
-        # App content is always world RAS converted to metres/+Y-up. Placement
-        # and fitting belong to the SDK, never to the per-eye camera transform.
+        # App content uses unmodified world RAS coordinates. Axis conversion,
+        # placement and scale belong to the SDK, never the per-eye camera.
         # Rotate the initial Slicer view's right/up/back axes onto app-volume
         # X/Y/Z. The transpose is the inverse of this orthonormal camera basis.
-        self.app_orientation = (0., 0., 0., 1.)
+        self.app_orientation = (-math.sqrt(.5), 0., 0., math.sqrt(.5))
         if match_view:
-            rotation = [list(app_vector(axis)) for axis in camera_basis(self.camera)]
+            rotation = [list(axis) for axis in camera_basis(self.camera)]
             q = [0.] * 4  # VTK returns scalar first; QAROS stores scalar last.
             vtk.vtkMath.Matrix3x3ToQuaternion(rotation, q)
             self.app_orientation = (*q[1:], q[0])
-        center_m = tuple(x * self.scale for x in app_vector(self.center))
-        self.app_position = tuple(-self.app_scale * x for x in _rotate(self.app_orientation, center_m))
+        self.app_position = tuple(-self.app_scale * x for x in _rotate(self.app_orientation, self.center))
         self.clip = (.05 / self.app_scale, 20. / self.app_scale)
         for method in ("GetDisplayFramebuffer", "GetFrameBlitMode", "SetUseOffScreenBuffers"):
             if not hasattr(self.window, method):
@@ -145,15 +137,15 @@ class HostView:
         position, orientation, fov = eye["position"], eye["orientation"], eye["fov"]
         if not all(math.isfinite(x) for x in (*position, *orientation)):
             raise ValueError("Non-finite eye pose")
-        p = tuple(x / self.scale for x in ras_vector(position))
-        forward = ras_vector(_rotate(orientation, (0., 0., -1.)))
-        up = ras_vector(_rotate(orientation, (0., 1., 0.)))
+        p = position
+        forward = _rotate(orientation, (0., 0., -1.))
+        up = _rotate(orientation, (0., 1., 0.))
         self.camera.SetPosition(p)
-        self.camera.SetFocalPoint(tuple(a + b / self.scale for a, b in zip(p, forward)))
+        self.camera.SetFocalPoint(tuple(a + b for a, b in zip(p, forward)))
         self.camera.SetViewUp(up)
         self.camera.SetParallelProjection(False)
-        self.camera.SetClippingRange(near / self.scale, far / self.scale)
-        self.camera.SetExplicitProjectionTransformMatrix(projection(fov, near / self.scale, far / self.scale))
+        self.camera.SetClippingRange(near, far)
+        self.camera.SetExplicitProjectionTransformMatrix(projection(fov, near, far))
         self.camera.SetUseExplicitProjectionTransformMatrix(True)
 
     @contextmanager

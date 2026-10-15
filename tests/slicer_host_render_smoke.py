@@ -70,7 +70,7 @@ def run():
     window.Render()
     host = HostView(view, match_view=False)
     print("HOST: VTK", vtk.vtkVersion.GetVTKVersion(), "window", window.GetClassName(),
-          "mapper", host.volume().GetClassName(), "scale", host.scale, flush=True)
+          "mapper", host.volume().GetClassName(), "app_scale", host.app_scale, flush=True)
     original_camera = camera_state(host.camera)
     original_size = window.GetSize()
     original_blit = window.GetFrameBlitMode()
@@ -263,7 +263,7 @@ def run():
             assert vc is None and vd is None
             values = depths(window)
             assert np.all(values == 1), "Offscreen volume retained an earlier eye's depth"
-    away = [dict(eye, orientation=(0., 1., 0., 0.)) for eye in eyes]
+    away = [sdk_eye(host, (x, 0., 1.2), orientation=(0., 1., 0., 0.)) for x in (-.032, .032)]
     host.render(away, EmptyOracle())
 
     class Broken(Oracle):
