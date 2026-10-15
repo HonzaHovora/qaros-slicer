@@ -136,6 +136,7 @@ class HostView:
         flip_y = window.GetFramebufferFlipY()
         camera_node = self.view.cameraNode() if hasattr(self.view, "cameraNode") else None
         modifying = camera_node.StartModify() if camera_node else None
+        render_enabled = self.view.renderEnabled if hasattr(self.view, "setRenderEnabled") else None
         preserved = False
         window.MakeCurrent()
         state = window.GetState()
@@ -143,6 +144,12 @@ class HostView:
         state.vtkglGetIntegerv(0x0BA2, viewport)  # GL_VIEWPORT
         state.vtkglGetIntegerv(0x0C10, scissor)  # GL_SCISSOR_BOX
         try:
+            # CTK can synchronously render when a temporary camera modification
+            # requests an update. Only explicit eye renders may run in this
+            # scope. Restore the flag without scheduling a redundant desktop
+            # render; existing queued updates and later user edits still run.
+            if render_enabled is not None:
+                self.view.setRenderEnabled(False)
             with self._timed("desktop_save_ms"):
                 preserved = self.desktop.begin()
             window.SetFrameBlitMode(vtk.vtkOpenGLRenderWindow.NoBlit)
@@ -172,6 +179,8 @@ class HostView:
                     self._render_window()
                     self.last_timings["desktop_restore_render_calls"] = 1.
             finally:
+                if render_enabled is not None:
+                    self.view.setRenderEnabled(render_enabled)
                 self.last_timings["desktop_restore_ms"] = (perf_counter() - restore_start) * 1000
                 self._busy = False
 

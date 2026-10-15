@@ -108,7 +108,7 @@ def single_pass_supported(renderer, volume):
     if (vtk.vtkVersion.GetVTKMajorVersion(), vtk.vtkVersion.GetVTKMinorVersion()) != (9, 6):
         return False
     mapper = volume.GetMapper()
-    if (renderer.GetPass() or renderer.GetUseDepthPeeling() or renderer.GetUseSSAO()
+    if (renderer.GetPass() or renderer.GetUseDepthPeelingForVolumes() or renderer.GetUseSSAO()
             or mapper.GetUseDepthPass()):
         return False
     keys = volume.GetPropertyKeys()

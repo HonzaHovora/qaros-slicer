@@ -105,6 +105,9 @@ def run():
     render_events = []
     render_observer = window.AddObserver(vtk.vtkCommand.StartEvent, lambda *args: render_events.append(1))
     host.render(eyes, oracle)
+    print("HOST initial timing", host.last_timings, "flags",
+          renderer.GetUseDepthPeeling(), renderer.GetUseDepthPeelingForVolumes(), renderer.GetUseSSAO(),
+          mapper.GetUseDepthPass(), "keys", original_keys, "renders", len(render_events), flush=True)
     assert len(render_events) == 2, f"Expected two renders, got {len(render_events)}"
     assert np.array_equal(pixels(window), desktop_color), "Desktop color was not preserved"
     assert np.array_equal(depths(window), desktop_depth), "Desktop depth was not preserved"
@@ -184,6 +187,37 @@ def run():
     host.render(eyes, again)
     assert np.max(np.abs(again.colors[0].astype(int)-expected.astype(int))) <= 2
 
+    # Preserve a real custom VOLUME shader as well as surface shaders. Only
+    # add our depth output; its normal color expression must remain unchanged.
+    tag = "//VTK::Base::Exit"
+    original_shader.AddFragmentShaderReplacement(tag, True,
+        tag + "\ng_fragColor.rgb *= vec3(0.5, 1.0, 1.0);", False)
+    try:
+        with host._frame_state():
+            host._camera_for_eye(eyes[0], .05, 20.)
+            window.SetSize(*eyes[0]["size"])
+            window.Render()
+            custom_expected = pixels(window)
+        custom = Oracle()
+        host.render(eyes, custom)
+        assert host.last_timings["host_render_calls"] == 2
+        assert np.max(np.abs(custom.colors[0].astype(int)-custom_expected.astype(int))) <= 2
+        assert not np.array_equal(custom.colors[0], again.colors[0])
+        assert volume.GetShaderProperty() == original_shader
+    finally:
+        original_shader.ClearFragmentShaderReplacement(tag, True)
+
+    # Existing plugins may already use the depth hook. Keep their shader and
+    # select the supplementary depth path instead of replacing their code.
+    tag = "//VTK::RenderToImage::Dec"
+    original_shader.AddFragmentShaderReplacement(tag, True, tag + "\n// existing plugin hook", False)
+    try:
+        host.render(eyes, Oracle())
+        assert host.last_timings["volume_depth_passes"] == 2
+        assert volume.GetShaderProperty() == original_shader
+    finally:
+        original_shader.ClearFragmentShaderReplacement(tag, True)
+
     # Host ROI cropping, explicitly unsupported by the snapshot exporter.
     roi = slicer.modules.volumerendering.logic().CreateROINode(vr)
     slicer.modules.volumerendering.logic().FitROIToVolume(vr)
@@ -242,6 +276,14 @@ def run():
         assert np.array_equal(depths(window), desktop_depth), "Error corrupted desktop depth"
     window.SetMultiSamples(original_samples)
     window.Render()
+    slicer.app.processEvents()
+    render_events.clear()
+    host.render(eyes, Oracle())
+    synchronous_count = len(render_events)
+    slicer.app.processEvents()
+    slicer.app.processEvents()
+    print("HOST render counts: synchronous", synchronous_count,
+          "after queued Qt events", len(render_events), flush=True)
     window.RemoveObserver(render_observer)
     host.close()
     print("PASS: two renders per stereo frame; single-pass CT depth matches VTK; exact desktop texture preservation; "
