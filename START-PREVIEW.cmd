@@ -1,13 +1,13 @@
 @echo off
 setlocal
 cd /d "%~dp0"
-if not exist "downloads\QAROS_VTK_Windows_session_022c40b6_2026-10-15_r14.zip" (
+if not exist "downloads\QAROS_VTK_Windows_session_022c40b6_2026-10-15_r15.zip" (
   echo The Windows starter ZIP is missing. Use Fetch origin and Pull origin in GitHub Desktop.
   pause
   exit /b 1
 )
-echo Preparing the Windows preview - live Slicer renderer r14...
-powershell.exe -NoProfile -Command "$ErrorActionPreference='Stop'; try { $zip=Join-Path (Get-Location) 'downloads/QAROS_VTK_Windows_session_022c40b6_2026-10-15_r14.zip'; $expected='f350d4a77458c59fe09a03a7e1ebfb0ffeac2dea8bd47d6a86a4955cac2ce91a'; if ((Get-FileHash -LiteralPath $zip -Algorithm SHA256).Hash -ine $expected) { throw 'Windows starter checksum mismatch.' }; Expand-Archive -LiteralPath $zip -DestinationPath 'package/windows-start' -Force } catch { Write-Error $_; exit 1 }"
+echo Preparing the Windows preview - live Slicer renderer r15...
+powershell.exe -NoProfile -Command "$ErrorActionPreference='Stop'; try { $zip=Join-Path (Get-Location) 'downloads/QAROS_VTK_Windows_session_022c40b6_2026-10-15_r15.zip'; $expected='e1e27028e8f303f75f30d5e51aa5749d0319daef6f45a9a503ffd1141d3cd7a9'; if ((Get-FileHash -LiteralPath $zip -Algorithm SHA256).Hash -ine $expected) { throw 'Windows starter checksum mismatch.' }; Expand-Archive -LiteralPath $zip -DestinationPath 'package/windows-start' -Force } catch { Write-Error $_; exit 1 }"
 if errorlevel 1 (
   echo Preparing the preview failed. Copy the error above.
   pause
