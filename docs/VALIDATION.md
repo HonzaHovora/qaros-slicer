@@ -28,6 +28,15 @@ calls can defer GPU cost into later synchronization. Native copy/sync fields are
 subsets of Python copy calls and native GUI wait; do not add overlapping fields.
 The instrumentation adds no pixel readback or GPU wait and makes no FPS claim.
 
+R11 release verification, source `cf96875df48a247fd693b4ad4207b40b52dd59d7`:
+
+- [Windows native 38729343448](https://github.com/HonzaHovora/QAROS_VTK/actions/runs/38729343448): both SDK builds; all eight host-only CTest cases, including the deterministic lease regression, Python nested-timer/stop cases, ABI and WGL sharing.
+- [Slicer 38729343478](https://github.com/HonzaHovora/QAROS_VTK/actions/runs/38729343478): actual Slicer 5.12.4 stereo/color/depth/ROI/restoration acceptance and non-overlapping Python stage measurements.
+- [Build 38729343505](https://github.com/HonzaHovora/QAROS_VTK/actions/runs/38729343505): all nine Linux CTest cases, Windows core/collector checks, both SDK compile paths and packaged Python plugins.
+- DLL SHA-256: `805c01781dec30d1e3d2aac9a8401df50e09a2483b1c256ee967920a3568e50e`.
+- ZIP SHA-256: `baa8f803914c62c366e3efe4f1d496e314d0ceb518f65323226b1fae131feb76`; 73 internal manifest entries verified.
+- These checks do not establish improved target-PC FPS or prove the cause of the receiver exit. Next on-device check: 30 seconds of live CT, normal Stop, then collect both live logs.
+
 ## Direct host rendering: r10, 2026-10-15
 
 The user confirmed that the r9 volume test works on the target installation.

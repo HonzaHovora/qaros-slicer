@@ -1,22 +1,23 @@
 {
-  "tag": "windows-start-2026-10-15-session022c40b6r10",
+  "tag": "windows-start-2026-10-15-session022c40b6r11",
   "date": "2026-10-15",
-  "title": "Windows starter — live Slicer renderer r10",
-  "filename": "QAROS_VTK_Windows_session_022c40b6_2026-10-15_r10.zip",
+  "title": "QAROS Live Renderer r11 — frame ownership fix and timing diagnostics",
+  "filename": "QAROS_VTK_Windows_session_022c40b6_2026-10-15_r11.zip",
   "native": {
-    "run_id": 38717231877,
-    "artifact_id": 11963620745,
-    "commit": "9d1b6126aeaf4d897d68c9e3608f6dedfc6621b7",
-    "sha256": "a5e417800daa6fb8472246e2a3dbdc2a607134266d028d4de943c59755ae73a6"
+    "run_id": 38729343448,
+    "artifact_id": 11969827874,
+    "commit": "cf96875df48a247fd693b4ad4207b40b52dd59d7",
+    "sha256": "ee6479b99d96b61ba92b97d8b7c26d53f51e29d0d0f34faedeab5b3ed83cd58c"
   },
   "plugins": {
-    "run_id": 38718347268,
-    "artifact_id": 11964570621,
-    "commit": "76db41975b58efab265dba5d85ba05dbf3072ea3",
-    "sha256": "c449ed1e0921338097e6bc83d6ee71c941a1f60f6e4c2b865fcb780a1cdcd12c"
+    "run_id": 38729343505,
+    "artifact_id": 11969852442,
+    "commit": "cf96875df48a247fd693b4ad4207b40b52dd59d7",
+    "sha256": "7ece7b125495f1ee8c1ceb140de10fa3a44a880b9417ab85abb865943c72750a"
   },
   "sdk_header_sha256": "022c40b670f87a066664c37daeb06da525db37fffdf5810e72cff8a5b81e677d",
   "modern_api": 0,
   "host_bridge": true,
-  "quickstart": "docs/WINDOWS_LIVE_QUICKSTART.txt"
+  "quickstart": "docs/WINDOWS_LIVE_QUICKSTART.txt",
+  "release_note": "R11 opravuje závod při převzetí dokončeného snímku (Duplicate host frame plane) a chrání před opakovaným vstupem časovače během renderu. Přidává pětisekundové souhrny časů hostitelského renderování, GPU kopírování/synchronizace a čekání na SDK. COLLECT-LOGS.cmd zahrnuje oba živé logy. Příčina hlášeného pádu Visualizeru ani zrychlení z přibližně 10 FPS zatím nejsou potvrzené."
 }

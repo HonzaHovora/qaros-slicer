@@ -11,9 +11,11 @@ maintenance problem identified with the ANARI integration.
 
 **Status, 2026-10-15:** the experimental Slicer host-rendered path is implemented
 as `QarosLive.py`, `qarvtk_host_view.py` and the VTK/Qt-free `qarvtk-host.dll`.
-It is packaged as experimental r10 after component acceptance. R9 remains a separate
-snapshot renderer. End-to-end live-host validation on the target NVIDIA/SDK
-installation is still required; the milestone is not yet declared complete.
+The r10 field test reached live streaming on the target NVIDIA/SDK installation,
+but exposed a completed-frame re-acquisition race, about 10 FPS and one reported
+Visualizer exit. R11 corrects lease ownership and instruments live wall times.
+Stable end-to-end operation and the receiver exit remain to be verified; the
+milestone is not yet declared complete. R9 remains a separate snapshot renderer.
 
 The live module uses the original view's resolved display framebuffer. The
 normal full host render supplies color; a supplementary render asks the same
