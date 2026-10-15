@@ -89,6 +89,11 @@ def run():
 
     oracle = Oracle()
     host.render(eyes, oracle)
+    timings = host.last_timings
+    parts = ("color_render_ms", "depth_render_ms", "color_copy_call_ms",
+             "depth_copy_call_ms", "desktop_restore_ms")
+    assert all(timings[name] > 0 for name in parts)
+    assert sum(timings[name] for name in parts) <= timings["frame_wall_ms"]
     assert len(oracle.colors) == 2 and len(oracle.depths) == 2
     assert np.count_nonzero(oracle.colors[0][:, :, 0] > 100) > 100
     assert not np.array_equal(oracle.colors[0], oracle.colors[1]), "Eyes must use distinct poses"

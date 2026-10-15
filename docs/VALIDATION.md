@@ -1,5 +1,33 @@
 # Validation and next work
 
+## Live r10 field report and r11 correction, 2026-10-15
+
+`QAROS-VTK-diagnostics-20261015-133345-549.zip` confirms the published r10 host
+DLL and SDK header on NVIDIA RTX 2070 Max-Q. The user reports about 10 FPS and
+one Visualizer exit. Live session 13:29 logged 240 submitted stereo frames then
+`ERROR: Duplicate host frame plane`; session 13:30 reached at least 600 frames.
+There is no matching Windows crash event in the collection. The old sender logs
+are from other sessions and must not be used to explain live-host performance.
+
+The bridge left a finished frame posted until the SDK worker woke up. If the GUI
+polled first, it could lease that same frame again, with its plane mask already
+complete. R11 moves ownership into a mutex-protected lease state: submitted and
+consumed frames cannot be acquired. A portable regression test forces this exact
+finish/re-poll-before-consume order 1000 times, and checks stale/partial/duplicate
+planes and cancellation. A Python guard also blocks nested timer events from
+overwriting the live frame or destroying the transport inside host rendering.
+This establishes a bridge defect and correction, not the cause of the Visualizer
+process exit, which still requires verification on the target installation.
+
+R11 records five-second wall-time averages in `host-bridge.log` and
+`host-python.log`, both collected by COLLECT-LOGS. Python separates normal color
+rendering, supplemental depth rendering, copy calls and desktop restoration.
+Native metrics separate SDK readiness, metadata, GUI handoff, SDK show and the
+existing GL synchronization/copy calls. GPU work is asynchronous: render CPU
+calls can defer GPU cost into later synchronization. Native copy/sync fields are
+subsets of Python copy calls and native GUI wait; do not add overlapping fields.
+The instrumentation adds no pixel readback or GPU wait and makes no FPS claim.
+
 ## Direct host rendering: r10, 2026-10-15
 
 The user confirmed that the r9 volume test works on the target installation.

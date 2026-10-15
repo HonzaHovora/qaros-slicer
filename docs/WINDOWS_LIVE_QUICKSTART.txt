@@ -1,10 +1,10 @@
-QAROS Live Renderer — přímý renderer Sliceru, r10
+QAROS Live Renderer — přímý renderer Sliceru, r11
 
 AKTUALIZACE
 
 1. Zastav přenos a zavři Slicer, Visualizer i náhled kostky.
 2. GitHub Desktop → QAROS_VTK / main → Fetch origin → Pull origin.
-3. Spusť D:\QAROS_VTK\START-PREVIEW.cmd. Ověří a rozbalí r10.
+3. Spusť D:\QAROS_VTK\START-PREVIEW.cmd. Ověří a rozbalí r11.
 4. Zavři náhled kostky a otevři Slicer.
 5. Zvol QAROS → QAROS Live Renderer.
 
@@ -55,9 +55,19 @@ ParaView zůstává u dosavadního povrchového exportu.
 PŘI CHYBĚ
 
 Zkopíruj text ze stavového řádku nového modulu. Log folder obsahuje jeho logy.
-D:\QAROS_VTK\COLLECT-LOGS.cmd přidá host-bridge.log do diagnostického ZIPu.
+D:\QAROS_VTK\COLLECT-LOGS.cmd přidá host-bridge.log a host-python.log do ZIPu.
 Při aktualizaci musí být Slicer zavřený, jinak Windows drží DLL zamčenou.
 SDK hlavičku ani knihovny v D:\install neměň.
+
+R11 opravuje opakované převzetí už dokončeného snímku (Duplicate host frame plane).
+Pád Visualizeru s touto chybou zatím není prokázaný. Pro měření výkonu nech
+přenos běžet 30 sekund s viditelným Visualizerem, pak dej Stop, počkej na jeho
+dokončení a spusť COLLECT-LOGS.cmd. Snímání obrazovky není potřeba.
+Každých přibližně 5 sekund se zapíší průměrné časy renderu barvy, hloubky,
+obnovy monitoru, GPU kopírování/synchronizace, čekání na SDK a odeslání.
+Jsou to časy volání na CPU včetně čekání, nikoli izolované časy GPU kernelů.
+Nativní kopírování/synchronizace jsou již obsažené v Python copy_call a gui_wait;
+tyto hodnoty se tedy nesčítají dohromady. První okno může obsahovat zahřátí GPU.
 
 JDE O PRVNÍ TESTOVACÍ VYDÁNÍ
 

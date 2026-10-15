@@ -15,7 +15,7 @@ $notes = New-Object 'System.Collections.Generic.List[string]'
 $notes.Add('Collected at: ' + (Get-Date -Format o))
 $notes.Add('PowerShell: ' + $PSVersionTable.PSVersion.ToString())
 $notes.Add('This collector does not launch, stop or modify the sender or viewer.')
-$notes.Add('Only sender logs, installed build metadata and related crash events are collected.')
+$notes.Add('Only sender/live-host logs, installed build metadata and related crash events are collected.')
 
 # Each Slicer/ParaView plugin instance has a separate qarvtk-* directory.
 # Copy only sender.log, never scene.vtp, invites or onboarding identities.
@@ -53,11 +53,18 @@ if (Test-Path -LiteralPath $liveRoot -PathType Container) {
     foreach ($log in $liveLogs) {
         $liveIndex++
         $target = Join-Path $folder ("host-bridge-" + $liveIndex + '.log')
-        $notes.Add(('host-bridge-{0}.log: {1}; {2} bytes' -f $liveIndex, $log.FullName, $log.Length))
+        $notes.Add(('host-bridge-{0}.log: {1}; modified {2:o}; {3} bytes' -f $liveIndex, $log.FullName, $log.LastWriteTime, $log.Length))
         try {
             Get-Content -LiteralPath $log.FullName -Encoding UTF8 -Tail 10000 |
                 Set-Content -LiteralPath $target -Encoding UTF8
         } catch { $notes.Add("Cannot read host bridge log: $_") }
+        $pythonLog = Join-Path $log.DirectoryName 'host-python.log'
+        if (Test-Path -LiteralPath $pythonLog -PathType Leaf) {
+            try {
+                Get-Content -LiteralPath $pythonLog -Encoding UTF8 -Tail 10000 |
+                    Set-Content -LiteralPath (Join-Path $folder ("host-python-" + $liveIndex + '.log')) -Encoding UTF8
+            } catch { $notes.Add("Cannot read live Python log: $_") }
+        }
     }
 }
 

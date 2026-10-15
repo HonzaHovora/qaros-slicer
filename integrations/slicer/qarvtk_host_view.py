@@ -4,6 +4,7 @@ The consumer must copy the supplied GPU textures before returning. Texture names
 are borrowed from the host context, not handles that can be sent to a process.
 """
 import math
+from time import perf_counter
 from contextlib import contextmanager
 
 import vtk
@@ -52,6 +53,7 @@ class HostView:
         self.renderer = view.renderWindow().GetRenderers().GetFirstRenderer()
         self.camera = self.renderer.GetActiveCamera()
         self._busy = False
+        self.last_timings = {}
         self.scale = .001
         self.center = (0., 0., 0.)
         # Placement is fixed at Start. Live changes never unexpectedly refit it.
@@ -105,6 +107,14 @@ class HostView:
         self.camera.SetUseExplicitProjectionTransformMatrix(True)
 
     @contextmanager
+    def _timed(self, name):
+        start = perf_counter()
+        try:
+            yield
+        finally:
+            self.last_timings[name] = self.last_timings.get(name, 0.) + (perf_counter() - start) * 1000
+
+    @contextmanager
     def _frame_state(self):
         if self._busy:
             raise RuntimeError("Reentrant host rendering is not supported")
@@ -128,6 +138,7 @@ class HostView:
             window.SetFramebufferFlipY(False)  # Transport normalizes both planes to top-left.
             yield
         finally:
+            restore_start = perf_counter()
             self.camera.DeepCopy(saved_camera)
             window.SetSize(size)
             window.SetFrameBlitMode(blit)
@@ -137,10 +148,13 @@ class HostView:
             window.SetFramebufferFlipY(flip_y)
             if camera_node:
                 camera_node.EndModify(modifying)
-            self._busy = False
             # Restore the desktop framebuffer as well as the camera. No Qt event
             # processing is permitted while either XR eye is installed.
-            window.Render()
+            try:
+                window.Render()
+            finally:
+                self.last_timings["desktop_restore_ms"] = (perf_counter() - restore_start) * 1000
+                self._busy = False
 
     def _textures(self):
         framebuffer = self.window.GetDisplayFramebuffer()
@@ -160,21 +174,28 @@ class HostView:
         """
         if len(eyes) != 2:
             raise ValueError("Exactly two eye requests are required")
+        if self._busy:
+            raise RuntimeError("Reentrant host rendering is not supported")
+        self.last_timings = dict.fromkeys(("color_render_ms", "depth_render_ms",
+                                          "color_copy_call_ms", "depth_copy_call_ms"), 0.)
         mapper = self.volume()
-        with self._frame_state():
+        with self._timed("frame_wall_ms"), self._frame_state():
             for index, eye in enumerate(eyes):
                 width, height = eye["size"]
                 if not (1 <= width <= 8192 and 1 <= height <= 8192):
                     raise ValueError("Invalid host render size")
                 self._camera_for_eye(eye, near, far)
                 self.window.SetSize(width, height)
-                self.window.Render()
+                with self._timed("color_render_ms"):
+                    self.window.Render()
                 color, depth = self._textures()
-                consumer.color(index, color, depth, width, height)
+                with self._timed("color_copy_call_ms"):
+                    consumer.color(index, color, depth, width, height)
                 if mapper:
                     self._volume_depth(index, mapper, consumer, width, height)
                 else:
-                    consumer.depth(index, color, depth, None, None, width, height)
+                    with self._timed("depth_copy_call_ms"):
+                        consumer.depth(index, color, depth, None, None, width, height)
 
     def _volume_depth(self, index, mapper, consumer, width, height):
         # The first render is the host's complete color output, including custom
@@ -193,12 +214,14 @@ class HostView:
             # Even an offscreen volume must execute its clear; otherwise its
             # texture may contain the preceding eye's data.
             self.renderer.GetCullers().RemoveAllItems()
-            self.window.Render()
+            with self._timed("depth_render_ms"):
+                self.window.Render()
             color, depth = self._textures()
             vc, vd = mapper.GetColorTexture(), mapper.GetDepthTexture()
             if not vc or not vd or not vc.GetHandle() or not vd.GetHandle():
                 raise RuntimeError("The live host volume mapper did not expose depth")
-            consumer.depth(index, color, depth, vc, vd, width, height)
+            with self._timed("depth_copy_call_ms"):
+                consumer.depth(index, color, depth, vc, vd, width, height)
         finally:
             mapper.SetRenderToImage(old[0])
             mapper.SetClampDepthToBackface(old[1])

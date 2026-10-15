@@ -4,9 +4,54 @@ import hashlib
 import json
 import os
 from pathlib import Path
+from time import perf_counter
+from datetime import datetime, timezone
 
 EXPECTED_SDK = "022c40b670f87a066664c37daeb06da525db37fffdf5810e72cff8a5b81e677d"
 _libraries = {}  # Never unload a DLL while an SDK callback may still use it.
+
+
+class HostTimingLog:
+    """Five-second wall-time averages. No readback, GPU queries or extra waits."""
+    def __init__(self, folder):
+        self.path = Path(folder) / "host-python.log"
+        self.started = None
+        self.count = 0
+        self.sums = {}
+        self.last_serial = 0
+        self.eye_sizes = []
+
+    def event(self, message):
+        try:
+            with self.path.open("a", encoding="utf-8") as stream:
+                stream.write(datetime.now(timezone.utc).isoformat(timespec="milliseconds") + " " + message + "\n")
+        except OSError:
+            pass  # A diagnostic write must not invalidate a live SDK frame.
+
+    def record(self, serial, timings, eyes, started):
+        if self.started is None:
+            self.started = started
+        self.count += 1
+        self.last_serial = serial
+        self.eye_sizes = [list(eye["size"]) for eye in eyes]
+        for key, value in timings.items():
+            self.sums[key] = self.sums.get(key, 0.) + value
+        self.flush()
+
+    def flush(self, force=False):
+        if not self.count:
+            return
+        now = perf_counter()
+        elapsed = now - self.started
+        if not force and elapsed < 5:
+            return
+        record = dict(frames=self.count, last_serial=self.last_serial,
+                      rendered_fps=round(self.count / max(elapsed, 1e-9), 2), eye_sizes=self.eye_sizes)
+        record.update({key: round(value / self.count, 3) for key, value in self.sums.items()})
+        self.event("PERF_HOST " + json.dumps(record, sort_keys=True))
+        self.started = now
+        self.count = 0
+        self.sums = {}
 
 
 class Eye(c.Structure):
@@ -58,6 +103,7 @@ class HostTransport:
         self.handle = c.c_void_p()
         self.frame = Frame()
         self.stopping = False
+        self._ticking = False
         self.last_status = "Starting live host transport"
         self.log_folder = Path(log_folder)
         self.host.window.MakeCurrent()
@@ -66,6 +112,9 @@ class HostTransport:
             str(self.log_folder).encode("utf-8"), c.byref(self.handle), error, len(error))
         if result != 0:
             raise RuntimeError(error.value.decode("utf-8", "replace"))
+        self.diagnostics = HostTimingLog(self.log_folder)
+        self.diagnostics.event("r11 live host timing enabled; wall times include existing GPU waits; "
+                               "native copy/sync timings overlap Python copy calls")
 
     @property
     def running(self):
@@ -92,6 +141,21 @@ class HostTransport:
             vd.GetHandle() if vd else 0, width, height))
 
     def tick(self):
+        # A host observer can enter a nested Qt event loop. Do not let its timer
+        # overwrite self.frame or destroy the transport while render is active.
+        if self._ticking:
+            return
+        self._ticking = True
+        try:
+            self._tick()
+        except Exception as error:
+            self.diagnostics.event("ERROR: " + str(error))
+            self.request_stop()
+            raise
+        finally:
+            self._ticking = False
+
+    def _tick(self):
         if not self.running:
             return
         if self.stopping:
@@ -99,6 +163,8 @@ class HostTransport:
             if self.dll.qarvtk_host_destroy(self.handle):
                 self.handle = c.c_void_p()
                 self.last_status = "Stopped. " + self.last_status
+                self.diagnostics.flush(force=True)
+                self.diagnostics.event(self.last_status)
             return
         result = self.dll.qarvtk_host_poll(self.handle, c.byref(self.frame))
         if result < 0:
@@ -112,9 +178,14 @@ class HostTransport:
             return
         eyes = [dict(position=tuple(eye.position), orientation=tuple(eye.orientation),
                      fov=tuple(eye.fov), size=(eye.width, eye.height)) for eye in self.frame.eyes]
+        started = perf_counter()
         try:
             self.host.render(eyes, self)
+            submit = perf_counter()
             self._check(self.dll.qarvtk_host_finish(self.handle, self.frame.serial))
+            timings = dict(self.host.last_timings)
+            timings["finish_call_ms"] = (perf_counter() - submit) * 1000
+            self.diagnostics.record(self.frame.serial, timings, eyes, started)
         except Exception:
             self.request_stop()
             raise
@@ -123,3 +194,5 @@ class HostTransport:
         if self.running and not self.stopping:
             self.stopping = True
             self.dll.qarvtk_host_stop(self.handle)
+            self.diagnostics.flush(force=True)
+            self.diagnostics.event("Stop requested")

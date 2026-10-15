@@ -137,7 +137,9 @@ povrchy. ParaView zatím přenáší povrchy. FPS diagnostika z r8 je zachována
 - [Instalační postup]({REPO}/blob/main/{config.get('quickstart', 'docs/WINDOWS_QUICKSTART.txt')})
 '''
     if config.get('host_bridge'):
-        notes = f'''Windows testovací balíček **QAROS Live Renderer r10**.
+        notes = f'''Windows testovací balíček **{config['title']}**.
+
+{config.get('release_note', '')}
 
 Nový modul ve Sliceru čte GPU výstup jeho skutečného 3D pohledu. Scéna se
 neexportuje a nevytváří se náhradní renderer. Barva zůstává výstupem celé

@@ -1,5 +1,6 @@
 #include "qarvtk/gl.hpp"
 #include "qarvtk/host_bridge.h"
+#include "qarvtk/host_frame_lease.hpp"
 #include "qarvtk/host_wgl.hpp"
 #include "qarvtk/gl_copy.hpp"
 #include "qarvtk/gl_composite.hpp"
@@ -17,6 +18,8 @@
 #include <memory>
 #include <mutex>
 #include <string>
+#include <sstream>
+#include <iomanip>
 #include <thread>
 #include <vector>
 
@@ -24,6 +27,15 @@ QAR_IMPLEMENT_DYNAMIC_LOADING()
 
 namespace {
 using Clock=std::chrono::steady_clock;
+double milliseconds(Clock::time_point from,Clock::time_point to=Clock::now()){
+  return std::chrono::duration<double,std::milli>(to-from).count();
+}
+struct FrameTimings {
+  double host_sync{},composite{},copy{},copy_finish{};
+  FrameTimings& operator+=(const FrameTimings& other){
+    host_sync+=other.host_sync;composite+=other.composite;copy+=other.copy;copy_finish+=other.copy_finish;return *this;
+  }
+};
 std::atomic<bool> active{false};
 void message(char* target,uint32_t size,const std::string& text){
   if(target&&size){const auto count=std::min<std::size_t>(text.size(),size-1);std::memcpy(target,text.data(),count);target[count]=0;}
@@ -89,8 +101,10 @@ struct QarvtkHost {
   std::condition_variable condition;
   std::atomic<bool> stopping{false},done{false};
   QarCancelToken* operation{}; // Protected by cancel_mutex, destroyed before library unload.
-  bool posted{},leased{},submitted{},failed{};
-  unsigned planes{};
+  bool failed{};
+  qarvtk::HostFrameLease lease;
+  FrameTimings timings;
+  const Clock::time_point created=Clock::now();
   uint64_t sent{};
   QarvtkHostFrame request{};
   qarvtk::Frame frame;
@@ -106,16 +120,20 @@ struct QarvtkHost {
     }
   }
   void gui() const {if(GetCurrentThreadId()!=owner)throw std::runtime_error("Host API must run on its creating GUI thread");}
+  void log_line(const std::string& text){ // mutex held by caller
+    if(log)log<<"elapsed_ms="<<milliseconds(created)<<" "<<text<<std::endl;
+  }
+  void note(const std::string& text){std::lock_guard<std::mutex> lock(mutex);log_line(text);}
   void set_status(const std::string& text){
-    std::lock_guard<std::mutex> lock(mutex);status=text;if(log)log<<text<<std::endl;
+    std::lock_guard<std::mutex> lock(mutex);status=text;log_line(text);
   }
   void fail(const std::string& text){
-    {std::lock_guard<std::mutex> lock(mutex);failed=true;status=text;leased=false;posted=false;if(log)log<<"ERROR: "<<text<<std::endl;}
+    {std::lock_guard<std::mutex> lock(mutex);if(!failed){failed=true;status=text;log_line("ERROR: "+text);}lease.cancel();}
     stopping=true;condition.notify_all();
   }
   void stop(){
     gui();stopping=true;
-    {std::lock_guard<std::mutex> lock(mutex);leased=false;posted=false;}
+    {std::lock_guard<std::mutex> lock(mutex);lease.cancel();log_line("Stop requested by GUI");}
     condition.notify_all();
     std::lock_guard<std::mutex> lock(cancel_mutex);
     if(operation)qar_cancel_token_cancel(operation);
@@ -156,21 +174,27 @@ struct QarvtkHost {
     gui();
     if(wglGetCurrentContext()!=host_context)throw std::runtime_error("Slicer changed the host OpenGL context; restart streaming");
     std::lock_guard<std::mutex> lock(mutex);
-    if(stopping||!leased||request.serial!=serial||eye>1)throw std::runtime_error("Invalid or expired host frame lease");
+    if(stopping)throw std::runtime_error("Invalid or expired host frame lease");
+    lease.check_plane(serial,eye,depth);
     if(source.width!=request.eyes[eye].width||source.height!=request.eyes[eye].height)
       throw std::runtime_error("Host image dimensions differ from the requested eye");
-    const unsigned bit=1u<<(eye*2+(depth?1:0));
-    if(planes&bit)throw std::runtime_error("Duplicate host frame plane");
+    auto stamp=Clock::now();
     glFinish(); // Complete host writes before the sharing context reads them.
+    timings.host_sync+=milliseconds(stamp);
     qarvtk::WglBinding binding(*copying);
     if((vc==0)!=(vd==0))throw std::runtime_error("Incomplete volume depth textures");
     if(depth&&vc){
+      stamp=Clock::now();
       if(!glIsTexture(vc)||!glIsTexture(vd))throw std::runtime_error("Volume textures are not shared");
       source=compositor->combine(source,vc,vd);
+      timings.composite+=milliseconds(stamp);
     }
+    stamp=Clock::now();
     copier->copy_plane(source,frame,views[eye],depth);
+    timings.copy+=milliseconds(stamp);stamp=Clock::now();
     copier->finish(); // Borrowed host textures may be overwritten immediately.
-    planes|=bit;
+    timings.copy_finish+=milliseconds(stamp);
+    lease.complete_plane(serial,eye,depth);
   }
 };
 
@@ -263,7 +287,23 @@ struct Session {
 void QarvtkHost::run() noexcept {
   try {
     Session sdk(*this);sdk.open();if(!stopping){const auto peer=sdk.viewer();if(!stopping)sdk.start(peer);}
-    auto last=Clock::now();
+    auto last=Clock::now(),cycle_start=last,window_start=last;
+    FrameTimings totals;
+    double wait_ms=0,metadata_ms=0,gui_ms=0,show_ms=0;
+    uint64_t measured=0;
+    auto report=[&](bool force){
+      const double elapsed=milliseconds(window_start);
+      if(!measured||(!force&&elapsed<5000))return;
+      const double count=static_cast<double>(measured);
+      std::ostringstream line;line<<std::fixed<<std::setprecision(2)
+        <<"PERF_NATIVE frames="<<measured<<" submitted_fps="<<count*1000/elapsed
+        <<" eye_size="<<request.eyes[0].width<<'x'<<request.eyes[0].height
+        <<" sdk_wait_ms="<<wait_ms/count<<" metadata_ms="<<metadata_ms/count
+        <<" gui_wait_ms="<<gui_ms/count<<" sdk_show_ms="<<show_ms/count
+        <<" host_sync_ms="<<totals.host_sync/count<<" composite_cpu_ms="<<totals.composite/count
+        <<" copy_cpu_ms="<<totals.copy/count<<" copy_finish_ms="<<totals.copy_finish/count;
+      note(line.str());totals={};wait_ms=metadata_ms=gui_ms=show_ms=0;measured=0;window_start=Clock::now();
+    };
     while(!stopping){
       if(Clock::now()-last>std::chrono::seconds(60))throw std::runtime_error("No viewer frame/pose for 60 seconds");
       QarRenderFrameInfo* raw{};bool ready=false;
@@ -275,6 +315,7 @@ void QarvtkHost::run() noexcept {
       checked(result,"begin live frame");
       if(!ready){pause(std::chrono::milliseconds(2));continue;}
       if(!info)throw std::runtime_error("Ready frame has no metadata");
+      const auto ready_at=Clock::now();
       auto access=qar_video_frame_opengl_default();checked(qar_render_sender_frame_opengl(sdk.sender,&access),"access frame textures");
       auto next=layout(access);const auto next_views=qarvtk::validate_stereo(next);
       QarvtkHostFrame next_request{};next_request.serial=sent+1;
@@ -288,20 +329,29 @@ void QarvtkHost::run() noexcept {
         eye.fov[0]=fov.angle_left;eye.fov[1]=fov.angle_right;eye.fov[2]=fov.angle_up;eye.fov[3]=fov.angle_down;
         eye.width=qarvtk::width(view);eye.height=qarvtk::height(view);
       }
+      const auto posted_at=Clock::now();
+      FrameTimings copied;
       {
         std::unique_lock<std::mutex> lock(mutex);
-        frame=std::move(next);views=next_views;request=next_request;planes=0;submitted=false;leased=false;posted=true;
-        condition.wait(lock,[&]{return submitted||(stopping&&!leased);});posted=false;
+        frame=std::move(next);views=next_views;request=next_request;timings={};lease.post(request.serial);
+        condition.wait(lock,[&]{return lease.submitted()||(stopping&&!lease.acquired());});
         if(stopping)break;
+        copied=timings;lease.consume();
       }
+      const auto show_at=Clock::now();
       auto show=qar_render_frame_show_default();show.rendered_near_far={.05F,20.F};show.depth_scale=1;
       checked(qar_render_sender_show_frame(sdk.sender,&show),"submit live stereo frame");
       ++sent;last=Clock::now();
+      totals+=copied;++measured;wait_ms+=milliseconds(cycle_start,ready_at);
+      metadata_ms+=milliseconds(ready_at,posted_at);gui_ms+=milliseconds(posted_at,show_at);
+      show_ms+=milliseconds(show_at,last);cycle_start=last;report(false);
       if(sent==1||sent%120==0)set_status("Live host renderer: submitted "+std::to_string(sent)+" stereo frames");
     }
+    report(true);
   } catch(const std::exception& e){if(!stopping)fail(e.what());}
     catch(...){if(!stopping)fail("Unknown native host transport failure");}
   // Session destruction (and all SDK workers) must finish before destroy is allowed.
+  note("SDK worker exited; submitted total="+std::to_string(sent));
   done=true;condition.notify_all();
 }
 
@@ -325,9 +375,8 @@ int qarvtk_host_poll(QarvtkHost* h,QarvtkHostFrame* out){
   try {
     h->gui();std::lock_guard<std::mutex> lock(h->mutex);
     if(h->failed)return -1;if(h->done)return 2;
-    if(!h->posted||h->stopping)return 0;
-    if(h->leased)throw std::runtime_error("Previous host frame has not been finished");
-    h->leased=true;*out=h->request;return 1;
+    if(h->stopping||!h->lease.acquire())return 0;
+    *out=h->request;return 1;
   } catch(const std::exception& e){h->fail(e.what());return -1;}
 }
 int qarvtk_host_color(QarvtkHost* h,uint64_t serial,uint32_t eye,uint32_t color,uint32_t depth,uint32_t width,uint32_t height){
@@ -342,8 +391,8 @@ int qarvtk_host_finish(QarvtkHost* h,uint64_t serial){
   if(!h)return -1;
   try {
     h->gui();std::lock_guard<std::mutex> lock(h->mutex);
-    if(h->stopping||!h->leased||h->request.serial!=serial||h->planes!=15)throw std::runtime_error("Incomplete host stereo frame");
-    h->leased=false;h->submitted=true;h->condition.notify_all();return 0;
+    if(h->stopping)throw std::runtime_error("Incomplete host stereo frame");
+    h->lease.finish(serial);h->condition.notify_all();return 0;
   } catch(const std::exception& e){h->fail(e.what());return -1;}
 }
 void qarvtk_host_stop(QarvtkHost* h){if(h)try{h->stop();}catch(const std::exception& e){h->fail(e.what());}}
