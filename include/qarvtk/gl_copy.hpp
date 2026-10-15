@@ -10,6 +10,9 @@ public:
   GlCopy();~GlCopy();
   GlCopy(const GlCopy&)=delete;GlCopy& operator=(const GlCopy&)=delete;
   void copy(const RenderedEye& source,const Frame& target,const EyeViews& views,bool report=false);
+  // Host rendering delivers the complete color image before a supplementary
+  // volume depth pass; the two planes must therefore be copied separately.
+  void copy_plane(const RenderedEye& source,const Frame& target,const EyeViews& views,bool depth);
   void finish(); // Conservative cross-context completion before SDK show_frame.
 private:
   unsigned program_{},vao_{},fbo_{};

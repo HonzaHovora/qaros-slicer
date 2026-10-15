@@ -97,8 +97,8 @@ def run():
 
     # A live native actor that has no MRML/export representation must appear.
     sphere = vtk.vtkSphereSource()
-    sphere.SetCenter(146.5, 270., 346.5)
-    sphere.SetRadius(15.)
+    sphere.SetCenter(170., 190., 346.5)
+    sphere.SetRadius(10.)
     surface_mapper = vtk.vtkPolyDataMapper()
     surface_mapper.SetInputConnection(sphere.GetOutputPort())
     actor = vtk.vtkActor()

@@ -158,4 +158,17 @@ void GlCopy::copy(const RenderedEye& s,const Frame& f,const EyeViews& v,bool rep
   const auto error=glGetError();if(error!=GL_NO_ERROR)throw std::runtime_error("OpenGL copy error: "+std::to_string(error));
 }
 void GlCopy::finish(){glFinish();}
+void GlCopy::copy_plane(const RenderedEye& s,const Frame& f,const EyeViews& v,bool depth){
+  (void)validate_stereo(f);
+  if(v.color>=f.views.size()||v.depth>=f.views.size())throw std::invalid_argument("Missing copy view");
+  checked_gl("Before host GPU copy");
+  State state;
+  for(auto cap:state.caps)glDisable(cap);
+  glColorMask(GL_TRUE,GL_TRUE,GL_TRUE,GL_TRUE);glUseProgram(program_);glBindVertexArray(vao_);
+  glActiveTexture(GL_TEXTURE0);glBindSampler(0,0);glUniform1i(glGetUniformLocation(program_,"sourceImage"),0);
+  const auto& view=f.views[depth?v.depth:v.color];
+  const auto source=depth?s.depth:s.color;
+  if(!source||!glIsTexture(source))throw std::runtime_error("Host texture is not shared with the copy context");
+  plane(source,f.textures[view.texture],view,depth,false);
+}
 }

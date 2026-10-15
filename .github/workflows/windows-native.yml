@@ -69,6 +69,16 @@ jobs:
           $info = $metadata | ConvertFrom-Json
           if ($info.header_sha256 -ne '022c40b670f87a066664c37daeb06da525db37fffdf5810e72cff8a5b81e677d' -or $info.modern_api -ne 0 -or $info.plugin_protocol -ne 2) { throw 'Incorrect session sender fingerprint or API mode' }
           Write-Output $metadata
+      - name: Build live host transport without VTK, Qt or GLFW
+        shell: pwsh
+        run: |
+          cmake -S . -B build-host -A x64 -DQARVTK_BUILD_RENDERER=OFF -DQARVTK_BUILD_HOST_BRIDGE=ON "-DQAROS_SDK_ROOT=$PWD/ci/sdk-headers/session-022c40b6"
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          cmake --build build-host --config Release --parallel 4
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          ctest --test-dir build-host -C Release --output-on-failure
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          Copy-Item build-host/Release/qarvtk-host.dll build-windows/Release/
       - uses: actions/upload-artifact@v4
         with:
           name: windows-session-022c40b6-no-qaros-runtime

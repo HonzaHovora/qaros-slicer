@@ -1,4 +1,5 @@
 #include "../apps/wgl_callbacks.hpp"
+#include "../include/qarvtk/host_wgl.hpp"
 #include <iostream>
 
 void require(bool value, const char* message) {
@@ -34,6 +35,21 @@ struct Context {
 int main() { try {
   Context host, sdk;
   require(wglMakeCurrent(host.dc,host.context)!=FALSE,"Cannot bind host context");
+  {
+    GLuint texture{};glGenTextures(1,&texture);glBindTexture(GL_TEXTURE_2D,texture);
+    const unsigned char pixel[]{17,93,201,255};
+    glTexImage2D(GL_TEXTURE_2D,0,GL_RGBA,1,1,0,GL_RGBA,GL_UNSIGNED_BYTE,pixel);glFinish();
+    qarvtk::HostSharedWgl shared(host.dc,host.context);
+    {
+      qarvtk::WglBinding binding(shared);
+      require(glIsTexture(texture)==GL_TRUE,"Host texture is not visible in sharing context");
+      unsigned char result[4]{};glBindTexture(GL_TEXTURE_2D,texture);
+      glGetTexImage(GL_TEXTURE_2D,0,GL_RGBA,GL_UNSIGNED_BYTE,result);
+      require(result[0]==17&&result[1]==93&&result[2]==201&&result[3]==255,"Shared host texture contents changed");
+    }
+    require(wglGetCurrentContext()==host.context,"Shared copy context did not restore host binding");
+    glDeleteTextures(1,&texture);
+  }
   qarvtk::WglCallbacks callbacks(sdk.dc,sdk.context);
   auto params=qar_stream_params_opengl_default(); callbacks.configure(params);
   // Test worker migration and OpenGL 1.1 export fallback using Windows' basic
