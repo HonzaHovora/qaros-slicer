@@ -1,10 +1,10 @@
-QAROS Live Renderer — přímý renderer Sliceru, r12
+QAROS Live Renderer — přímý renderer Sliceru, r13
 
 AKTUALIZACE
 
 1. Zastav přenos a zavři Slicer, Visualizer i náhled kostky.
 2. GitHub Desktop → QAROS_VTK / main → Fetch origin → Pull origin.
-3. Spusť D:\QAROS_VTK\START-PREVIEW.cmd. Ověří a rozbalí r12.
+3. Spusť D:\QAROS_VTK\START-PREVIEW.cmd. Ověří a rozbalí r13.
 4. Zavři náhled kostky a otevři Slicer.
 5. Zvol QAROS → QAROS Live Renderer.
 
@@ -21,6 +21,8 @@ PRVNÍ TEST
    QAROS SDK folder: D:/install
    Viewer: visualizer
    Center and fit into 65 cm workspace at Start: zapnuto
+   Use Slicer viewing direction at Start: zapnuto
+   Render resolution: 100 % pro původní kvalitu; 50 % pro porovnání rychlosti
 5. Klikni Start live streaming a nech Visualizer viditelný.
 6. Po prvním snímku změň preset / barvu / viditelnost ve Sliceru.
    Změna se má projevit sama, bez Update scene.
@@ -29,9 +31,17 @@ PRVNÍ TEST
 
 Pokud je starý QAROS Streaming spuštěný, nejprve v něm dej Stop streaming.
 Při změně rozložení oken nebo zavření scény se živý přenos zastaví.
-Vystředění a měřítko se určují při Start. Pro nové vystředění přenos restartuj.
-Kamera v headsetu je nezávislá na pohledu na monitoru; stejné jsou scéna a její
-vykreslovací nastavení. Dva různé pohledy proto nemusejí mít stejný obraz.
+Natočení, vystředění a měřítko se při Start nastaví přes SDK app_pose/app_scale.
+Výchozí směr odpovídá pohledu ve Sliceru. Další pohyb kamer je nezávislý;
+otáčení desktopové kamery po Start nepřesouvá scénu ve Visualizeru.
+Pro nové výchozí natočení nebo jiné renderovací rozlišení dej Stop a Start.
+
+Pod volbou rozlišení jsou skutečné velikosti: Render, stream color, depth, Slicer.
+Při požadavku 1920 × 1080 pro oko zůstává přenášená barva v tomto rozlišení,
+depth má 960 × 540. Render 75 % znamená 1440 × 810, 50 % znamená 960 × 540.
+50 % vykresluje čtvrtinu pixelů; barva se na GPU zvětší do streamu. Hloubka
+se vzorkuje bez míchání vzdáleností na hranách. Přenosové rozlišení barvy se nemění.
+Samotná poloviční depth u společného průchodu nesnižuje počet paprsků barvy.
 
 CO TATO VERZE DĚLÁ
 
@@ -43,8 +53,10 @@ a SDK. Původní renderer na monitoru se po každém stereo snímku obnoví.
 U standardního CT/MR vykreslování ve Sliceru 5.12.4 se barva a hloubka získávají
 společně, jedním vykreslením pro každé oko. Původní desktopové textury se
 uchovají na GPU a vrátí bez dalšího renderu. Dočasné změny kamery nespouštějí
-automatické překreslení Sliceru. Nativní transport a jeho synchronizace jsou
-beze změny; oprava je v Python části pluginu. Rozlišení očí se nesnižuje.
+automatické překreslení Sliceru. R13 obsahuje nový plugin i qarvtk-host.dll;
+musí být aktualizované společně. Synchronizace a vlastnictví snímku zůstávají.
+SDK pózy se použijí přímo v původních RAS souřadnicích Sliceru. Převod milimetrů
+na metry, přizpůsobení velikosti i otočení zajišťují app_scale a app_pose.
 
 U neověřených vlastních renderovacích průchodů, SSAO, volume depth peelingu
 nebo konfliktního shaderu zůstává původní doplňkový průchod pro hloubku.
@@ -73,6 +85,8 @@ Každých přibližně 5 sekund se zapíší průměrné časy renderu barvy, hl
 obnovy monitoru, GPU kopírování/synchronizace, čekání na SDK a odeslání.
 R12 přidává počty host_render_calls, volume_depth_passes a
 desktop_restore_render_calls. Standardní stereo snímek má hodnoty 2, 0, 0.
+R13 navíc rozlišuje eye_sizes (barva streamu), depth_sizes, render_sizes a
+desktop_size. Záznam PLACEMENT obsahuje výchozí app_pose/app_scale.
 Jsou to časy volání na CPU včetně čekání, nikoli izolované časy GPU kernelů.
 Nativní kopírování/synchronizace jsou již obsažené v Python copy_call a gui_wait;
 tyto hodnoty se tedy nesčítají dohromady. První okno může obsahovat zahřátí GPU.

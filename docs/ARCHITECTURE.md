@@ -16,6 +16,10 @@ but exposed a completed-frame re-acquisition race, about 10 FPS and one reported
 Visualizer exit. R11 corrects lease ownership and instruments live wall times.
 R12 reduces the standard Composite path to one host render per eye, preserves
 desktop framebuffer attachments and suppresses CTK's redundant camera redraws.
+R13 moves all placement, axis conversion and fitting into SDK `app_pose` and
+`app_scale`, aligns the initial viewing direction with Slicer and negotiates
+depth at half the color width/height. The user can select 100/75/50% host render
+resolution independently of the negotiated stream color dimensions.
 Stable end-to-end operation and the receiver exit remain to be verified; the
 milestone is not yet declared complete. R9 remains a separate snapshot renderer.
 
@@ -48,6 +52,26 @@ uses the pinned session SDK and imports no host VTK/Qt classes. Conservative
 `glFinish` calls remain unchanged; removing synchronization needs a separate
 ownership/fence design. R12 changes the Python host capture, not the native SDK
 transport. Two actual eye renders still consume time on the host GUI/GPU thread.
+
+R13 uses host ABI 2: creation receives SDK placement; each frame reports both
+color/depth dimensions and the exact near/far supplied to `show_frame`.
+App coordinates are the original Slicer world RAS numbers, without a per-frame
+matrix, centering or scaling. `app_scale=.001` maps one native coordinate unit to 0.001 room metres;
+fit uses `.65 / max_extent_in_native_units` instead.
+`app_pose` rotates the initial Slicer camera basis onto the app-volume basis
+and translates the scaled, rotated bounds centre to the volume origin.
+SDK poses already account for placement and scale and are used directly by VTK.
+Clip values are `.05/app_scale` and `20/app_scale` at Start, in app units;
+the exact same values accompany the depth stream, with `depth_scale=1`.
+
+The layout is changed before the first begin-frame, preserving per-plane flips
+and using a separate texture for each view. Depth has ceil(color width/2) by
+ceil(color height/2). GPU copy samples depth with nearest texels, never linearly
+blending a foreground surface with background. Scaled color uses bilinear
+resampling with clamped edges. The supported single-pass path still computes
+depth with color at the selected host render size; only its output is reduced.
+The compatibility depth pass renders at the smaller of host and depth sizes.
+The UI/log distinguish render pixels, stream color/depth and desktop dimensions.
 
 Initial depth scope is one GPU Composite volume with opaque surfaces. ROI
 cropping is live. Multi-volume/MIP and volume plus translucent surfaces fail

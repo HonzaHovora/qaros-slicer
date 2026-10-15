@@ -15,7 +15,7 @@ Tento postup nepotřebuje přihlášení v prohlížeči, instalaci GitHub CLI a
 Podporovaná grafika a Visual C++ Runtime x64 jsou stále potřeba.
 Při chybě pošli text z otevřeného okna; při hlášení o chybějícím ZIPu dokonči Pull origin.
 
-## Přímý renderer Sliceru: r12
+## Přímý renderer Sliceru: r13
 
 Po aktualizaci otevři **QAROS → QAROS Live Renderer**. Modul používá první
 3D pohled Sliceru. Host bridge DLL je
@@ -29,6 +29,10 @@ VTK GPU Composite objem a neprůhledné povrchy; ROI ořez je podporovaný.
 R12 u standardního vykreslování spojuje barvu a hloubku do jednoho průchodu pro
 každé oko, uchovává desktopové textury a potlačuje automatický redraw při změně
 kamery. Neověřené vlastní renderovací průchody mají původní doplňkovou cestu.
+R13 předává natočení, umístění i velikost SDK pomocí app_pose/app_scale.
+Nech zapnuté **Use Slicer viewing direction at Start**. Depth má poloviční
+šířku i výšku oproti barvě. **Render resolution** 100/75/50 % mění velikost
+skutečného renderu; 50 % používá čtvrtinu pixelů. Rozměry se zobrazují v modulu.
 R11 oprava opakovaného snímku a měření zůstávají zachované.
 Pro další diagnostiku nech přenos běžet 30 sekund, zastav ho a spusť COLLECT-LOGS.cmd.
 ZIP zahrne host-bridge.log i host-python.log. Zrychlení ani odstranění pádu
@@ -61,7 +65,7 @@ a odpovídá přesné hlavičce z existujícího SDK:
 Plugin tuto shodu ověřuje automaticky. Toto SDK neposkytuje nové Hub párování;
 pole Hub identity se nepoužívá. SDK runtime a viewer nejsou součástí balíčku.
 
-Balíček odpovídá testovacímu vydání `windows-start-2026-10-15-session022c40b6r12`.
+Balíček odpovídá testovacímu vydání `windows-start-2026-10-15-session022c40b6r13`.
 Nový modul QAROS Live Renderer používá postup uvedený výše. Následující popis
 se týká zachovaného modulu QAROS Streaming s exportem r9.
 R9 přidává osvětlení, barvy, viditelné modely/segmenty a jeden CT/MR objem ze Sliceru.

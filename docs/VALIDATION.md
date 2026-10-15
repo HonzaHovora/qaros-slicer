@@ -1,5 +1,54 @@
 # Validation and next work
 
+## Live r13: SDK placement and separate depth resolution, 2026-10-15
+
+The user reports that r12 improved source FPS but still slows Slicer, and that
+Visualizer X/Z controls and the starting view appear reversed. The last uploaded
+field measurement remains r11 (1920x1080 per eye); there is no new r12/r13 timing
+capture. R12 code still rendered at the full viewer dimensions with full image
+sampling. Its initial fixed RAS mapping selected a posterior view and did not
+adopt the desktop camera direction.
+
+R13 keeps native Slicer RAS coordinates throughout rendering. The initial camera
+basis and bounds are represented solely by SDK `app_pose` and `app_scale`.
+This includes millimetre conversion: without fit `app_scale=.001`; with fit it
+is `.65 / max_extent_mm`. Incoming SDK eyes are used directly. The SDK can then
+apply its own movement/scale controls without an extra hidden scene transform.
+The depth layout is negotiated before begin-frame at half the color width and
+height. A 1920x1080 color eye thus has 960x540 depth. Render resolution can be
+100/75/50%; full color remains the default and transport color size is unchanged.
+The module and PERF_HOST record actual render, color, depth and desktop sizes.
+Half-sized output depth alone does not reduce full-size color ray casting.
+
+Accepted plugin source: `bc1da84b7a51e3cd1cdb5e6957b0bd0014ef71fd`.
+[Slicer 38750315676](https://github.com/HonzaHovora/QAROS_VTK/actions/runs/38750315676)
+and [build/test 38750316041](https://github.com/HonzaHovora/QAROS_VTK/actions/runs/38750316041)
+passed. The unchanged native code was built and tested on source
+`4fd59dad46fd38588c33883dcead62d175141658` in
+[Windows native 38749688548](https://github.com/HonzaHovora/QAROS_VTK/actions/runs/38749688548).
+
+- Independent matrix contract checks cover anterior, posterior and oblique
+  initial views, stereo/head rotations, +app_pose X moving content right and
+  +Z toward the viewer. VTK eye position equals the SDK request exactly.
+- Actual Slicer rendering verifies half-sized host textures against independently
+  requested smaller eyes, and smaller fallback volume depth with full-size color.
+  Existing CT depth, ROI, host shaders, MSAA and desktop restoration checks pass;
+  normal capture still makes exactly two host renders after queued Qt events.
+- Mesa GPU tests verify independently sized color/depth, flipped rectangles,
+  color enlargement, and nearest depth at foreground/background discontinuities
+  for both R32F and D32F. CPU layout checks include reordered eyes and odd sizes.
+- Windows host ABI 2, WGL sharing and lifetime tests passed. The packaged plugin
+  and DLL must be updated together; Slicer must be closed during installation.
+
+R13 starter SHA-256: `679deb687d8edc209a11d92082bfa230bf91146ee01e9c062bf5eb90b478f6b6`.
+Host DLL SHA-256: `821fdf85a940e12bf47ca8a7adcebb7444708aa62b72a751f86d9f13e3690704`.
+All 74 manifest entries and the packaged host Python sources were verified.
+
+No real SDK runtime/Visualizer runs in these CI tests. The negotiated layout,
+interactive X/Z response and resulting FPS on the target NVIDIA laptop still
+need field verification. This is not a measured FPS improvement or a proof
+that every source of the reported Visualizer reversal is eliminated.
+
 ## Live r11 performance report and r12 optimization, 2026-10-15
 
 `QAROS-VTK-diagnostics-20261015-135746-589.zip` contains a verified r11 run

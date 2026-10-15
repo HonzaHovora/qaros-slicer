@@ -1,23 +1,24 @@
 {
-  "tag": "windows-start-2026-10-15-session022c40b6r12",
+  "tag": "windows-start-2026-10-15-session022c40b6r13",
   "date": "2026-10-15",
-  "title": "QAROS Live Renderer r12 — two eye renders and preserved desktop",
-  "filename": "QAROS_VTK_Windows_session_022c40b6_2026-10-15_r12.zip",
+  "title": "QAROS Live Renderer r13 — SDK app placement and half-resolution depth",
+  "filename": "QAROS_VTK_Windows_session_022c40b6_2026-10-15_r13.zip",
   "native": {
-    "run_id": 38729343448,
-    "artifact_id": 11969827874,
-    "commit": "cf96875df48a247fd693b4ad4207b40b52dd59d7",
-    "sha256": "ee6479b99d96b61ba92b97d8b7c26d53f51e29d0d0f34faedeab5b3ed83cd58c"
+    "run_id": 38749688548,
+    "artifact_id": 11980672080,
+    "commit": "4fd59dad46fd38588c33883dcead62d175141658",
+    "sha256": "9b32dd558964f446d39e9ddaf73e86f76782b03748e73078dd2abd0a89d2c0ec"
   },
   "plugins": {
-    "run_id": 38740812647,
-    "artifact_id": 11975642549,
-    "commit": "5e8cc3bcf8e93a51f088bc7203fd2850700da976",
-    "sha256": "7a7893a9ba4ef12a292642e1b890c4734220bc9d6ff01492ca739689482038f3"
+    "run_id": 38750316041,
+    "artifact_id": 11980477629,
+    "commit": "bc1da84b7a51e3cd1cdb5e6957b0bd0014ef71fd",
+    "sha256": "0067a1fd9e6056f0d47c5e99163a9897702a82cc800f46300062958883617804"
   },
   "sdk_header_sha256": "022c40b670f87a066664c37daeb06da525db37fffdf5810e72cff8a5b81e677d",
   "modern_api": 0,
   "host_bridge": true,
   "quickstart": "docs/WINDOWS_LIVE_QUICKSTART.txt",
-  "release_note": "R12 odstraňuje nadbytečná vykreslení na hlavním vlákně Sliceru: u standardního VTK 9.6 Composite objemu získává barvu a hloubku společně, uchovává desktopové GPU textury a potlačuje automatický redraw během dočasné změny kamery. Test v reálném Sliceru 5.12.4 potvrzuje dva rendery na stereo snímek místo pěti, shodu barvy i hloubky, ROI, vlastní shadery a obnovu po chybě. Rozlišení se nesnižuje. Nativní DLL a SDK zůstávají z ověřené r11; změna je v pluginu. Pro neověřené efekty zůstává doplňková hloubková cesta. Výsledné FPS na cílovém NVIDIA PC zatím nejsou změřené."
+  "release_note": "R13 nastavuje natočení, umístění i velikost scény pomocí SDK app_pose/app_scale. Kamera používá SDK polohy přímo v původních souřadnicích Sliceru. Výchozí směr přebírá pohled ve Sliceru při Start. Depth má poloviční šířku i výšku oproti barvě (např. 960 × 540 k barvě 1920 × 1080 pro každé oko). Volba Render resolution 100/75/50 % snižuje skutečnou velikost renderu; barva streamu zůstává v požadovaném rozlišení. Skutečné rozměry jsou viditelné v modulu i logu. Testy v oficiálním Sliceru 5.12.4, GPU resampling a Windows ABI/WGL prošly. Nové FPS a reakci ovládání X/Z ve Visualizeru musí potvrdit test na cílovém PC. Aktualizuj plugin i DLL společně při zavřeném Sliceru.",
+  "host_abi": 2
 }

@@ -148,6 +148,11 @@ hostitelské pipeline. Standardní GPU Composite objem získává barvu i hloubk
 jedním průchodem pro každé oko. Desktopové textury zůstávají zachované;
 kompatibilní doplňkový průchod se použije u neověřených efektů. ROI a presety jsou živé.
 
+Umístění, natočení podle výchozího pohledu Sliceru a velikost nastavuje SDK přes
+app_pose/app_scale. Hloubka má poloviční šířku i výšku oproti přenášené barvě.
+Render resolution 100/75/50 % ovládá velikost skutečného renderu; rozměry jsou
+viditelné v modulu i v logu. R13 vyžaduje společnou aktualizaci pluginu a DLL.
+
 Modul: **QAROS → QAROS Live Renderer**. Před instalací zavři Slicer a Visualizer,
 v GitHub Desktop proveď Fetch/Pull a spusť START-PREVIEW.cmd. Po rozbalení zavři
 náhled kostky a otevři Slicer. Podrobnosti jsou v ZACNI_ZDE.txt.
