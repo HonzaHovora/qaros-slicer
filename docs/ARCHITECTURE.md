@@ -11,7 +11,7 @@ maintenance problem identified with the ANARI integration.
 
 **Status, 2026-10-15:** the experimental Slicer host-rendered path is implemented
 as `QarosLive.py`, `qarvtk_host_view.py` and the VTK/Qt-free `qarvtk-host.dll`.
-It is undergoing acceptance and Windows packaging for r10. R9 remains a separate
+It is packaged as experimental r10 after component acceptance. R9 remains a separate
 snapshot renderer. End-to-end live-host validation on the target NVIDIA/SDK
 installation is still required; the milestone is not yet declared complete.
 

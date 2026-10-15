@@ -6,6 +6,14 @@ The user confirmed that the r9 volume test works on the target installation.
 The next test is the separate **QAROS Live Renderer** module, using the actual
 Slicer view and GPU textures. This is not an additional snapshot export mode.
 
+Verified release inputs:
+
+- [Windows run 38717231877](https://github.com/HonzaHovora/QAROS_VTK/actions/runs/38717231877), source `9d1b6126aeaf4d897d68c9e3608f6dedfc6621b7`: modern/session sender builds, VTK-free host DLL, ABI test and shared WGL texture test.
+- [Slicer run 38718347233](https://github.com/HonzaHovora/QAROS_VTK/actions/runs/38718347233), source `76db41975b58efab265dba5d85ba05dbf3072ea3`: complete live-host acceptance below, including custom shader and offscreen-volume clearing.
+- [Build run 38718347268](https://github.com/HonzaHovora/QAROS_VTK/actions/runs/38718347268), same source: CTest/GPU oracles including split color/depth copying, ParaView compatibility and packaged plugins.
+- Host DLL SHA-256: `32ed3995868f303d1ce7e0f9ed24d7c147ce9befb353572f776049243b835d5e`. Its PE import table contains only OpenGL/Win32 and Microsoft C/C++ runtime libraries, no VTK/Qt/GLFW.
+- Assembled r10 ZIP SHA-256: `cf089ec7aca2e2ae0e7ad8fb34307dc8d3201b0a266fd8a4af0e3e2ec7c558a8`.
+
 Slicer acceptance uses the official 5.12.4 binary (VTK 9.6.2) under Xvfb/Mesa.
 It checks stereo, matching host color, tissue depth, a renderer-only actor with
 a custom shader, ROI cropping, and restoration of the camera/mapper/cullers and

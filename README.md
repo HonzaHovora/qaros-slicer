@@ -1,14 +1,18 @@
 # QAROS × VTK
 
-Pluginy pro **ParaView a 3D Slicer** se společným VTK/OpenGL backendem pro QAROS.
-Instalují se do běžných hostitelských aplikací; backend renderuje v samostatném
-procesu. QAROS už OpenGL podporuje; Vulkan není součástí této implementace.
+Pluginy pro **ParaView a 3D Slicer** a OpenGL přenos do QAROS.
 
-**Priorita dalšího vývoje (14. 10. 2026): přímý výstup rendereru hostitelské
-aplikace.** R9 znovu sestavuje exportovanou scénu ve vlastním rendereru a není
-přenosem vizualizace 1:1. Další milník musí použít skutečný renderer Sliceru,
-potom ParaView, včetně jejich objemového vykreslování a efektů. Přenos ovládacích
-panelů navazuje až na ověřený obraz a hloubku. [Rozhodnutí a podmínky ověření](docs/ARCHITECTURE.md#host-rendering-first-decision-2026-10-14).
+**R10: QAROS Live Renderer čte přímo renderer Sliceru.** Nový modul přebírá GPU
+výstup živého 3D pohledu, včetně hostitelských shaderů a ROI ořezu objemu.
+Scénu neexportuje. Windows knihovna nepřidává do Sliceru další VTK ani Qt.
+Automatické testy prošly; spojení živého Sliceru přes skutečný SDK runtime
+na cílové NVIDIA kartě ještě vyžaduje ověření.
+[Postup pro první test](docs/WINDOWS_LIVE_QUICKSTART.txt).
+
+Dosavadní **QAROS Streaming** používá samostatný renderer r9 a export VTP/VTM;
+ParaView zatím zůstává u povrchového exportu. Další prioritou je ověřit přímý
+Slicer přenos, pak napojit renderer ParaView a následně ovládací panely.
+[Architektura a podmínky ověření](docs/ARCHITECTURE.md).
 
 **První test přes GitHub Desktop:** po Fetch/Pull spusť `START-PREVIEW.cmd`
 v kořeni checkoutu. Hotový Windows ZIP se stáhne spolu s repozitářem; skript ho
@@ -25,7 +29,7 @@ QAROS/mixeru/přijímače; podrobnosti jsou v [VALIDATION.md](docs/VALIDATION.md
 Údaj přibližně 44 FPS ve Visualizeru měří jinou část přenosu. Dosažení cíle
 60 FPS ještě není potvrzené. Před rozbalením zavři Slicer i Visualizer;
 cesty k pluginu a senderu zůstávají stejné. Logy lze zabalit pomocí `COLLECT-LOGS.cmd`.
-Samostatné stažení je také v [GitHub Release](https://github.com/HonzaHovora/QAROS_VTK/releases/tag/windows-start-2026-10-14-session022c40b6r9).
+Samostatné stažení je také v [GitHub Release](https://github.com/HonzaHovora/QAROS_VTK/releases/tag/windows-start-2026-10-15-session022c40b6r10).
 Původní [moderní Hub varianta](https://github.com/HonzaHovora/QAROS_VTK/releases/tag/windows-start-2026-10-14)
 zůstává dostupná pro jiné SDK. Každý sender vyžaduje odpovídající kompletní runtime.
 
@@ -42,6 +46,8 @@ transportu ani výsledného obrazu v headsetu. Aktuální sestavení a jejich v�
 - VTK/OpenGL renderer a samostatný náhled bez QAROS SDK.
 - GPU kopírování barvy a hloubky do textur QAROS bez čtení obrazu na CPU.
 - Odesílač pro Windows/WGL a Linux/GLX: nový Hub onboarding i starší SDK 2540.
+- QAROS Live Renderer pro Slicer: přímý hostitelský stereo render a Windows
+  knihovna bez VTK/Qt, živé změny scény a ROI, jeden GPU Composite objem.
 - Slicer plugin: model/segment/CT/MR nebo viditelná 3D scéna, barvy, osvětlení,
   volume transfer funkce, automatické vystředění, Start/Stop, aktualizace a log.
 - ParaView Python plugin přes Plugin Manager: filtr QAROS Streaming, Start/Stop
@@ -49,7 +55,7 @@ transportu ani výsledného obrazu v headsetu. Aktuální sestavení a jejich v�
 - Samostatné složky pluginů, ZIP balíček a základ CMake extension pro Slicer.
 - Znovunačtení exportu za běhu (`--watch`), kontrola shody SDK, skripty pro build a CI.
 
-Slicer předává scénu přes atomicky publikovaný `.vtm` a neměnné VTP/VTI soubory;
+Původní modul QAROS Streaming předává scénu přes atomicky publikovaný `.vtm` a neměnné VTP/VTI soubory;
 ParaView používá `.vtp`. Video i hloubka zůstávají na GPU backendu. VTK/Qt
 hostitele se nemíchá s knihovnami senderu. R9 podporuje jeden skalární objem
 (Composite, bez ROI ořezu) a neprůhledné modely/segmenty. CT/MR převezme nastavení

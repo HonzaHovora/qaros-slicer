@@ -1,21 +1,22 @@
 {
-  "tag": "windows-start-2026-10-14-session022c40b6r9",
-  "date": "2026-10-14",
-  "title": "Windows starter — lighting, scenes and CT/MR volumes r9",
-  "filename": "QAROS_VTK_Windows_session_022c40b6_2026-10-14_r9.zip",
+  "tag": "windows-start-2026-10-15-session022c40b6r10",
+  "date": "2026-10-15",
+  "title": "Windows starter — live Slicer renderer r10",
+  "filename": "QAROS_VTK_Windows_session_022c40b6_2026-10-15_r10.zip",
   "native": {
-    "run_id": 38600700083,
-    "artifact_id": 11912284114,
-    "commit": "e92a9f964e42ec596b4bcf9edac6f20cb97a8eea",
-    "sha256": "49a507d2e30ea086682d30a6bbf3390313de92cfbc1f0fca5868a892927c6755"
+    "run_id": 38717231877,
+    "artifact_id": 11963620745,
+    "commit": "9d1b6126aeaf4d897d68c9e3608f6dedfc6621b7",
+    "sha256": "a5e417800daa6fb8472246e2a3dbdc2a607134266d028d4de943c59755ae73a6"
   },
   "plugins": {
-    "run_id": 38600700191,
-    "artifact_id": 11913701117,
-    "commit": "e92a9f964e42ec596b4bcf9edac6f20cb97a8eea",
-    "sha256": "45662a6b2972234ee4752aa11fe9ddb1956f12375d4f200f3f63ed7f4c62b9c9"
+    "run_id": 38718347268,
+    "artifact_id": 11964570621,
+    "commit": "76db41975b58efab265dba5d85ba05dbf3072ea3",
+    "sha256": "c449ed1e0921338097e6bc83d6ee71c941a1f60f6e4c2b865fcb780a1cdcd12c"
   },
   "sdk_header_sha256": "022c40b670f87a066664c37daeb06da525db37fffdf5810e72cff8a5b81e677d",
   "modern_api": 0,
-  "quickstart": "docs/WINDOWS_SESSION_QUICKSTART.txt"
+  "host_bridge": true,
+  "quickstart": "docs/WINDOWS_LIVE_QUICKSTART.txt"
 }
