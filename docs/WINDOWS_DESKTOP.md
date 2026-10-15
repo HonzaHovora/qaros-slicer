@@ -15,7 +15,7 @@ Tento postup nepotřebuje přihlášení v prohlížeči, instalaci GitHub CLI a
 Podporovaná grafika a Visual C++ Runtime x64 jsou stále potřeba.
 Při chybě pošli text z otevřeného okna; při hlášení o chybějícím ZIPu dokonči Pull origin.
 
-## Přímý renderer Sliceru: r13
+## Přímý renderer Sliceru: r14
 
 Po aktualizaci otevři **QAROS → QAROS Live Renderer**. Modul používá první
 3D pohled Sliceru. Host bridge DLL je
@@ -34,9 +34,11 @@ Nech zapnuté **Use Slicer viewing direction at Start**. Depth má poloviční
 šířku i výšku oproti barvě. **Render resolution** 100/75/50 % mění velikost
 skutečného renderu; 50 % používá čtvrtinu pixelů. Rozměry se zobrazují v modulu.
 R11 oprava opakovaného snímku a měření zůstávají zachované.
-Pro další diagnostiku nech přenos běžet 30 sekund, zastav ho a spusť COLLECT-LOGS.cmd.
-ZIP zahrne host-bridge.log i host-python.log. Zrychlení ani odstranění pádu
-Visualizeru zatím nejsou potvrzené.
+R14 doplňuje sekundová měření snímků, aktivního okna a volitelná data NVIDIA GPU.
+Pro další měření nastav 50 %, střídej aktivní okno po 20–30 sekundách bez změny
+pohledu a scény, po 2–3 minutách zastav stream a spusť COLLECT-LOGS.cmd.
+ZIP zahrne host-bridge.log, host-python.log a host-system.log.
+Orientace je potvrzená; příčinu postupného poklesu FPS tato diagnostika teprve hledá.
 
 ## Instalace modulu a dosavadní exportní cesta
 

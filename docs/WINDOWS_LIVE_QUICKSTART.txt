@@ -1,10 +1,10 @@
-QAROS Live Renderer — přímý renderer Sliceru, r13
+QAROS Live Renderer — přímý renderer Sliceru, r14
 
 AKTUALIZACE
 
 1. Zastav přenos a zavři Slicer, Visualizer i náhled kostky.
 2. GitHub Desktop → QAROS_VTK / main → Fetch origin → Pull origin.
-3. Spusť D:\QAROS_VTK\START-PREVIEW.cmd. Ověří a rozbalí r13.
+3. Spusť D:\QAROS_VTK\START-PREVIEW.cmd. Ověří a rozbalí r14.
 4. Zavři náhled kostky a otevři Slicer.
 5. Zvol QAROS → QAROS Live Renderer.
 
@@ -43,6 +43,18 @@ depth má 960 × 540. Render 75 % znamená 1440 × 810, 50 % znamená 960 × 540
 se vzorkuje bez míchání vzdáleností na hranách. Přenosové rozlišení barvy se nemění.
 Samotná poloviční depth u společného průchodu nesnižuje počet paprsků barvy.
 
+MĚŘENÍ POKLESU FPS V R14
+
+R14 přidává diagnostiku; zatím nejde o opravu poklesu FPS. Orientace v r13
+je potvrzená. Rozlišení při předchozím testu zůstalo 960 × 540 pro každé oko,
+ale čas renderu postupně narostl z asi 30 na 48 ms a FPS kleslo z 19 na 13.
+
+Pro srovnání nech Render resolution na 50 %. Obě okna měj pokud možno viditelná.
+Nech 20–30 sekund aktivní Visualizer, pak 20–30 sekund Slicer, a zopakuj to.
+Během tohoto měření neměň natočení, zoom ani preset. Po 2–3 minutách dej Stop,
+počkej na povolení Start a spusť COLLECT-LOGS.cmd. Snímání obrazovky není potřeba.
+Aktivní okno, jednotlivé snímky a GPU se zaznamenávají automaticky.
+
 CO TATO VERZE DĚLÁ
 
 Používá přímo renderer, objekty, shadery a volume mapper běžící ve Sliceru.
@@ -53,8 +65,8 @@ a SDK. Původní renderer na monitoru se po každém stereo snímku obnoví.
 U standardního CT/MR vykreslování ve Sliceru 5.12.4 se barva a hloubka získávají
 společně, jedním vykreslením pro každé oko. Původní desktopové textury se
 uchovají na GPU a vrátí bez dalšího renderu. Dočasné změny kamery nespouštějí
-automatické překreslení Sliceru. R13 obsahuje nový plugin i qarvtk-host.dll;
-musí být aktualizované společně. Synchronizace a vlastnictví snímku zůstávají.
+automatické překreslení Sliceru. R14 zachovává nativní DLL z r13;
+aktualizuje Python plugin a diagnostiku. Synchronizace a vlastnictví snímku zůstávají.
 SDK pózy se použijí přímo v původních RAS souřadnicích Sliceru. Převod milimetrů
 na metry, přizpůsobení velikosti i otočení zajišťují app_scale a app_pose.
 
@@ -73,7 +85,7 @@ ParaView zůstává u dosavadního povrchového exportu.
 PŘI CHYBĚ
 
 Zkopíruj text ze stavového řádku nového modulu. Log folder obsahuje jeho logy.
-D:\QAROS_VTK\COLLECT-LOGS.cmd přidá host-bridge.log a host-python.log do ZIPu.
+D:\QAROS_VTK\COLLECT-LOGS.cmd přidá host-bridge.log, host-python.log a host-system.log do ZIPu.
 Při aktualizaci musí být Slicer zavřený, jinak Windows drží DLL zamčenou.
 SDK hlavičku ani knihovny v D:\install neměň.
 
@@ -81,8 +93,12 @@ R11 opravuje opakované převzetí už dokončeného snímku (Duplicate host fra
 Pád Visualizeru s touto chybou zatím není prokázaný. Pro měření výkonu nech
 přenos běžet 30 sekund s viditelným Visualizerem, pak dej Stop, počkej na jeho
 dokončení a spusť COLLECT-LOGS.cmd. Snímání obrazovky není potřeba.
-Každých přibližně 5 sekund se zapíší průměrné časy renderu barvy, hloubky,
-obnovy monitoru, GPU kopírování/synchronizace, čekání na SDK a odeslání.
+R14 zapisuje Python souhrny po sekundě, včetně časové řady jednotlivých snímků,
+aktivního procesu, CPU času renderovacího vlákna a změn SDK kamery. GPU teplota,
+takty, vytížení, paměť a důvody omezení taktů se čtou přes NVML jednou za sekundu
+na samostatném vlákně. Nepodporované údaje se označí jako nedostupné; přenos běží dál.
+Nativní SDK/kopírovací časování zůstává v pětisekundových souhrnech.
+Podrobnosti a význam sloupců jsou v docs/FPS_DIAGNOSTICS.md v repozitáři.
 R12 přidává počty host_render_calls, volume_depth_passes a
 desktop_restore_render_calls. Standardní stereo snímek má hodnoty 2, 0, 0.
 R13 navíc rozlišuje eye_sizes (barva streamu), depth_sizes, render_sizes a

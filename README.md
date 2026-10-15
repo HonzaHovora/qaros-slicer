@@ -2,7 +2,12 @@
 
 Pluginy pro **ParaView a 3D Slicer** a OpenGL přenos do QAROS.
 
-**R13: umístění přes app_pose/app_scale a poloviční hloubka.** Modul přebírá GPU
+**R14: měření postupného poklesu FPS a vlivu aktivního okna.**
+Sekundové souhrny, rozestupy jednotlivých snímků a volitelná telemetrie GPU
+na samostatném vlákně pomohou určit příčinu; opravu poklesu FPS zatím neslibujeme.
+[Dosavadní zjištění a další měření](docs/FPS_DIAGNOSTICS.md).
+
+R13 umístění přes app_pose/app_scale a poloviční hloubka zůstávají zachované. Modul přebírá GPU
 výstup živého 3D pohledu, včetně hostitelských shaderů a ROI ořezu objemu.
 Scénu neexportuje. Windows knihovna nepřidává do Sliceru další VTK ani Qt.
 Natočení podle pohledu Sliceru, vystředění i měřítko nyní nastavuje SDK.
@@ -11,7 +16,8 @@ Při barvě 1920 × 1080 má depth 960 × 540 pro každé oko. Volba Render reso
 100/75/50 % mění skutečnou velikost hostitelského renderu; modul i log zobrazují
 rozměry renderu, přenášené barvy, hloubky a desktopového pohledu.
 Zachovává dva rendery na stereo snímek z r12 a původní desktopové GPU textury.
-Nové FPS a reakce ovládání Visualizeru musí potvrdit test na cílovém PC.
+Orientace v r13 je na cílovém PC potvrzená. Při 50 % renderu FPS postupně
+kleslo z přibližně 19 na 13; růst času uvnitř Render() ještě nemá určenou příčinu.
 [Postup pro první test](docs/WINDOWS_LIVE_QUICKSTART.txt).
 
 Dosavadní **QAROS Streaming** používá samostatný renderer r9 a export VTP/VTM;
@@ -34,7 +40,7 @@ QAROS/mixeru/přijímače; podrobnosti jsou v [VALIDATION.md](docs/VALIDATION.md
 Údaj přibližně 44 FPS ve Visualizeru měří jinou část přenosu. Dosažení cíle
 60 FPS ještě není potvrzené. Před rozbalením zavři Slicer i Visualizer;
 cesty k pluginu a senderu zůstávají stejné. Logy lze zabalit pomocí `COLLECT-LOGS.cmd`.
-Samostatné stažení je také v [GitHub Release](https://github.com/HonzaHovora/QAROS_VTK/releases/tag/windows-start-2026-10-15-session022c40b6r13).
+Samostatné stažení je také v [GitHub Release](https://github.com/HonzaHovora/QAROS_VTK/releases/tag/windows-start-2026-10-15-session022c40b6r14).
 Původní [moderní Hub varianta](https://github.com/HonzaHovora/QAROS_VTK/releases/tag/windows-start-2026-10-14)
 zůstává dostupná pro jiné SDK. Každý sender vyžaduje odpovídající kompletní runtime.
 

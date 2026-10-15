@@ -109,7 +109,11 @@ def run():
     host.render(eyes, oracle)
     diagnostic_state = host.diagnostic_state()
     assert diagnostic_state["volume"]["dimensions"] == (32, 32, 32)
-    assert diagnostic_state["volume"]["spacing"] == (3., 3., 3.)
+    # Slicer can put voxel spacing in the volume matrix and keep mapper input
+    # spacing at one. Verify the physical spacing using both recorded values.
+    diagnostic_matrix = np.asarray(diagnostic_state["volume"]["matrix"]).reshape(4, 4)
+    world_spacing = np.linalg.norm(diagnostic_matrix[:3, :3], axis=0) * diagnostic_state["volume"]["spacing"]
+    assert np.allclose(world_spacing, ct.GetSpacing()), diagnostic_state
     assert diagnostic_state["volume"]["image_sample_distance"] == old_mapper[1]
     assert host.last_timings["host_render_thread_cpu_ms"] >= 0
     print("PASS: read-only live diagnostic state and render thread CPU time", flush=True)

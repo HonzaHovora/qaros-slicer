@@ -1,11 +1,22 @@
 # Validation and next work
 
+## Live r13 field results and r14 diagnostics, 2026-10-15
+
+The user now confirms correct orientation. The latest r13 logs confirm two
+eye renders, half-sized depth and 50% actual color render resolution throughout.
+In the latest run source throughput first reached 19–19.5 FPS, then declined to
+about 13 FPS while both-eye Render wall time grew from about 30 to 48 ms.
+Copy costs stayed around 3–4 ms. See [FPS_DIAGNOSTICS.md](FPS_DIAGNOSTICS.md)
+for exact session identification, measurement limits and the r14 experiment.
+R14 changes diagnostics only and retains the accepted r13 native DLL.
+
+
 ## Live r13: SDK placement and separate depth resolution, 2026-10-15
 
 The user reports that r12 improved source FPS but still slows Slicer, and that
-Visualizer X/Z controls and the starting view appear reversed. The last uploaded
-field measurement remains r11 (1920x1080 per eye); there is no new r12/r13 timing
-capture. R12 code still rendered at the full viewer dimensions with full image
+Visualizer X/Z controls and the starting view appear reversed. At the time of this implementation, the last uploaded
+field measurement was r11 (1920x1080 per eye); the newer field evidence above
+supersedes this initial status. R12 code still rendered at the full viewer dimensions with full image
 sampling. Its initial fixed RAS mapping selected a posterior view and did not
 adopt the desktop camera direction.
 
@@ -44,10 +55,9 @@ R13 starter SHA-256: `679deb687d8edc209a11d92082bfa230bf91146ee01e9c062bf5eb90b4
 Host DLL SHA-256: `821fdf85a940e12bf47ca8a7adcebb7444708aa62b72a751f86d9f13e3690704`.
 All 74 manifest entries and the packaged host Python sources were verified.
 
-No real SDK runtime/Visualizer runs in these CI tests. The negotiated layout,
-interactive X/Z response and resulting FPS on the target NVIDIA laptop still
-need field verification. This is not a measured FPS improvement or a proof
-that every source of the reported Visualizer reversal is eliminated.
+No real SDK runtime/Visualizer runs in these CI tests. Subsequent field logs confirm the negotiated layout
+and actual render sizes; the user confirms orientation. These CI checks alone
+do not establish target-device FPS or separately verify every X/Z gesture.
 
 ## Live r11 performance report and r12 optimization, 2026-10-15
 
