@@ -1,10 +1,10 @@
-QAROS Live Renderer — přímý renderer Sliceru, r16
+QAROS Live Renderer — přímý renderer Sliceru a náhledy řezů, r17
 
 AKTUALIZACE
 
 1. Zastav přenos a zavři Slicer, Visualizer i náhled kostky.
 2. GitHub Desktop → QAROS_VTK / main → Fetch origin → Pull origin.
-3. Spusť D:\QAROS_VTK\START-PREVIEW.cmd. Ověří a rozbalí r16 včetně nové DLL.
+3. Spusť D:\QAROS_VTK\START-PREVIEW.cmd. Ověří a rozbalí r17 včetně nové DLL.
 4. Zavři náhled kostky a otevři Slicer.
 5. Zvol QAROS → QAROS Live Renderer.
 
@@ -22,6 +22,8 @@ PRVNÍ TEST
    Viewer: visualizer
    Center and fit into 65 cm workspace at Start: zapnuto
    Use Slicer viewing direction at Start: zapnuto
+   Show slice views as panels (preview only): zapnuto
+   Slice preview FPS limit: 15; pro rychlejší video můžeš zvolit 30
    Render resolution: 100 % pro původní kvalitu; 50 % pro porovnání rychlosti
 5. Klikni Start live streaming a nech Visualizer viditelný.
 6. Po prvním snímku změň preset / barvu / viditelnost ve Sliceru.
@@ -36,6 +38,30 @@ Natočení, vystředění a měřítko se při Start nastaví přes SDK app_pose
 Výchozí směr odpovídá pohledu ve Sliceru. Další pohyb kamer je nezávislý;
 otáčení desktopové kamery po Start nepřesouvá scénu ve Visualizeru.
 Pro nové výchozí natočení, rozsah scény nebo jiné renderovací rozlišení dej Stop a Start.
+
+ŽIVÉ NÁHLEDY ŘEZŮ A VIDEA
+
+Zvol ve Sliceru rozložení Four-up, aby byly vidět 3D pohled a červený, žlutý
+a zelený řez. Po Start se jejich živé obrazy zobrazí jako samostatné panely
+pod pracovním objemem. Náhledy mají nejvýše 768 pixelů na delší straně,
+zachovávají poměr stran a při změně tvaru okna doplní černé okraje.
+Změny dat, polohy řezu, anotací, video a přehrávání časové sekvence se přenášejí
+podle vykreslování Sliceru. Panel neřídí přehrávání ani nepřijímá interakce.
+Qt lišty a posuvníky nejsou součástí tohoto náhledu; ovládají se ve Sliceru.
+
+Limit 5/10/15/30 FPS je maximum na panel, nikoli zaručená rychlost. Při pomalém
+přenosu se starší čekající snímky nahradí nejnovějším. Náhled nespouští další
+Render ani čtení obrazu do RAM. Zachycení je GPU kopie; enkódování a přenos
+mají vlastní vlákno. Statický obraz se po síti obnoví jednou za dvě sekundy
+kvůli znovupřipojení, bez nové kopie ze Sliceru.
+
+Skrytí řezu v rozložení skryje i jeho panel; návrat jej opět aktualizuje.
+Při maximalizaci samotného 3D pohledu tedy náhledy řezů zmizí. Chyba jednoho
+panelu se zobrazí v modulu a logu, stereo stream pokračuje. Stop zavře panely
+i jejich streamy. Pro porovnání výkonu dej Stop, vypni Show slice views as
+panels a znovu Start. Změna limitu FPS se také uplatní při Start.
+Náhledy přidávají GPU kopie a video enkodéry; nulový dopad na FPS neslibujeme.
+COLLECT-LOGS.cmd zahrnuje i záznamy PANEL_SOURCE, PANEL_ERROR a PERF_PANELS.
 
 PRACOVNÍ PROSTOR VE VISUALIZERU
 
@@ -79,8 +105,8 @@ a SDK. Původní renderer na monitoru se po každém stereo snímku obnoví.
 U standardního CT/MR vykreslování ve Sliceru 5.12.4 se barva a hloubka získávají
 společně, jedním vykreslením pro každé oko. Původní desktopové textury se
 uchovají na GPU a vrátí bez dalšího renderu. Dočasné změny kamery nespouštějí
-automatické překreslení Sliceru. R16 aktualizuje Python plugin i nativní DLL
-(host ABI 3), aby předal rozměry pracovního prostoru SDK. Proto rozbal celý
+automatické překreslení Sliceru. R17 aktualizuje Python plugin i nativní DLL
+(host ABI 4), aby přidal samostatné GUI video panely. Proto rozbal celý
 balíček se zavřeným Slicerem. Synchronizace a vlastnictví snímku zůstávají.
 SDK pózy se použijí přímo v původních RAS souřadnicích Sliceru. Převod milimetrů
 na metry, přizpůsobení velikosti i otočení zajišťují app_scale a app_pose.

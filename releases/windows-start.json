@@ -1,24 +1,24 @@
 {
-  "tag": "windows-start-2026-10-15-session022c40b6r16",
+  "tag": "windows-start-2026-10-15-session022c40b6r17",
   "date": "2026-10-15",
-  "title": "QAROS Live Renderer r16 — workspace dimensions from the Slicer scene",
-  "filename": "QAROS_VTK_Windows_session_022c40b6_2026-10-15_r16.zip",
+  "title": "QAROS Live Renderer r17 — živé náhledy řezů a videa jako GUI panely",
+  "filename": "QAROS_VTK_Windows_session_022c40b6_2026-10-15_r17.zip",
   "native": {
-    "run_id": 38771694919,
-    "artifact_id": 11991548100,
-    "commit": "00f48c9a8f318f03513413792fa6e0788528acce",
-    "sha256": "3898ff874e40fbc332e9c98b70a0cec38cb10b2417ab415f1cea803db67fc944"
+    "run_id": 38785407270,
+    "artifact_id": 11998715418,
+    "commit": "c471ee4e8da86fe5f2ff84a4450b91fd27b44b63",
+    "sha256": "ac5ab2369deb0dbfe39fe055a7aa0634916317f3f80a9dd26ab44c9ab435ecaa"
   },
   "plugins": {
-    "run_id": 38771695514,
-    "artifact_id": 11991337407,
-    "commit": "00f48c9a8f318f03513413792fa6e0788528acce",
-    "sha256": "53bf061f929598dd0de0508879af458567297fd033ea483a5b8ecfd3d84980e3"
+    "run_id": 38785407260,
+    "artifact_id": 11997856887,
+    "commit": "c471ee4e8da86fe5f2ff84a4450b91fd27b44b63",
+    "sha256": "72cf012381959d70515752205e7be1f5b316ddf50a73e6dd79a6c560d0e91357"
   },
   "sdk_header_sha256": "022c40b670f87a066664c37daeb06da525db37fffdf5810e72cff8a5b81e677d",
   "modern_api": 0,
   "host_bridge": true,
   "quickstart": "docs/WINDOWS_LIVE_QUICKSTART.txt",
-  "release_note": "R16 nahrazuje pevnou kostku 1,2 m pracovním kvádrem podle viditelné scény Sliceru, jejího natočení a SDK app_scale. Center and fit vystředí data a nastaví nejdelší hranu na 65 cm; vypnuté zachová skutečnou velikost i polohu dat. Workspace v modulu ukazuje šířku × výšku × hloubku v centimetrech. Rozměry se přepočítají při Start; ROI a preset se dál vykreslují živě. Nová DLL a plugin používají host ABI 3 a musí se aktualizovat společně. Přímý renderer, app_pose/app_scale, poloviční depth, diagnostika a r15 podpora fullscreen zůstávají. Windows build, ABI, mapování XYZ na SDK width/length/height a test skutečného Slicer CT prošly. Automatické rozměry ještě ověř ve Visualizeru na cílovém PC. Tato změna nepřidává práci do snímku a neslibuje opravu FPS.",
-  "host_abi": 3
+  "release_note": "R17 přidává živé náhledy viditelných řezů Sliceru jako samostatné QAROS GUI panely pod 3D objemem. Přenáší i video a časové sekvence z hotových VTK GPU textur, bez dalšího Render a čtení do RAM. Limit je 768 px na delší straně a 5/10/15/30 FPS na panel, výchozí 15. Při zpomalení se přenese nejnovější snímek bez fronty. Panelový přenos běží na samostatném SDK vlákně a jeho chyba neukončí stereo stream. Náhled je bez interakce a Qt lišt. Použij Four-up a Show slice views as panels (preview only); volby platí při Start. Balíček obsahuje novou DLL i plugin pro host ABI 4. Testy skutečného Sliceru, mono GPU orientace, videa při pomalém příjemci, rozložení, úklidu a Windows DLL prošly. SDK GUI panely a náklady dalších enkodérů ještě vyžadují ověření na cílovém PC. Přímý 3D renderer, app_pose/app_scale, poloviční depth, automatický pracovní prostor a fullscreen zůstávají.",
+  "host_abi": 4
 }

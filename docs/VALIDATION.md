@@ -1,5 +1,55 @@
 # Validation and next work
 
+## Live r17: read-only slice/video GUI panels, 2026-10-15
+
+Visible Slicer slice windows feed their completed GPU color textures to separate
+mono SDK video senders and GUI panels. EndEvent revisions and bounded staging
+retain the latest frame under backpressure; no queued video history accumulates.
+There are no extra renders or CPU readbacks in the production preview path.
+Capture is capped at 768 pixels on the longer side and 5/10/15/30 FPS per panel,
+default 15. Panels sit below the workspace, preserve aspect ratio, hide with
+their source views and close on Stop. They have no interaction or Qt controls.
+Panel SDK work has a separate worker; failures do not stop stereo streaming.
+GPU copies, synchronization and additional encoders still have a cost.
+
+Accepted production source: `c471ee4e8da86fe5f2ff84a4450b91fd27b44b63`.
+[Build/test 38785407260](https://github.com/HonzaHovora/QAROS_VTK/actions/runs/38785407260)
+passed, including the mono GPU copy test for 2D/array targets, SDK flips,
+letterboxing, exact orientation and GL state restoration. Local scheduler tests
+cover throttling, skipped busy captures, newest-frame replacement, hidden views,
+context replacement and cleanup. Runtime tests keep stereo alive after preview
+failure. Windows native
+[38785407270](https://github.com/HonzaHovora/QAROS_VTK/actions/runs/38785407270)
+passed all ten host/core tests, including DLL loading, ABI 4 exports and WGL
+callbacks. Placement/Eye/Frame remain 112/104/232 bytes; old ABI 3 is rejected.
+Both release artifacts are from the accepted production commit.
+
+Test-only follow-up `070219a88fde3788d7a8a33adb40a65d7a7fc751` passed
+[Slicer 38785978619](https://github.com/HonzaHovora/QAROS_VTK/actions/runs/38785978619)
+and [Build/test 38785978734](https://github.com/HonzaHovora/QAROS_VTK/actions/runs/38785978734).
+In actual Slicer 5.12.4 / VTK 9.6.2, Red/Yellow/Green previews match their native
+GPU textures, preserve desktop pixels and issue no extra renders. Animated CT
+data proves video/sequence frames advance and coalesce during receiver stalls;
+resumed capture matches the current native image. Layout hide/restore and Stop
+remove the expected visibility/observer state. All existing stereo, CT depth,
+ROI, world-bounds, fullscreen and desktop-preservation tests also pass.
+The first preview test compared motion-oracle arrays across a Qt splitter resize;
+the follow-up compares consecutive equal-sized frames while separately checking
+the newest capture exactly against the current native image. No production code
+changed in that follow-up.
+
+These Slicer tests use Mesa and a transport fixture. New panel creation, encoder
+capacity, display and placement in the actual Windows SDK/Visualizer remain
+to be checked on the target PC, including the user's video dataset. Compare
+the same camera/preset with previews enabled and disabled. No FPS improvement
+is claimed, and R16 workspace sizing still awaits explicit field confirmation.
+
+The assembled starter has 76 verified manifest entries and byte-identical
+accepted host plugin sources. Host DLL SHA-256:
+`2fd97138f9ecf3fbe781a0c8e9e261849abeefb06e1fd2dbb1f931017b5bdeb6`.
+Starter SHA-256:
+`159a782957174d25da8f4494e3ecc29a1f56607ef2767c11032f7e8e8f1b617a`.
+
 ## Live r16: workspace dimensions from the Slicer scene, 2026-10-15
 
 The former fixed 1.2 m cube is replaced with the visible scene bounds rotated

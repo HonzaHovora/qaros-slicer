@@ -72,6 +72,8 @@ def package(native_archive, plugins_archive, output):
                      'plugins/slicer/QarosVTKLib/qarvtk_host_diagnostics.py'):
             if name not in payload:
                 raise ValueError(f'Missing live host plugin: {name}')
+        if config.get('host_abi', 0) >= 4 and 'plugins/slicer/QarosVTKLib/qarvtk_host_panels.py' not in payload:
+            raise ValueError('Live slice preview release is missing its panel capture module')
     for target, source in {
         '01-Preview.cmd': 'scripts/windows/01-Preview.cmd',
         'ZACNI_ZDE.txt': config.get('quickstart', 'docs/WINDOWS_QUICKSTART.txt'),
@@ -159,7 +161,12 @@ pokud přežije stejný 3D pohled a OpenGL kontext; ukončení má konkrétní d
 R16 nastavuje pracovní kvádr podle rozsahu scény v osách pracovního prostoru.
 Při Center and fit má nejdelší hranu 65 cm; vypnuté zachová skutečnou velikost
 i polohu dat. Rozměry se přepočítají při Start a zobrazí v řádku Workspace.
-Balíček obsahuje novou nativní DLL i plugin pro host ABI 3.
+R17 přidává živé náhledy viditelných řezů, včetně videa a časových sekvencí,
+jako samostatné QAROS GUI panely. Náhledy používají hotové VTK GPU textury,
+vlastní video sender a vlastní SDK vlákno. Maximum je 768 px a 5/10/15/30 FPS
+na panel (výchozí 15); staré snímky se nehromadí. Panelové streamy nepotřebují
+stereo ani depth a nesdílejí čekání na snímek s 3D senderem. Bez interakce a Qt lišt.
+Balíček obsahuje novou nativní DLL i plugin pro host ABI 4.
 
 Modul: **QAROS → QAROS Live Renderer**. Před instalací zavři Slicer a Visualizer,
 v GitHub Desktop proveď Fetch/Pull a spusť START-PREVIEW.cmd. Po rozbalení zavři
@@ -179,7 +186,11 @@ Orientace, poloviční depth a r15 přepínání fullscreen jsou potvrzené na c
 potvrdily 960 × 540 na oko i ve fullscreen, teplotní omezení GPU při 86–87 °C
 a současné změny SDK kamery. R16 upravuje pracovní prostor, nikoli výkon renderu.
 Podporovaný je jeden GPU Composite objem a neprůhledné povrchy.
-Na cílovém PC ověř, že pracovní kvádr obklopuje data a rozměry odpovídají řádku Workspace.
+Na cílovém PC použij Four-up a zapni Show slice views as panels (preview only).
+Ověř živé řezy i video a porovnej FPS se stejnou scénou a vypnutými náhledy.
+Testy GPU kopírování a Sliceru ověřují mono orientaci, poměr stran, aktuálnost
+video snímků při pomalém příjemci, rozložení a úklid. SDK panelový transport
+ještě nebyl ověřen proti skutečnému Visualizeru; další enkodéry nejsou zdarma.
 Při potížích spusť COLLECT-LOGS.cmd; rozměry a umístění jsou v PLACEMENT,
 důvody ukončení v STOP_REQUEST.
 Pro srovnání FPS drž stejnou SDK kameru a preset a zohledni teplotu GPU.

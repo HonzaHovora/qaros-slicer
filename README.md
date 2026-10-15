@@ -2,7 +2,15 @@
 
 Pluginy pro **ParaView a 3D Slicer** a OpenGL přenos do QAROS.
 
-**R16: pracovní prostor Visualizeru podle rozsahu scény Sliceru.**
+**R17: živé náhledy řezů jako samostatné QAROS panely.**
+Volba **Show slice views as panels (preview only)** přenáší hotové GPU obrazy
+viditelných řezů, včetně videa a časových sekvencí. Výchozí limit je 15 FPS
+na panel, volitelně 5/10/15/30. Při pomalém příjemci vítězí nejnovější snímek.
+Panely se objeví pod 3D objemem; ovládání zatím zůstává ve Sliceru.
+Přenos panelů má vlastní SDK vlákno a chyby náhledů neukončí stereo stream.
+Na cílové NVIDIA kartě je potřeba ověřit obraz a náklady dalších enkodérů.
+
+R16 pracovní prostor podle rozsahu scény zůstává zachovaný.
 Při Start se nastaví kvádr podle viditelných objektů, jejich natočení a měřítka.
 Zapnuté **Center and fit** vystředí scénu a nastaví nejdelší hranu na 65 cm;
 vypnuté zachová skutečnou velikost a polohu. Rozměry zobrazí řádek **Workspace**.
@@ -25,7 +33,7 @@ kleslo z přibližně 19 na 13; růst času uvnitř Render() ještě nemá urče
 
 Dosavadní **QAROS Streaming** používá samostatný renderer r9 a export VTP/VTM;
 ParaView zatím zůstává u povrchového exportu. Další prioritou je ověřit přímý
-Slicer přenos, pak napojit renderer ParaView a následně ovládací panely.
+Slicer přenos s náhledy řezů, pak napojit renderer ParaView a původní Qt ovládání.
 [Architektura a podmínky ověření](docs/ARCHITECTURE.md).
 
 **První test přes GitHub Desktop:** po Fetch/Pull spusť `START-PREVIEW.cmd`
@@ -43,7 +51,7 @@ QAROS/mixeru/přijímače; podrobnosti jsou v [VALIDATION.md](docs/VALIDATION.md
 Údaj přibližně 44 FPS ve Visualizeru měří jinou část přenosu. Dosažení cíle
 60 FPS ještě není potvrzené. Před rozbalením zavři Slicer i Visualizer;
 cesty k pluginu a senderu zůstávají stejné. Logy lze zabalit pomocí `COLLECT-LOGS.cmd`.
-Samostatné stažení je také v [GitHub Release](https://github.com/HonzaHovora/QAROS_VTK/releases/tag/windows-start-2026-10-15-session022c40b6r16).
+Samostatné stažení je také v [GitHub Release](https://github.com/HonzaHovora/QAROS_VTK/releases/tag/windows-start-2026-10-15-session022c40b6r17).
 Původní [moderní Hub varianta](https://github.com/HonzaHovora/QAROS_VTK/releases/tag/windows-start-2026-10-14)
 zůstává dostupná pro jiné SDK. Každý sender vyžaduje odpovídající kompletní runtime.
 

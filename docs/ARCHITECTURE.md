@@ -53,7 +53,7 @@ uses the pinned session SDK and imports no host VTK/Qt classes. Conservative
 ownership/fence design. R12 changes the Python host capture, not the native SDK
 transport. Two actual eye renders still consume time on the host GUI/GPU thread.
 
-R16 uses host ABI 3: creation receives SDK placement, workspace XYZ dimensions
+R17 uses host ABI 4: creation retains SDK placement, workspace XYZ dimensions
 and room centre (112 bytes); each frame still reports both
 color/depth dimensions and the exact near/far supplied to `show_frame`.
 App coordinates are the original Slicer world RAS numbers, without a per-frame
@@ -122,7 +122,7 @@ The implemented transport-only bridge exposes a narrow native interface without
 linking another VTK. Real Windows Slicer/SDK shared-context integration still
 needs on-device validation.
 
-### Acceptance before UI work
+### Host-rendering acceptance
 
 - On the target Windows Slicer installation, stream a live CT/MR volume and an
   opaque model/segment to Visualizer from the host's render path. Verify stereo
@@ -138,10 +138,55 @@ needs on-device validation.
 - Verify the real Windows SDK/GPU path. A synthetic renderer test or a passed
   Linux host smoke test does not complete this milestone.
 
-Once this works, adapt the same transport to ParaView's own view/render lifecycle.
-Then address original host panels with input forwarding and an optional public
-UI extension interface. Do not build or maintain a replica UI for each plugin.
-FPS investigation remains a separate deferred task.
+The user has requested read-only slice previews next; R17 implements this
+alongside continued host-rendering acceptance. Then adapt the shared transport
+to ParaView's own view/render lifecycle and connect the existing Qt streaming
+and input capabilities when their integration contract is available. An optional
+public UI extension interface should avoid maintaining a replica UI per plugin.
+FPS investigation remains a separate task.
+
+### R17: live slice preview panels
+
+`qarvtk_host_panels.py` observes EndEvent on visible Slicer slice render windows
+and reads their completed display-FBO color texture. It never calls Render or
+reads pixels to CPU. The source can be a static slice, changing annotations,
+video or a playing sequence: each newer rendered image replaces the pending
+revision. Capture is limited to 5/10/15/30 FPS per view (15 by default), with
+at most one capture per Qt timer turn and fair rotation between views. There
+is no frame queue. A busy native staging lock skips capture; the next attempt
+uses the latest texture. The preview checkbox and FPS choice apply at Start.
+
+Each visible slice has a mono RGBA video sender and SDK GUI stream panel,
+independent of the stereo/depth sender. The native panel worker uses
+try_begin_frame and sends the newest owned GPU copy. A static copy is resent
+every two seconds for reconnects without recapturing Slicer. A panel failure
+is reported separately and does not terminate stereo streaming. No input
+subscriptions, event forwarding, Qt toolbars or controls are part of R17.
+
+Slice windows need not share the 3D view's OpenGL context. Each source owns a
+shared copy context and a separate SDK graphics-callback context. An exclusive
+GPU mutex controls copy-context migration between GUI capture and the worker;
+GUI capture uses try_lock rather than waiting for the sender. GPU completion
+still uses conservative glFinish, so copies and additional encoders have a
+real cost. All SDK panel destruction happens on the panel worker. The session
+joins that worker before destroying the SDK session/library; GL resources are
+released on the GUI thread after native shutdown.
+
+An owned texture has at most 768 pixels on its longer side, even dimensions,
+and the source aspect ratio at creation. Later source resizing fits inside it
+with black padding. The first copy converts VTK's bottom-left origin to the
+SDK's top-left convention; upload does not flip it again and respects returned
+view flips. Up to eight named slice views occupy a three-column grid below the
+workspace; each fits a 45 cm square. Red, Yellow and Green come first.
+
+Layout-hidden slices hide their panels and resume with current content when
+visible again. Window/context replacement retires the old source. Up to 16
+source creations per session bound retained contexts; reaching that limit asks
+for a stream restart. Stop removes all observers and closes streams/panels.
+Diagnostics report capture time, busy skips, replaced revisions and native
+source sizes. Real Slicer/Mesa and GPU-copy tests cover source correctness,
+video freshness, orientation and lifecycle; Windows SDK/Visualizer behavior
+and the cost on the target NVIDIA GPU remain field checks.
 
 ## Current r9 data and frame paths
 
@@ -268,10 +313,11 @@ is a portable manual-install bundle, not an Extensions Manager package.
 ## Next integration stages
 
 1. Complete the host-rendered Slicer milestone and acceptance checks above.
-2. Integrate ParaView's actual renderer using a matching host adapter and the
+2. Validate R17 live slice/video panels against the Windows SDK and Visualizer.
+3. Integrate ParaView's actual renderer using a matching host adapter and the
    shared transport boundary. Verify live pipeline updates and render effects.
-3. Integrate original host panels/input and an optional extension interface.
-4. Add per-viewer cameras and picking/gestures; profile synchronization with the
+4. Connect original Qt controls/input and an optional extension interface.
+5. Add per-viewer cameras and picking/gestures; profile synchronization with the
    real encoder before replacing conservative waits.
 
 Further per-feature scene-export reconstruction is no longer the integration

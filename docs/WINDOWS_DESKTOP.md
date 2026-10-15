@@ -15,7 +15,7 @@ Tento postup nepotřebuje přihlášení v prohlížeči, instalaci GitHub CLI a
 Podporovaná grafika a Visual C++ Runtime x64 jsou stále potřeba.
 Při chybě pošli text z otevřeného okna; při hlášení o chybějícím ZIPu dokonči Pull origin.
 
-## Přímý renderer Sliceru: r16
+## Přímý renderer Sliceru: r17
 
 Po aktualizaci otevři **QAROS → QAROS Live Renderer**. Modul používá první
 3D pohled Sliceru. Host bridge DLL je
@@ -26,7 +26,12 @@ Pracovní kvádr se při Start nastaví podle viditelné scény, natočení a m�
 **Center and fit** zapnuto znamená vystředění a nejdelší hranu 65 cm;
 vypnuto zachová fyzickou velikost i polohu. **Workspace** ukazuje výsledné
 rozměry v centimetrech. Pro přepočet rozsahu po změně dat dej Stop a Start.
-R16 vyžaduje novou DLL i plugin z balíčku, proto aktualizuj se zavřeným Slicerem.
+R17 vyžaduje novou DLL i plugin z balíčku, proto aktualizuj se zavřeným Slicerem.
+Zapnuté **Show slice views as panels (preview only)** zobrazí viditelné řezy
+jako panely pod 3D objemem. Použij rozložení **Four-up**. Náhled zahrnuje video
+a časové sekvence; limit je výchozích 15 FPS nebo 5/10/15/30 podle volby.
+Staré snímky se při zpoždění zahazují. Panely jsou bez interakce a Qt lišt.
+Pro srovnání výkonu je vypni před Start; další enkodéry mají vlastní náklady.
 [Celý postup a rozsah testovací verze](WINDOWS_LIVE_QUICKSTART.txt).
 
 Předchozí QAROS Streaming musí být zastavený. První verze podporuje jeden
@@ -78,7 +83,7 @@ a odpovídá přesné hlavičce z existujícího SDK:
 Plugin tuto shodu ověřuje automaticky. Toto SDK neposkytuje nové Hub párování;
 pole Hub identity se nepoužívá. SDK runtime a viewer nejsou součástí balíčku.
 
-Balíček odpovídá testovacímu vydání `windows-start-2026-10-15-session022c40b6r16`.
+Balíček odpovídá testovacímu vydání `windows-start-2026-10-15-session022c40b6r17`.
 Nový modul QAROS Live Renderer používá postup uvedený výše. Následující popis
 se týká zachovaného modulu QAROS Streaming s exportem r9.
 R9 přidává osvětlení, barvy, viditelné modely/segmenty a jeden CT/MR objem ze Sliceru.
