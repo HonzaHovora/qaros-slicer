@@ -152,7 +152,8 @@ kompatibilní doplňkový průchod se použije u neověřených efektů. ROI a p
 Umístění, natočení podle výchozího pohledu Sliceru a velikost nastavuje SDK přes
 app_pose/app_scale. Hloubka má poloviční šířku i výšku oproti přenášené barvě.
 Render resolution 100/75/50 % ovládá velikost skutečného renderu; rozměry jsou
-viditelné v modulu i v logu. R13 vyžaduje společnou aktualizaci pluginu a DLL.
+viditelné v modulu i v logu. R14 přidává diagnostiku aktivního procesu, časové řady
+snímků a volitelné telemetrie NVIDIA. Nativní DLL z r13 zůstává zachovaná.
 
 Modul: **QAROS → QAROS Live Renderer**. Před instalací zavři Slicer a Visualizer,
 v GitHub Desktop proveď Fetch/Pull a spusť START-PREVIEW.cmd. Po rozbalení zavři
@@ -164,9 +165,13 @@ zachován. ParaView zatím zůstává u povrchového exportu.
 
 Windows build/ABI a WGL sdílení textur prošly. Test v oficiálním Sliceru 5.12.4
 ověřuje stereo, shodu barvy, vlastní shader, CT hloubku, ROI a obnovu stavu po
-chybě. **Spojení živého Sliceru s QAROS na cílové NVIDIA kartě je potřeba ověřit.**
-První verze podporuje jeden GPU Composite objem a neprůhledné povrchy.
-Dva rendery očí stále mají náklady. Výsledné FPS na cílovém PC zatím nejsou změřené.
+chybě. Orientace a poloviční depth z r13 jsou potvrzené na cílovém PC. Při 50 %
+renderu ale FPS postupně kleslo z přibližně 19 na 13; příčina růstu času renderu
+zatím není určená. **R14 je diagnostické vydání, nikoli ověřená oprava FPS.**
+Podporovaný je jeden GPU Composite objem a neprůhledné povrchy.
+Pro další test ponech 50 %, střídej aktivní okno po 20–30 sekundách bez změny
+pohledu, po 2–3 minutách zastav stream a spusť COLLECT-LOGS.cmd. Telemetrie
+GPU na konkrétní NVIDIA kartě a její režie musí být ověřeny tímto během.
 
 - Native build: [{config['native']['commit'][:8]}]({provenance['native_run']})
 - Plugins: [{config['plugins']['commit'][:8]}]({provenance['plugins_run']})

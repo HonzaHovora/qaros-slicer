@@ -1,8 +1,8 @@
 {
-  "tag": "windows-start-2026-10-15-session022c40b6r13",
+  "tag": "windows-start-2026-10-15-session022c40b6r14",
   "date": "2026-10-15",
-  "title": "QAROS Live Renderer r13 — SDK app placement and half-resolution depth",
-  "filename": "QAROS_VTK_Windows_session_022c40b6_2026-10-15_r13.zip",
+  "title": "QAROS Live Renderer r14 — frame cadence, focus and GPU diagnostics",
+  "filename": "QAROS_VTK_Windows_session_022c40b6_2026-10-15_r14.zip",
   "native": {
     "run_id": 38749688548,
     "artifact_id": 11980672080,
@@ -10,15 +10,15 @@
     "sha256": "9b32dd558964f446d39e9ddaf73e86f76782b03748e73078dd2abd0a89d2c0ec"
   },
   "plugins": {
-    "run_id": 38750316041,
-    "artifact_id": 11980477629,
-    "commit": "bc1da84b7a51e3cd1cdb5e6957b0bd0014ef71fd",
-    "sha256": "0067a1fd9e6056f0d47c5e99163a9897702a82cc800f46300062958883617804"
+    "run_id": 38759400030,
+    "artifact_id": 11984618174,
+    "commit": "760df92fe350c36cddc6a10e07fe143534cb1e86",
+    "sha256": "73e0b3f637212a9aecc44e521f184ac4cbe244d64bd051ee5d1246bc6c9bb27a"
   },
   "sdk_header_sha256": "022c40b670f87a066664c37daeb06da525db37fffdf5810e72cff8a5b81e677d",
   "modern_api": 0,
   "host_bridge": true,
   "quickstart": "docs/WINDOWS_LIVE_QUICKSTART.txt",
-  "release_note": "R13 nastavuje natočení, umístění i velikost scény pomocí SDK app_pose/app_scale. Kamera používá SDK polohy přímo v původních souřadnicích Sliceru. Výchozí směr přebírá pohled ve Sliceru při Start. Depth má poloviční šířku i výšku oproti barvě (např. 960 × 540 k barvě 1920 × 1080 pro každé oko). Volba Render resolution 100/75/50 % snižuje skutečnou velikost renderu; barva streamu zůstává v požadovaném rozlišení. Skutečné rozměry jsou viditelné v modulu i logu. Testy v oficiálním Sliceru 5.12.4, GPU resampling a Windows ABI/WGL prošly. Nové FPS a reakci ovládání X/Z ve Visualizeru musí potvrdit test na cílovém PC. Aktualizuj plugin i DLL společně při zavřeném Sliceru.",
+  "release_note": "R14 měří postupný pokles FPS při přepínání Sliceru a Visualizeru. Sekundové souhrny obsahují jednotlivé rozestupy snímků, časy renderu na CPU, aktivní proces a změny SDK kamery. Samostatné vlákno jednou za sekundu čte dostupné NVIDIA NVML údaje: takty, teplotu, vytížení, výkonový stav, důvody omezení taktů a paměť. Nepodporované údaje jsou označené, monitor nečeká na GUI a COLLECT-LOGS.cmd přidává host-system.log. Orientace, app_pose/app_scale, poloviční depth a renderovací pipeline z r13 zůstávají zachované. Jde o diagnostické vydání, ne o potvrzenou opravu poklesu FPS. Windows testy a ověření barvy/CT hloubky v oficiálním Sliceru 5.12.4 prošly. Ponech Render resolution na 50 %, střídej aktivní okno po 20–30 sekundách bez změny pohledu/scény a po 2–3 minutách pošli logy.",
   "host_abi": 2
 }

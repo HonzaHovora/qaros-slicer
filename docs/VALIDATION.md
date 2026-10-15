@@ -9,6 +9,16 @@ about 13 FPS while both-eye Render wall time grew from about 30 to 48 ms.
 Copy costs stayed around 3–4 ms. See [FPS_DIAGNOSTICS.md](FPS_DIAGNOSTICS.md)
 for exact session identification, measurement limits and the r14 experiment.
 R14 changes diagnostics only and retains the accepted r13 native DLL.
+Accepted diagnostic/plugin source: `760df92fe350c36cddc6a10e07fe143534cb1e86`.
+[Slicer 38759400135](https://github.com/HonzaHovora/QAROS_VTK/actions/runs/38759400135)
+and [build/test 38759400030](https://github.com/HonzaHovora/QAROS_VTK/actions/runs/38759400030)
+passed. Windows tests include real foreground-process API calls; NVML behavior
+is tested with a fixture, not a physical NVIDIA GPU. Slicer confirms the added
+read-only sampling and continues to pass color/depth, ROI and desktop restoration.
+Actual NVIDIA telemetry availability/overhead remains a field check.
+R14 starter SHA-256: `f350d4a77458c59fe09a03a7e1ebfb0ffeac2dea8bd47d6a86a4955cac2ce91a`.
+All 75 manifest entries, packaged host Python sources and the unchanged r13
+host DLL hash were verified before publication.
 
 
 ## Live r13: SDK placement and separate depth resolution, 2026-10-15
