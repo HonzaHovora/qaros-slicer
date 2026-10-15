@@ -24,12 +24,12 @@ jobs:
       - name: Download the published and verified starter
         run: |
           mkdir -p downloads
-          gh release download windows-start-2026-10-15-session022c40b6r10 --pattern QAROS_VTK_Windows_session_022c40b6_2026-10-15_r10.zip --dir downloads --clobber
+          gh release download windows-start-2026-10-15-session022c40b6r11 --pattern QAROS_VTK_Windows_session_022c40b6_2026-10-15_r11.zip --dir downloads --clobber
           python3 - <<'PY'
           import hashlib
           from pathlib import Path
-          archive = Path('downloads/QAROS_VTK_Windows_session_022c40b6_2026-10-15_r10.zip')
-          expected = 'cf089ec7aca2e2ae0e7ad8fb34307dc8d3201b0a266fd8a4af0e3e2ec7c558a8'
+          archive = Path('downloads/QAROS_VTK_Windows_session_022c40b6_2026-10-15_r11.zip')
+          expected = 'baa8f803914c62c366e3efe4f1d496e314d0ceb518f65323226b1fae131feb76'
           actual = hashlib.sha256(archive.read_bytes()).hexdigest()
           if actual != expected:
               raise ValueError('Published starter checksum mismatch: ' + actual)
@@ -37,7 +37,7 @@ jobs:
           PY
       - name: Make the starter available through normal GitHub Desktop pull
         run: |
-          git add -- downloads/QAROS_VTK_Windows_session_022c40b6_2026-10-15_r10.zip downloads/QAROS_VTK_Windows_session_022c40b6_2026-10-15_r10.zip.sha256
+          git add -- downloads/QAROS_VTK_Windows_session_022c40b6_2026-10-15_r11.zip downloads/QAROS_VTK_Windows_session_022c40b6_2026-10-15_r11.zip.sha256
           if git diff --cached --quiet; then
             echo "The checked-out starter already matches the release."
             exit 0
