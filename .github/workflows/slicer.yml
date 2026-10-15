@@ -5,6 +5,7 @@ on:
     paths:
       - 'integrations/**'
       - 'tests/slicer_smoke.py'
+      - 'tests/slicer_host_render_smoke.py'
       - 'tests/process_fixture.cpp'
       - 'tests/fixture_support.py'
       - 'scripts/package_plugins.py'
@@ -38,3 +39,5 @@ jobs:
           cmake --build build-fixture --parallel 2
       - name: Discover packaged module and verify surface and process controls
         run: xvfb-run -a env LIBGL_ALWAYS_SOFTWARE=1 QARVTK_TEST_BACKEND="$PWD/build-fixture/qarvtk-process-fixture" build-slicer/Slicer --no-splash --no-main-window --ignore-slicerrc --additional-module-paths "$PWD/package/QAROS-VTK-plugins/slicer" --python-script tests/slicer_smoke.py
+      - name: Render stereo and cropped CT using the live host renderer
+        run: xvfb-run -a env LIBGL_ALWAYS_SOFTWARE=1 build-slicer/Slicer --no-splash --no-main-window --ignore-slicerrc --python-script tests/slicer_host_render_smoke.py
