@@ -2,13 +2,14 @@
 
 Pluginy pro **ParaView a 3D Slicer** a OpenGL přenos do QAROS.
 
-**R11: QAROS Live Renderer čte přímo renderer Sliceru.** Nový modul přebírá GPU
+**R12: QAROS Live Renderer omezuje nadbytečná vykreslení ve Sliceru.** Modul přebírá GPU
 výstup živého 3D pohledu, včetně hostitelských shaderů a ROI ořezu objemu.
 Scénu neexportuje. Windows knihovna nepřidává do Sliceru další VTK ani Qt.
-R10 na cílové RTX 2070 přenos spustila, ale uživatel hlásil asi 10 FPS a jeden
-pád Visualizeru. R11 opravuje opakované převzetí dokončeného snímku a přidává
-měření renderu, kopírování a čekání. Souvislost chyby s pádem Visualizeru ani
-zlepšení FPS zatím nejsou potvrzené.
+R11 naměřila přibližně 141 ms práce na hlavním vlákně pro jeden stereo snímek.
+R12 spojuje barvu a hloubku objemu do jednoho průchodu pro každé oko a zachovává
+desktopové GPU textury bez dalšího renderu. Potlačuje automatické překreslení
+vyvolané dočasnou změnou kamery. U vlastních neověřených renderovacích průchodů
+zůstává doplňkový průchod pro hloubku. Skutečné FPS je potřeba změřit na cílovém PC.
 [Postup pro první test](docs/WINDOWS_LIVE_QUICKSTART.txt).
 
 Dosavadní **QAROS Streaming** používá samostatný renderer r9 a export VTP/VTM;
@@ -31,7 +32,7 @@ QAROS/mixeru/přijímače; podrobnosti jsou v [VALIDATION.md](docs/VALIDATION.md
 Údaj přibližně 44 FPS ve Visualizeru měří jinou část přenosu. Dosažení cíle
 60 FPS ještě není potvrzené. Před rozbalením zavři Slicer i Visualizer;
 cesty k pluginu a senderu zůstávají stejné. Logy lze zabalit pomocí `COLLECT-LOGS.cmd`.
-Samostatné stažení je také v [GitHub Release](https://github.com/HonzaHovora/QAROS_VTK/releases/tag/windows-start-2026-10-15-session022c40b6r11).
+Samostatné stažení je také v [GitHub Release](https://github.com/HonzaHovora/QAROS_VTK/releases/tag/windows-start-2026-10-15-session022c40b6r12).
 Původní [moderní Hub varianta](https://github.com/HonzaHovora/QAROS_VTK/releases/tag/windows-start-2026-10-14)
 zůstává dostupná pro jiné SDK. Každý sender vyžaduje odpovídající kompletní runtime.
 

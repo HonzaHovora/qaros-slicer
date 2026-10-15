@@ -1,10 +1,10 @@
-QAROS Live Renderer — přímý renderer Sliceru, r11
+QAROS Live Renderer — přímý renderer Sliceru, r12
 
 AKTUALIZACE
 
 1. Zastav přenos a zavři Slicer, Visualizer i náhled kostky.
 2. GitHub Desktop → QAROS_VTK / main → Fetch origin → Pull origin.
-3. Spusť D:\QAROS_VTK\START-PREVIEW.cmd. Ověří a rozbalí r11.
+3. Spusť D:\QAROS_VTK\START-PREVIEW.cmd. Ověří a rozbalí r12.
 4. Zavři náhled kostky a otevři Slicer.
 5. Zvol QAROS → QAROS Live Renderer.
 
@@ -40,10 +40,16 @@ Scéna se neexportuje do VTP/VTM. Obraz se nečte do RAM. Knihovna qarvtk-host.d
 neobsahuje další VTK/Qt a používá vlastní sdílené OpenGL kontexty pro kopírování
 a SDK. Původní renderer na monitoru se po každém stereo snímku obnoví.
 
-U CT/MR se barva vezme z normálního hostitelského renderu. Hloubka se získá
-doplňkovým průchodem stejného volume mapperu a spojí se s hloubkou povrchů.
-To má výpočetní náklady. Tento balíček řeší správný zdroj obrazu, nezvyšuje
-prokazatelně FPS. FPS diagnostiku necháváme oddělenou.
+U standardního CT/MR vykreslování ve Sliceru 5.12.4 se barva a hloubka získávají
+společně, jedním vykreslením pro každé oko. Původní desktopové textury se
+uchovají na GPU a vrátí bez dalšího renderu. Dočasné změny kamery nespouštějí
+automatické překreslení Sliceru. Nativní transport a jeho synchronizace jsou
+beze změny; oprava je v Python části pluginu. Rozlišení očí se nesnižuje.
+
+U neověřených vlastních renderovacích průchodů, SSAO, volume depth peelingu
+nebo konfliktního shaderu zůstává původní doplňkový průchod pro hloubku.
+Dvě vykreslení očí stále mají náklady na hlavním vlákně a GPU. Zlepšení FPS na
+tvém PC je potřeba změřit, tato verze neslibuje 60 FPS ani nulový vliv streamu.
 
 První verze ověřuje jeden VTK GPU Composite objem a neprůhledné povrchy.
 ROI ořez je podporovaný. Multi-volume, MIP a průhledné povrchy v kombinaci
@@ -65,13 +71,15 @@ přenos běžet 30 sekund s viditelným Visualizerem, pak dej Stop, počkej na j
 dokončení a spusť COLLECT-LOGS.cmd. Snímání obrazovky není potřeba.
 Každých přibližně 5 sekund se zapíší průměrné časy renderu barvy, hloubky,
 obnovy monitoru, GPU kopírování/synchronizace, čekání na SDK a odeslání.
+R12 přidává počty host_render_calls, volume_depth_passes a
+desktop_restore_render_calls. Standardní stereo snímek má hodnoty 2, 0, 0.
 Jsou to časy volání na CPU včetně čekání, nikoli izolované časy GPU kernelů.
 Nativní kopírování/synchronizace jsou již obsažené v Python copy_call a gui_wait;
 tyto hodnoty se tedy nesčítají dohromady. První okno může obsahovat zahřátí GPU.
 
 JDE O PRVNÍ TESTOVACÍ VYDÁNÍ
 
-Testy v oficiálním Sliceru 5.12.4 ověřují stereo obraz, CT hloubku, nativní
-objekt se shaderem, živý ROI ořez a obnovu stavu i po chybě. Windows build,
+Testy v oficiálním Sliceru 5.12.4 ověřují stereo obraz, CT hloubku, vlastní
+shadery, živý ROI ořez a obnovu stavu i po chybě. Windows build,
 ABI a sdílení OpenGL textur mají samostatné testy. Přenos z živého Sliceru
 přes skutečný SDK runtime na cílové NVIDIA kartě musí potvrdit tento test.

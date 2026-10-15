@@ -67,7 +67,8 @@ def package(native_archive, plugins_archive, output):
             raise ValueError(f'Missing plugin file: {name}')
     if config.get('host_bridge'):
         for name in ('plugins/slicer/QarosLive.py', 'plugins/slicer/QarosVTKLib/qarvtk_host_view.py',
-                     'plugins/slicer/QarosVTKLib/qarvtk_host_runtime.py'):
+                     'plugins/slicer/QarosVTKLib/qarvtk_host_runtime.py',
+                     'plugins/slicer/QarosVTKLib/qarvtk_host_gpu.py'):
             if name not in payload:
                 raise ValueError(f'Missing live host plugin: {name}')
     for target, source in {
@@ -143,8 +144,9 @@ povrchy. ParaView zatím přenáší povrchy. FPS diagnostika z r8 je zachována
 
 Nový modul ve Sliceru čte GPU výstup jeho skutečného 3D pohledu. Scéna se
 neexportuje a nevytváří se náhradní renderer. Barva zůstává výstupem celé
-hostitelské pipeline; pro jeden GPU Composite objem se získává hloubka
-doplňkovým průchodem stejného mapperu. ROI ořez a změny presetu jsou živé.
+hostitelské pipeline. Standardní GPU Composite objem získává barvu i hloubku
+jedním průchodem pro každé oko. Desktopové textury zůstávají zachované;
+kompatibilní doplňkový průchod se použije u neověřených efektů. ROI a presety jsou živé.
 
 Modul: **QAROS → QAROS Live Renderer**. Před instalací zavři Slicer a Visualizer,
 v GitHub Desktop proveď Fetch/Pull a spusť START-PREVIEW.cmd. Po rozbalení zavři
@@ -158,7 +160,7 @@ Windows build/ABI a WGL sdílení textur prošly. Test v oficiálním Sliceru 5.
 ověřuje stereo, shodu barvy, vlastní shader, CT hloubku, ROI a obnovu stavu po
 chybě. **Spojení živého Sliceru s QAROS na cílové NVIDIA kartě je potřeba ověřit.**
 První verze podporuje jeden GPU Composite objem a neprůhledné povrchy.
-Dodatečný hloubkový průchod má náklady; nejde o optimalizaci FPS.
+Dva rendery očí stále mají náklady. Výsledné FPS na cílovém PC zatím nejsou změřené.
 
 - Native build: [{config['native']['commit'][:8]}]({provenance['native_run']})
 - Plugins: [{config['plugins']['commit'][:8]}]({provenance['plugins_run']})

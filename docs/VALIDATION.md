@@ -1,5 +1,60 @@
 # Validation and next work
 
+## Live r11 performance report and r12 optimization, 2026-10-15
+
+`QAROS-VTK-diagnostics-20261015-135746-589.zip` contains a verified r11 run
+with 484 stereo frames, 1920x1080 per eye, a normal stop and no duplicate-frame
+error in that run. Older r10 logs in the same archive are separate runs.
+Weighted stage means: color renders 57.86 ms, supplementary depth renders
+49.17 ms, desktop restoration 28.70 ms, Python frame wall time 141.29 ms.
+The measured stream rate was 5.78 new stereo frames/s. SDK readiness waiting
+averaged 22.82 ms on the worker. Native explicit host/copy synchronization was
+2.63 ms, already included in the Python copy calls; it must not be added again.
+This does not measure GPU waits internal to VTK separately. The user's observed
+7 FPS in the source Slicer is consistent with the long synchronous GUI workload.
+
+R12 changes the host plugin, retaining the accepted r11 native DLL and SDK:
+
+- A scoped addition to the actual volume shader writes first-contributing-sample
+  depth alongside normal host color. No second volume render is needed on the
+  supported standard VTK 9.6 Composite pipeline.
+- The render/display framebuffers borrow reusable eye attachments; the original
+  desktop textures are reattached without rerendering, copying or CPU readback.
+- CTK's automatic camera redraw is disabled only during capture and restored
+  afterwards. This prevents a hidden synchronous extra render on camera
+  restoration. The normal event loop and subsequent user edits remain enabled.
+- Conflicting shaders, custom passes, SSAO, shadows and actual translucent
+  geometry retain the supplementary depth path. Slicer's enabled peeling flags
+  alone do not imply an active peeling pass when all polygonal props are opaque.
+
+[Slicer acceptance 38740811539](https://github.com/HonzaHovora/QAROS_VTK/actions/runs/38740811539)
+passed on source `5e8cc3bcf8e93a51f088bc7203fd2850700da976`, using the official
+Slicer 5.12.4 / VTK 9.6.2 binary under Xvfb/Mesa:
+
+- Exactly two render-window StartEvents, including after queued Qt events.
+- Color within two byte levels of the unmodified host rendering, including
+  custom surface and volume shaders; first-hit depth agrees with VTK's
+  independent RenderToImage result within 2e-5 of normalized depth.
+- Opaque surface occlusion, live ROI cropping and empty/offscreen rays.
+- Exact preservation of desktop color/depth and original texture objects.
+- Changed eye sizes, MSAA 0/4, consumer failure and restoration of the current
+  MRML shader/property-key objects, sampling, camera, size and render enablement.
+- Compatibility fallback for an existing depth override or conflicting shader.
+
+[Build/test 38740812647](https://github.com/HonzaHovora/QAROS_VTK/actions/runs/38740812647)
+passed Linux GPU/core tests, Windows core/runtime tests and ParaView packaging
+on the same source commit. The native DLL is unchanged from accepted r11 build
+38729343448 (SHA-256 `805c01781dec30d1e3d2aac9a8401df50e09a2483b1c256ee967920a3568e50e`).
+R12 ZIP SHA-256: `677c698c2672b88c95cff06ab1ccfc07a13cbccb3e4ec57685fdf2fe8929f128`.
+All packaged file hashes and the packaged host Python files were checked locally.
+
+The standard capture requests two host renders instead of five. Requested
+eye resolution is unchanged. Full-resolution image sampling is used while
+writing volume depth; the original sampling settings are restored afterwards.
+Native synchronization is unchanged. Two eye renders still occupy the GUI/GPU
+thread, so this is not a claim of zero source slowdown, 60 FPS, or a proven
+speedup on the target NVIDIA laptop. That requires a new field run.
+
 ## Live r10 field report and r11 correction, 2026-10-15
 
 `QAROS-VTK-diagnostics-20261015-133345-549.zip` confirms the published r10 host

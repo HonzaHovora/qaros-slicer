@@ -14,15 +14,30 @@ as `QarosLive.py`, `qarvtk_host_view.py` and the VTK/Qt-free `qarvtk-host.dll`.
 The r10 field test reached live streaming on the target NVIDIA/SDK installation,
 but exposed a completed-frame re-acquisition race, about 10 FPS and one reported
 Visualizer exit. R11 corrects lease ownership and instruments live wall times.
+R12 reduces the standard Composite path to one host render per eye, preserves
+desktop framebuffer attachments and suppresses CTK's redundant camera redraws.
 Stable end-to-end operation and the receiver exit remain to be verified; the
 milestone is not yet declared complete. R9 remains a separate snapshot renderer.
 
-The live module uses the original view's resolved display framebuffer. The
-normal full host render supplies color; a supplementary render asks the same
-active GPU volume mapper for its first contributing sample depth. GPU composition
-combines that depth with opaque surfaces without replacing the original color.
-It restores mapper, cullers, camera, dimensions and desktop framebuffer even
-when the consumer raises an error. There is no scene export or CPU image path.
+The live module uses the original view's resolved display framebuffer. On VTK
+9.6's standard Composite pipeline, a scoped shader addition writes the first
+contributing sample to `gl_FragDepth` during the normal color render. The original
+mapper, lighting, transfer functions, crop and compatible shader replacements
+remain in use. Depth writes use VTK's `GLDepthMaskOverride=1`; full-resolution
+image sampling avoids the mapper's separate color-only downsampling FBO. Both
+settings and the original shader/property-key objects are restored afterwards.
+Custom render passes, SSAO, volume depth peeling, existing depth overrides and
+conflicting shader replacements retain the supplementary RenderToImage path.
+That path combines volume and opaque-surface depth on the GPU, preserving color.
+
+For the Qt host, reusable eye textures temporarily replace the attachments of
+the existing render/display framebuffers. The original desktop textures remain
+untouched and are reattached with their original sizes, including after failure.
+No desktop copy or full render is needed. CTK render requests from temporary
+camera changes are disabled within the capture scope; its previous render-enabled
+state is restored before returning to the event loop. No events are processed
+while an eye camera is installed. Other windows/stereo modes retain a desktop
+rerender fallback. There is no scene export or CPU image path.
 
 The native C ABI receives texture names only inside Slicer's process. Two owned
 WGL contexts share host resources: one copies frames, one is reserved for SDK
@@ -30,7 +45,9 @@ graphics callbacks. SDK session/frame control runs on a worker. A frame lease
 holds SDK textures until the GUI thread has copied both eyes and planes; Stop
 cancels pending SDK work and destruction waits for worker shutdown. The bridge
 uses the pinned session SDK and imports no host VTK/Qt classes. Conservative
-`glFinish` calls and the supplementary depth render are correctness baselines.
+`glFinish` calls remain unchanged; removing synchronization needs a separate
+ownership/fence design. R12 changes the Python host capture, not the native SDK
+transport. Two actual eye renders still consume time on the host GUI/GPU thread.
 
 Initial depth scope is one GPU Composite volume with opaque surfaces. ROI
 cropping is live. Multi-volume/MIP and volume plus translucent surfaces fail

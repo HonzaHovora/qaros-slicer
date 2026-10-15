@@ -1,8 +1,8 @@
 {
-  "tag": "windows-start-2026-10-15-session022c40b6r11",
+  "tag": "windows-start-2026-10-15-session022c40b6r12",
   "date": "2026-10-15",
-  "title": "QAROS Live Renderer r11 — frame ownership fix and timing diagnostics",
-  "filename": "QAROS_VTK_Windows_session_022c40b6_2026-10-15_r11.zip",
+  "title": "QAROS Live Renderer r12 — two eye renders and preserved desktop",
+  "filename": "QAROS_VTK_Windows_session_022c40b6_2026-10-15_r12.zip",
   "native": {
     "run_id": 38729343448,
     "artifact_id": 11969827874,
@@ -10,14 +10,14 @@
     "sha256": "ee6479b99d96b61ba92b97d8b7c26d53f51e29d0d0f34faedeab5b3ed83cd58c"
   },
   "plugins": {
-    "run_id": 38729343505,
-    "artifact_id": 11969852442,
-    "commit": "cf96875df48a247fd693b4ad4207b40b52dd59d7",
-    "sha256": "7ece7b125495f1ee8c1ceb140de10fa3a44a880b9417ab85abb865943c72750a"
+    "run_id": 38740812647,
+    "artifact_id": 11975642549,
+    "commit": "5e8cc3bcf8e93a51f088bc7203fd2850700da976",
+    "sha256": "7a7893a9ba4ef12a292642e1b890c4734220bc9d6ff01492ca739689482038f3"
   },
   "sdk_header_sha256": "022c40b670f87a066664c37daeb06da525db37fffdf5810e72cff8a5b81e677d",
   "modern_api": 0,
   "host_bridge": true,
   "quickstart": "docs/WINDOWS_LIVE_QUICKSTART.txt",
-  "release_note": "R11 opravuje závod při převzetí dokončeného snímku (Duplicate host frame plane) a chrání před opakovaným vstupem časovače během renderu. Přidává pětisekundové souhrny časů hostitelského renderování, GPU kopírování/synchronizace a čekání na SDK. COLLECT-LOGS.cmd zahrnuje oba živé logy. Příčina hlášeného pádu Visualizeru ani zrychlení z přibližně 10 FPS zatím nejsou potvrzené."
+  "release_note": "R12 odstraňuje nadbytečná vykreslení na hlavním vlákně Sliceru: u standardního VTK 9.6 Composite objemu získává barvu a hloubku společně, uchovává desktopové GPU textury a potlačuje automatický redraw během dočasné změny kamery. Test v reálném Sliceru 5.12.4 potvrzuje dva rendery na stereo snímek místo pěti, shodu barvy i hloubky, ROI, vlastní shadery a obnovu po chybě. Rozlišení se nesnižuje. Nativní DLL a SDK zůstávají z ověřené r11; změna je v pluginu. Pro neověřené efekty zůstává doplňková hloubková cesta. Výsledné FPS na cílovém NVIDIA PC zatím nejsou změřené."
 }
