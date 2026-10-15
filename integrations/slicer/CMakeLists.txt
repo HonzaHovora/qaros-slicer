@@ -16,6 +16,7 @@ file(MAKE_DIRECTORY ${library_dir})
 file(WRITE ${library_dir}/__init__.py "\"\"\"QAROS support package.\"\"\"\n")
 configure_file(qarvtk_slicer.py ${library_dir}/qarvtk_slicer.py COPYONLY)
 configure_file(qarvtk_host_view.py ${library_dir}/qarvtk_host_view.py COPYONLY)
+configure_file(qarvtk_host_panels.py ${library_dir}/qarvtk_host_panels.py COPYONLY)
 configure_file(qarvtk_host_gpu.py ${library_dir}/qarvtk_host_gpu.py COPYONLY)
 configure_file(qarvtk_host_runtime.py ${library_dir}/qarvtk_host_runtime.py COPYONLY)
 configure_file(qarvtk_host_diagnostics.py ${library_dir}/qarvtk_host_diagnostics.py COPYONLY)
@@ -26,6 +27,7 @@ install(FILES
   ${library_dir}/__init__.py
   ${library_dir}/qarvtk_slicer.py
   ${library_dir}/qarvtk_host_view.py
+  ${library_dir}/qarvtk_host_panels.py
   ${library_dir}/qarvtk_host_gpu.py
   ${library_dir}/qarvtk_host_runtime.py
   ${library_dir}/qarvtk_host_diagnostics.py

@@ -10,7 +10,7 @@ from qarvtk_host_runtime import Placement
 dll = c.CDLL(sys.argv[1])
 dll.qarvtk_host_info.restype = c.c_char_p
 info = json.loads(dll.qarvtk_host_info())
-assert info == dict(host_abi=3, modern_api=0,
+assert info == dict(host_abi=4, modern_api=0,
     header_sha256="022c40b670f87a066664c37daeb06da525db37fffdf5810e72cff8a5b81e677d",
     eye_size=104, frame_size=232, placement_size=112)
 assert c.sizeof(Placement) == 112
@@ -28,4 +28,11 @@ for _ in range(2):
 dll.qarvtk_host_destroy.argtypes = [c.c_void_p]
 dll.qarvtk_host_destroy.restype = c.c_int
 assert dll.qarvtk_host_destroy(None) == 1
+for name in ("create", "capture", "visible", "close", "status"):
+    assert getattr(dll, "qarvtk_host_panel_" + name)
+dll.qarvtk_host_panel_create.argtypes = [c.c_void_p, c.c_char_p] + [c.c_uint32]*2 + [c.c_double]*4 + [c.POINTER(c.c_void_p), c.c_char_p, c.c_uint32]
+panel = c.c_void_p()
+error = c.create_string_buffer(1024)
+assert dll.qarvtk_host_panel_create(None, b"Red", 320, 240, 0., 0., -1.5, .45, c.byref(panel), error, len(error)) == -1
+assert not panel.value and b"No active panel transport" in error.value
 print("PASS: VTK-free DLL loads; ABI metadata; missing host context fails cleanly and can be retried")

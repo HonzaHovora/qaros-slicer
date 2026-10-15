@@ -144,7 +144,7 @@ def library(path):
     dll.qarvtk_host_info.restype = c.c_char_p
     info = json.loads(dll.qarvtk_host_info())
     if (info.get("host_abi"), info.get("header_sha256"), info.get("modern_api"),
-        info.get("eye_size"), info.get("frame_size"), info.get("placement_size")) != (3, EXPECTED_SDK, 0, c.sizeof(Eye), c.sizeof(Frame), c.sizeof(Placement)):
+        info.get("eye_size"), info.get("frame_size"), info.get("placement_size")) != (4, EXPECTED_SDK, 0, c.sizeof(Eye), c.sizeof(Frame), c.sizeof(Placement)):
         raise RuntimeError("Host DLL ABI or SDK fingerprint does not match this plugin")
     signatures = {
         "create": ([c.c_char_p, c.c_char_p, c.c_char_p, c.POINTER(Placement), c.POINTER(c.c_void_p), c.c_char_p, c.c_uint32], c.c_int),
@@ -155,6 +155,12 @@ def library(path):
         "stop": ([c.c_void_p], None),
         "destroy": ([c.c_void_p], c.c_int),
         "status": ([c.c_void_p, c.c_char_p, c.c_uint32], None),
+        "panel_create": ([c.c_void_p, c.c_char_p] + [c.c_uint32]*2 + [c.c_double]*4 +
+                         [c.POINTER(c.c_void_p), c.c_char_p, c.c_uint32], c.c_int),
+        "panel_capture": ([c.c_void_p, c.c_void_p] + [c.c_uint32]*3 + [c.c_char_p, c.c_uint32], c.c_int),
+        "panel_visible": ([c.c_void_p, c.c_void_p, c.c_uint32], c.c_int),
+        "panel_close": ([c.c_void_p, c.c_void_p], None),
+        "panel_status": ([c.c_void_p, c.c_void_p, c.c_char_p, c.c_uint32], None),
     }
     for name, (args, result) in signatures.items():
         function = getattr(dll, "qarvtk_host_" + name)
@@ -180,6 +186,8 @@ class HostTransport:
         self._ticking = False
         self.last_status = "Starting live host transport"
         self.resolution_status = "Waiting for viewer resolution"
+        self.panels = None
+        self.panel_status_text = "Slice previews off"
         self.log_folder = Path(log_folder)
         self.host.window.MakeCurrent()
         error = c.create_string_buffer(2048)
@@ -192,7 +200,7 @@ class HostTransport:
         if result != 0:
             raise RuntimeError(error.value.decode("utf-8", "replace"))
         self.diagnostics = HostTimingLog(self.log_folder)
-        self.diagnostics.event("r16 workspace size follows Slicer scene bounds and SDK placement; "
+        self.diagnostics.event("r17 read-only slice video panels; workspace follows Slicer bounds and SDK placement; "
                                "same-view layout changes preserve streaming; explicit stop reasons; "
                                "one-second frame/focus diagnostics and optional background NVML; "
                                "wall times include existing GPU waits; "
@@ -233,6 +241,33 @@ class HostTransport:
             color.GetHandle(), depth.GetHandle(), vc.GetHandle() if vc else 0,
             vd.GetHandle() if vd else 0, width, height))
 
+    def panel_create(self, name, size, position, width_m):
+        handle, error = c.c_void_p(), c.create_string_buffer(2048)
+        result = self.dll.qarvtk_host_panel_create(self.handle, name.encode("utf-8"), *size,
+            *position, width_m, c.byref(handle), error, len(error))
+        if result != 0:
+            raise RuntimeError(error.value.decode("utf-8", "replace"))
+        return handle
+
+    def panel_capture(self, panel, texture, width, height):
+        error = c.create_string_buffer(2048)
+        result = self.dll.qarvtk_host_panel_capture(self.handle, panel, texture, width, height, error, len(error))
+        if result < 0:
+            raise RuntimeError(error.value.decode("utf-8", "replace"))
+        return bool(result)
+
+    def panel_visible(self, panel, visible):
+        if self.dll.qarvtk_host_panel_visible(self.handle, panel, int(visible)) != 0:
+            raise RuntimeError("Cannot update slice panel visibility")
+
+    def panel_close(self, panel):
+        self.dll.qarvtk_host_panel_close(self.handle, panel)
+
+    def panel_status(self, panel):
+        text = c.create_string_buffer(2048)
+        self.dll.qarvtk_host_panel_status(self.handle, panel, text, len(text))
+        return text.value.decode("utf-8", "replace")
+
     def tick(self):
         # A host observer can enter a nested Qt event loop. Do not let its timer
         # overwrite self.frame or destroy the transport while render is active.
@@ -241,6 +276,17 @@ class HostTransport:
         self._ticking = True
         try:
             self._tick()
+            if getattr(self, "panels", None) and self.running and not self.stopping:
+                try:
+                    self.panels.tick()
+                    self.panel_status_text = self.panels.status
+                except Exception as error:
+                    self.panel_status_text = "Slice previews stopped: " + str(error)
+                    self.diagnostics.event("PANEL_ERROR " + str(error))
+                    self.panels.close()
+                    self.panels = None
+                finally:
+                    self.host.window.MakeCurrent()
         except Exception as error:
             self.diagnostics.event("ERROR: " + str(error))
             self.request_stop("Transport error: " + str(error))
@@ -297,6 +343,9 @@ class HostTransport:
     def request_stop(self, reason="Stop requested"):
         if self.running and not self.stopping:
             self.stopping = True
+            if getattr(self, "panels", None):
+                self.panels.close()
+                self.panels = None
             self.stop_reason = reason
             self.diagnostics.event("STOP_REQUEST " + json.dumps(dict(reason=reason)))
             self.diagnostics.stop_system_monitor()

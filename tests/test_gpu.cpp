@@ -90,5 +90,38 @@ int main(){try{
     std::cout<<"PASS: "<<width<<'x'<<height<<" px, "<<(target==GL_TEXTURE_2D_ARRAY?"2D array":"2D")
       <<", "<<(floatColorDepth?"R32F":"D32F")<<", shared contexts, stereo, depth, alpha, flips and GL state\n";
   }
+  // Mono slice -> bounded staging -> SDK image. Preserve orientation through
+  // both copies, letterbox a resized view, and honour destination view flips.
+  for(GLenum target:{GL_TEXTURE_2D,GL_TEXTURE_2D_ARRAY})for(bool flipped:{false,true}){
+    renderer.make_current();OwnedTextures owned;glGenTextures(4,owned.ids.data());
+    std::vector<unsigned char> pattern(8*4*4);
+    for(unsigned y=0;y<4;++y)for(unsigned x=0;x<8;++x){const auto i=(y*8+x)*4;
+      pattern[i]=y<2?255:0;pattern[i+1]=x<4?51:203;pattern[i+2]=y<2?0:255;pattern[i+3]=255;}
+    for(int i=0;i<3;++i){const auto type=i==2?target:GL_TEXTURE_2D;
+      glBindTexture(type,owned.ids[i]);glTexParameteri(type,GL_TEXTURE_MIN_FILTER,GL_NEAREST);glTexParameteri(type,GL_TEXTURE_MAG_FILTER,GL_NEAREST);
+      if(type==GL_TEXTURE_2D_ARRAY)glTexImage3D(type,0,GL_RGBA8,8,8,1,0,GL_RGBA,GL_UNSIGNED_BYTE,nullptr);
+      else glTexImage2D(type,0,GL_RGBA8,8,i==0?4:8,0,GL_RGBA,GL_UNSIGNED_BYTE,i==0?pattern.data():nullptr);
+    }
+    Frame stage{{{owned.ids[1],8,8,1}},{{Eye::left,Plane::color,0,0,0,8,8,0}}};
+    const unsigned first=flipped?8:0,last=flipped?0:8;
+    Frame output{{{owned.ids[2],8,8,1}},{{Eye::left,Plane::color,0,first,first,last,last,0}}};
+    glClearColor(.1F,.2F,.3F,.4F);glEnable(GL_SCISSOR_TEST);glScissor(0,0,1,1);
+    copy.copy_color({owned.ids[0],0,8,4},stage,false,true);
+    copy.copy_color({owned.ids[1],0,8,8},output,true);copy.finish();
+    GLfloat clear[4]{};glGetFloatv(GL_COLOR_CLEAR_VALUE,clear);
+    check(std::abs(clear[0]-.1F)<1e-6&&glIsEnabled(GL_SCISSOR_TEST),"Panel copy changed host GL state");
+    glDisable(GL_SCISSOR_TEST);
+    std::vector<unsigned char> result(8*8*4);
+    glBindTexture(target,owned.ids[2]);glGetTexImage(target,0,GL_RGBA,GL_UNSIGNED_BYTE,result.data());
+    for(unsigned y=0;y<8;++y)for(unsigned x=0;x<8;++x){
+      const auto expected_x=flipped?7-x:x,expected_y=flipped?7-y:y;
+      const auto i=(y*8+x)*4;
+      if(expected_y<2||expected_y>=6)check(result[i]==0&&result[i+1]==0&&result[i+2]==0&&result[i+3]==255,"Panel padding is not black");
+      else {const auto src=((5-expected_y)*8+expected_x)*4;
+        for(unsigned channel=0;channel<4;++channel)check(result[i+channel]==pattern[src+channel],"Panel mono orientation/flip changed");}
+    }
+    check(glGetError()==GL_NO_ERROR,"Panel GPU copy left an OpenGL error");
+  }
+  std::cout<<"PASS: mono panel GPU staging/upload, letterbox, single vertical conversion, SDK flips and GL state\n";
   return 0;
 }catch(const std::exception&e){std::cerr<<"ERROR: "<<e.what()<<'\n';return 1;}}

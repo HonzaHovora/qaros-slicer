@@ -43,12 +43,29 @@ class FakeDll:
 
 class HostRuntimeTest(unittest.TestCase):
     def test_old_placement_abi_is_rejected_before_binding_create(self):
-        old_info = dict(host_abi=2, header_sha256=EXPECTED_SDK, modern_api=0,
-                        eye_size=104, frame_size=232, placement_size=64)
-        old_dll = type("OldDll", (), {"qarvtk_host_info": staticmethod(lambda: json.dumps(old_info).encode())})()
-        with patch("qarvtk_host_runtime.c.CDLL", return_value=old_dll):
-            with self.assertRaisesRegex(RuntimeError, "ABI or SDK fingerprint"):
-                library("old-host.dll")
+        for abi, size in ((2, 64), (3, 112)):
+            old_info = dict(host_abi=abi, header_sha256=EXPECTED_SDK, modern_api=0,
+                            eye_size=104, frame_size=232, placement_size=size)
+            old_dll = type("OldDll", (), {"qarvtk_host_info": staticmethod(lambda: json.dumps(old_info).encode())})()
+            with patch("qarvtk_host_runtime.c.CDLL", return_value=old_dll):
+                with self.assertRaisesRegex(RuntimeError, "ABI or SDK fingerprint"):
+                    library("old-host.dll")
+
+    def test_preview_failure_preserves_stereo_and_restores_context(self):
+        with tempfile.TemporaryDirectory() as folder:
+            events = []
+            t = self.transport(folder, lambda *args, **kwargs: None)
+            t.host.window = type("Window", (), {"MakeCurrent": lambda self: events.append("context")})()
+            def fail(): raise RuntimeError("Preview-only failure")
+            t.panels = type("Panels", (), {"tick": staticmethod(fail), "close": staticmethod(lambda: events.append("closed"))})()
+            t.tick()
+            self.assertEqual(t.dll.finished, [1])
+            self.assertFalse(t.stopping)
+            self.assertIsNone(t.panels)
+            self.assertEqual(events, ["closed", "context"])
+            t.tick()
+            self.assertEqual(t.dll.finished, [1, 2])
+            t.request_stop()
 
     def transport(self, folder, render):
         # Bypass Windows/SDK creation; exercise the actual poll/render/finish

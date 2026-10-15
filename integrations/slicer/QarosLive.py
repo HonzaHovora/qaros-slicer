@@ -12,10 +12,12 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 if (Path(__file__).resolve().parent / "QarosVTKLib").is_dir():
     from QarosVTKLib.qarvtk_host_view import HostView
     from QarosVTKLib.qarvtk_host_runtime import HostTransport
+    from QarosVTKLib.qarvtk_host_panels import SlicePanels
     from QarosVTKLib.qarvtk_runtime import user_directory
 else:
     from qarvtk_host_view import HostView
     from qarvtk_host_runtime import HostTransport
+    from qarvtk_host_panels import SlicePanels
     sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
     from qarvtk_runtime import user_directory
 
@@ -50,6 +52,18 @@ class QarosLiveWidget(ScriptedLoadableModuleWidget):
         self.matchView = qt.QCheckBox("Use Slicer viewing direction at Start")
         self.matchView.checked = True
         form.addRow(self.matchView)
+        self.slicePreviews = qt.QCheckBox("Show slice views as panels (preview only)")
+        self.slicePreviews.checked = True
+        self.slicePreviews.toolTip = "Live images of visible slice views, including video/sequences. No remote interaction. Applied at Start."
+        form.addRow(self.slicePreviews)
+        self.sliceFps = qt.QComboBox()
+        self.sliceFps.addItems(["5", "10", "15", "30"])
+        self.sliceFps.currentIndex = 2
+        self.sliceFps.toolTip = "Maximum updates per second per slice. Newest frame wins if the sender cannot keep up."
+        form.addRow("Slice preview FPS limit", self.sliceFps)
+        self.panelStatus = qt.QLabel("Slice previews start with streaming.")
+        self.panelStatus.wordWrap = True
+        form.addRow(self.panelStatus)
         self.workspaceStatus = qt.QLabel("Dimensions follow the visible scene at Start.")
         self.workspaceStatus.wordWrap = True
         form.addRow("Workspace", self.workspaceStatus)
@@ -116,6 +130,9 @@ class QarosLiveWidget(ScriptedLoadableModuleWidget):
             folder = user_directory() / "live-logs" / datetime.now().strftime("%Y%m%d-%H%M%S-%f")
             self.transport = HostTransport(self.dll.currentPath, self.sdk.currentPath,
                                             self.target.currentText, folder, host)
+            if self.slicePreviews.checked:
+                self.transport.panels = SlicePanels(lm, self.transport, host.workspace_position,
+                                                   host.workspace_size, fps=int(self.sliceFps.currentText))
             self.workspaceStatus.text = " × ".join(f"{x * 100:.1f}" for x in host.workspace_size) + " cm (width × height × depth)"
             self.settings.setValue("QAROS_LIVE/Dll", self.dll.currentPath)
             self.settings.setValue("QAROS_VTK/Sdk", self.sdk.currentPath)
@@ -161,6 +178,7 @@ class QarosLiveWidget(ScriptedLoadableModuleWidget):
                 if not self.cleaned_up:
                     self.status.text = self.transport.status()
                     self.resolutionStatus.text = self.transport.resolution_status
+                    self.panelStatus.text = getattr(self.transport, "panel_status_text", "Slice previews off")
             except Exception as error:
                 self.transport.request_stop("GUI error: " + str(error))
                 if not self.cleaned_up:
@@ -168,7 +186,7 @@ class QarosLiveWidget(ScriptedLoadableModuleWidget):
             if not self.cleaned_up:
                 self.startButton.enabled = not self.transport.running
                 self.stopButton.enabled = self.transport.running and not self.transport.stopping
-                for control in (self.fit, self.matchView, self.renderScale):
+                for control in (self.fit, self.matchView, self.renderScale, self.slicePreviews, self.sliceFps):
                     control.enabled = not self.transport.running
         if self.cleaned_up and (not self.transport or not self.transport.running):
             self.timer.stop()

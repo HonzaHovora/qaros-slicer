@@ -1,6 +1,7 @@
 #include "qarvtk/gl.hpp"
 #include "qarvtk/host_bridge.h"
 #include "qarvtk/host_frame_lease.hpp"
+#include "qarvtk/host_panels.hpp"
 #include "qarvtk/host_wgl.hpp"
 #include "qarvtk/gl_copy.hpp"
 #include "qarvtk/gl_composite.hpp"
@@ -96,6 +97,7 @@ struct QarvtkHost {
   std::unique_ptr<qarvtk::GlCopy> copier;
   std::unique_ptr<qarvtk::GlComposite> compositor;
   std::unique_ptr<qarvtk::WglCallbacks> callbacks;
+  std::unique_ptr<qarvtk::HostPanels> panels;
   QarGraphicsDeviceId adapter=qar_graphics_device_id_default();
   std::thread worker;
   std::mutex mutex,cancel_mutex;
@@ -135,6 +137,7 @@ struct QarvtkHost {
   }
   void stop(){
     gui();stopping=true;
+    if(panels)panels->request_stop();
     {std::lock_guard<std::mutex> lock(mutex);lease.cancel();log_line("Stop requested by GUI");}
     condition.notify_all();
     std::lock_guard<std::mutex> lock(cancel_mutex);
@@ -169,6 +172,7 @@ struct QarvtkHost {
     callbacks=std::make_unique<qarvtk::WglCallbacks>(graphics->dc,graphics->context);
     const auto probe=callbacks->probe_on_worker();
     if(!probe.get_string_i||!probe.memory_import)throw std::runtime_error("Shared SDK context lacks required OpenGL interop functions");
+    panels=std::make_unique<qarvtk::HostPanels>([this](const std::string& text){note(text);});
     worker=std::thread([this]{run();});
   }
   void run() noexcept;
@@ -212,6 +216,8 @@ struct Session {
   qarvtk::LegacyPeerObserver peers;
   explicit Session(QarvtkHost& h):host(h){}
   ~Session(){
+    // Panel video uses this session concurrently, but never outlives it.
+    if(host.panels){host.panels->request_stop();host.panels->join();}
     if(subscription)qar_cancel_token_cancel(subscription);
     if(sender)qar_render_stream_handle_destroy(sender);
     if(volume_created)qar_app_volumes_close_volume(session,&volume);
@@ -293,6 +299,7 @@ struct Session {
     const auto reduced=qarvtk::half_depth_layout(current);
     checked(qar_render_sender_change_layout(sender,&reduced),"set half-resolution depth layout");
     host.note("App placement uses SDK app_pose/app_scale; depth requested at half color width and height");
+    if(!host.stopping)host.panels->start(session,peer);
     host.set_status("Waiting for the viewer's first pose");host.pause(std::chrono::milliseconds(1200));
   }
 };
@@ -379,7 +386,7 @@ void QarvtkHost::run() noexcept {
 
 extern "C" {
 const char* qarvtk_host_info(){
-  return "{\"host_abi\":3,\"modern_api\":0,\"header_sha256\":\"" QARVTK_HOST_SDK_HASH "\",\"eye_size\":104,\"frame_size\":232,\"placement_size\":112}";
+  return "{\"host_abi\":4,\"modern_api\":0,\"header_sha256\":\"" QARVTK_HOST_SDK_HASH "\",\"eye_size\":104,\"frame_size\":232,\"placement_size\":112}";
 }
 int qarvtk_host_create(const char* sdk,const char* target,const char* folder,const QarvtkHostPlacement* placement,
                       QarvtkHost** result,char* error,uint32_t size){
@@ -429,6 +436,32 @@ int qarvtk_host_destroy(QarvtkHost* h){
 void qarvtk_host_status(QarvtkHost* h,char* text,uint32_t size){
   if(!h){message(text,size,"Stopped");return;}
   std::lock_guard<std::mutex> lock(h->mutex);message(text,size,h->status);
+}
+int qarvtk_host_panel_create(QarvtkHost* h,const char* name,uint32_t w,uint32_t height,
+    double x,double y,double z,double width_meters,QarvtkHostPanel** out,char* error,uint32_t size){
+  if(out)*out=nullptr;
+  try{
+    if(!h||!out||!h->panels||h->stopping)throw std::invalid_argument("No active panel transport");
+    *out=reinterpret_cast<QarvtkHostPanel*>(h->panels->create(name,w,height,x,y,z,width_meters));return 0;
+  }catch(const std::exception& e){message(error,size,e.what());return -1;}
+}
+int qarvtk_host_panel_capture(QarvtkHost* h,QarvtkHostPanel* p,uint32_t color,uint32_t w,uint32_t height,char* error,uint32_t size){
+  try{
+    if(!h||!h->panels)throw std::invalid_argument("No active panel transport");
+    if(h->stopping)return 0;
+    return h->panels->capture(reinterpret_cast<qarvtk::HostPanel*>(p),color,w,height);
+  }catch(const std::exception& e){message(error,size,e.what());return -1;}
+}
+int qarvtk_host_panel_visible(QarvtkHost* h,QarvtkHostPanel* p,uint32_t visible){
+  try{if(!h||!h->panels)return -1;h->panels->visible(reinterpret_cast<qarvtk::HostPanel*>(p),visible!=0);return 0;}
+  catch(...){return -1;}
+}
+void qarvtk_host_panel_close(QarvtkHost* h,QarvtkHostPanel* p){
+  if(h&&h->panels)try{h->panels->close(reinterpret_cast<qarvtk::HostPanel*>(p));}catch(...){}
+}
+void qarvtk_host_panel_status(QarvtkHost* h,QarvtkHostPanel* p,char* text,uint32_t size){
+  try{message(text,size,h&&h->panels?h->panels->status(reinterpret_cast<qarvtk::HostPanel*>(p)):"Stopped");}
+  catch(const std::exception& e){message(text,size,e.what());}
 }
 }
 static_assert(sizeof(QarvtkHostEye)==104&&sizeof(QarvtkHostFrame)==232&&sizeof(QarvtkHostPlacement)==112,"Unexpected host C ABI packing");

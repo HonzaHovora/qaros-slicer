@@ -10,6 +10,7 @@ extern "C" {
 #endif
 
 typedef struct QarvtkHost QarvtkHost;
+typedef struct QarvtkHostPanel QarvtkHostPanel;
 typedef struct QarvtkHostPlacement {
   double position[3], orientation[4], app_scale; /* app_pose in volume metres */
   double workspace_size[3]; /* full extents along volume X/Y/Z, in metres */
@@ -25,7 +26,7 @@ typedef struct QarvtkHostFrame {
   double near_plane, far_plane; /* app coordinates, also reported to SDK show_frame */
 } QarvtkHostFrame;
 
-/* ABI 3, Windows x64/session SDK only. All calls are on the creating GUI thread.
+/* ABI 4, Windows x64/session SDK only. All calls are on the creating GUI thread.
    poll: 0 waiting, 1 frame leased, 2 stopped, -1 error (message via status).
    Stop is asynchronous; destroy returns 0 until the worker is finished.
    No borrowed GPU texture survives color/depth returning. SDK frame ownership
@@ -43,6 +44,18 @@ QARVTK_HOST_API int qarvtk_host_finish(QarvtkHost*,uint64_t serial);
 QARVTK_HOST_API void qarvtk_host_stop(QarvtkHost*);
 QARVTK_HOST_API int qarvtk_host_destroy(QarvtkHost*);
 QARVTK_HOST_API void qarvtk_host_status(QarvtkHost*,char* text,uint32_t size);
+
+/* Read-only mono previews. Create/capture with the source slice GL context
+   current. Capture returns 1 copied, 0 busy/hidden/stopping, -1 panel error;
+   it never waits for the SDK receiver and never stops the stereo stream.
+   Close retires the panel; its opaque handle expires when host is destroyed. */
+QARVTK_HOST_API int qarvtk_host_panel_create(QarvtkHost*,const char* name,uint32_t width,uint32_t height,
+    double x,double y,double z,double width_meters,QarvtkHostPanel**,char* error,uint32_t error_size);
+QARVTK_HOST_API int qarvtk_host_panel_capture(QarvtkHost*,QarvtkHostPanel*,uint32_t color,uint32_t width,uint32_t height,
+    char* error,uint32_t error_size);
+QARVTK_HOST_API int qarvtk_host_panel_visible(QarvtkHost*,QarvtkHostPanel*,uint32_t visible);
+QARVTK_HOST_API void qarvtk_host_panel_close(QarvtkHost*,QarvtkHostPanel*);
+QARVTK_HOST_API void qarvtk_host_panel_status(QarvtkHost*,QarvtkHostPanel*,char* text,uint32_t size);
 
 #ifdef __cplusplus
 }
