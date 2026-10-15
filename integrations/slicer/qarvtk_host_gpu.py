@@ -108,8 +108,15 @@ def single_pass_supported(renderer, volume):
     if (vtk.vtkVersion.GetVTKMajorVersion(), vtk.vtkVersion.GetVTKMinorVersion()) != (9, 6):
         return False
     mapper = volume.GetMapper()
-    if (renderer.GetPass() or renderer.GetUseDepthPeelingForVolumes() or renderer.GetUseSSAO()
+    if (renderer.GetPass() or renderer.GetUseSSAO() or renderer.GetUseShadows()
             or mapper.GetUseDepthPass()):
+        return False
+    # Slicer enables peeling by default, but VTK only runs the peeling pass
+    # when a visible prop actually has translucent polygonal geometry. The
+    # standard single-volume + opaque-surface path does not enter that pass.
+    props = renderer.GetViewProps()
+    if any(p.GetVisibility() and p.HasTranslucentPolygonalGeometry()
+           for p in (props.GetItemAsObject(i) for i in range(props.GetNumberOfItems()))):
         return False
     keys = volume.GetPropertyKeys()
     key = vtk.vtkOpenGLActor.GLDepthMaskOverride()
