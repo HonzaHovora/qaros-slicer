@@ -242,6 +242,9 @@ def run():
     class Broken(Oracle):
         def depth(self, *args):
             raise RuntimeError("injected consumer failure")
+    # ROI/MRML updates are allowed to replace property objects. Restore the
+    # current host state at entry, not the fixture's pre-ROI objects.
+    before_error_shader, before_error_keys = volume.GetShaderProperty(), volume.GetPropertyKeys()
     try:
         host.render(eyes, Broken())
         raise AssertionError("Consumer failure did not propagate")
@@ -252,7 +255,9 @@ def run():
     assert tuple(host.renderer.GetCullers()) == original_cullers
     assert (mapper.GetRenderToImage(), mapper.GetImageSampleDistance(),
             mapper.GetAutoAdjustSampleDistances(), mapper.GetDepthImageScalarType()) == old_mapper
-    assert volume.GetShaderProperty() == original_shader and volume.GetPropertyKeys() == original_keys
+    assert volume.GetShaderProperty() == before_error_shader, "Error changed the host shader object"
+    assert volume.GetPropertyKeys() == before_error_keys, "Error changed the host property keys"
+    assert view.renderEnabled, "Error left Slicer rendering disabled"
 
     # Reuse the private attachments with different eye sizes and with MSAA.
     # Both desktop textures and their content must survive, including errors.
