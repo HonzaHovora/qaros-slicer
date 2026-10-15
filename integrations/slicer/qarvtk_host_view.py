@@ -70,6 +70,7 @@ class HostView:
     def __init__(self, view, fit=True, match_view=True, render_scale=1.):
         self.view = view
         self.window = view.renderWindow()
+        self.context_creation_time = self.window.GetContextCreationTime()
         self.renderer = view.renderWindow().GetRenderers().GetFirstRenderer()
         self.camera = self.renderer.GetActiveCamera()
         if not math.isfinite(render_scale) or not .25 <= render_scale <= 1.:
@@ -114,6 +115,16 @@ class HostView:
 
     def close(self):
         self.desktop.close()
+
+    def validate_source(self):
+        if self.view.renderWindow() != self.window:
+            raise RuntimeError("The Slicer render window changed; restart live streaming")
+        if self.window.GetContextCreationTime() != self.context_creation_time:
+            raise RuntimeError("The Slicer OpenGL context changed; restart live streaming")
+        if self.window.GetRenderers().GetFirstRenderer() != self.renderer:
+            raise RuntimeError("The Slicer renderer changed; restart live streaming")
+        if self.renderer.GetActiveCamera() != self.camera:
+            raise RuntimeError("The Slicer view camera changed; restart live streaming")
 
     def volume(self):
         volumes = [v for v in _items(self.renderer.GetVolumes()) if v.GetVisibility()]
@@ -160,8 +171,7 @@ class HostView:
     def _frame_state(self):
         if self._busy:
             raise RuntimeError("Reentrant host rendering is not supported")
-        if self.renderer.GetActiveCamera() != self.camera:
-            raise RuntimeError("The Slicer view camera changed; restart live streaming")
+        self.validate_source()
         self._busy = True
         window = self.window
         saved_camera = vtk.vtkCamera()

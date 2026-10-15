@@ -327,6 +327,77 @@ def run():
     print("HOST render counts: synchronous", synchronous_count,
           "after queued Qt events", len(render_events), flush=True)
     window.RemoveObserver(render_observer)
+
+    # Exercise the connected layout signal, not just its handler. The previous
+    # plugin stopped a live stream on every signal, including same-view maximize.
+    class LayoutTransport:
+        running, stopping = True, False
+        resolution_status = "layout test"
+        def __init__(self):
+            self.host = host
+            self.events, self.reasons = [], []
+            self.diagnostics = self
+        def event(self, message):
+            self.events.append(message)
+        def request_stop(self, reason):
+            self.reasons.append(reason)
+            self.stopping = True
+        def tick(self):
+            pass
+        def status(self):
+            return "layout test"
+
+    transport = LayoutTransport()
+    live_widget.transport = transport
+    lm = slicer.app.layoutManager()
+    main_window = slicer.util.mainWindow()
+    try:
+        reference = Oracle()
+        host.render(eyes, reference)
+        for label, change in (
+                ("four-up", lambda: lm.setLayout(slicer.vtkMRMLLayoutNode.SlicerLayoutFourUpView)),
+                ("maximize 3D", lambda: lm.addMaximizedViewNode(view.mrmlViewNode())),
+                ("restore 3D", lm.removeAllMaximizedViewNodes),
+                ("one-up 3D", lambda: lm.setLayout(slicer.vtkMRMLLayoutNode.SlicerLayoutOneUp3DView)),
+                ("application fullscreen", main_window.showFullScreen),
+                ("application normal", main_window.showNormal)):
+            change()
+            slicer.app.processEvents()
+            window.Render()
+            assert not transport.reasons, (label, transport.reasons)
+            assert lm.threeDWidget(0).threeDView() == view
+            host.validate_source()
+            before_color, before_depth = pixels(window), depths(window)
+            captured = Oracle()
+            host.render(eyes, captured)
+            assert host.last_timings["host_render_calls"] == 2, label
+            assert np.array_equal(pixels(window), before_color), label
+            assert np.array_equal(depths(window), before_depth), label
+            for a, b in zip(captured.colors, reference.colors):
+                assert np.max(np.abs(a.astype(int)-b.astype(int))) <= 2, label
+            for a, b in zip(captured.depths, reference.depths):
+                assert np.max(np.abs(a-b)) < 2e-5, label
+        assert len(transport.events) >= 4, transport.events
+        lm.setLayout(slicer.vtkMRMLLayoutNode.SlicerLayoutOneUpRedSliceView)
+        slicer.app.processEvents()
+        assert transport.stopping and len(transport.reasons) == 1
+        assert "source 3D view" in transport.reasons[0], transport.reasons
+        print("PASS: same-view layout/maximize/fullscreen preserves stereo and desktop; removed source stops explicitly", flush=True)
+    finally:
+        live_widget.transport = None
+        lm.setLayout(slicer.vtkMRMLLayoutNode.SlicerLayoutOneUp3DView)
+        slicer.app.processEvents()
+
+    # A recreated context must be rejected before borrowing cached attachments.
+    context_stamp = host.context_creation_time
+    host.context_creation_time = -1
+    try:
+        host.render(eyes, Oracle())
+        raise AssertionError("Changed context was accepted")
+    except RuntimeError as error:
+        assert "OpenGL context changed" in str(error), str(error)
+    finally:
+        host.context_creation_time = context_stamp
     host.close()
     print("PASS: two renders per stereo frame; single-pass CT depth matches VTK; exact desktop texture preservation; "
           "host-only shader/actor and occlusion; ROI; offscreen rays; MSAA/eye resize/error restoration", flush=True)

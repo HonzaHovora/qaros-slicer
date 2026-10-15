@@ -99,6 +99,21 @@ class HostRuntimeTest(unittest.TestCase):
             self.assertFalse(t.running)
             self.assertIn("render cancelled by observer", Path(folder, "host-python.log").read_text())
 
+    def test_first_stop_reason_survives_repeated_stop_and_worker_shutdown(self):
+        with tempfile.TemporaryDirectory() as folder:
+            t = self.transport(folder, lambda *args, **kwargs: None)
+            t.request_stop("Slicer scene closing")
+            t.request_stop("Module cleanup or application exit")
+            self.assertIn("Slicer scene closing", t.status())
+            t.tick()
+            self.assertFalse(t.running)
+            self.assertIn("Slicer scene closing", t.status())
+            self.assertEqual(t.dll.stops, 1)
+            events = [json.loads(line.split("STOP_REQUEST ")[1])
+                      for line in Path(folder, "host-python.log").read_text().splitlines()
+                      if "STOP_REQUEST " in line]
+            self.assertEqual(events, [{"reason": "Slicer scene closing"}])
+
 
 if __name__ == "__main__":
     unittest.main()

@@ -1,6 +1,7 @@
 """Experimental direct streaming of Slicer's own render window."""
 from datetime import datetime
 from pathlib import Path
+import json
 import sys
 import qt
 import ctk
@@ -84,10 +85,10 @@ class QarosLiveWidget(ScriptedLoadableModuleWidget):
         self.timer.setInterval(5)
         self.timer.connect("timeout()", self.tick)
         self.timer.start()
-        self.scene_observer = slicer.mrmlScene.AddObserver(slicer.mrmlScene.StartCloseEvent, self.stop_stream)
+        self.scene_observer = slicer.mrmlScene.AddObserver(slicer.mrmlScene.StartCloseEvent, self.scene_closing)
         self.layout_manager = slicer.app.layoutManager()
         if self.layout_manager:
-            self.layout_manager.connect("layoutChanged(int)", self.stop_stream)
+            self.layout_manager.connect("layoutChanged(int)", self.layout_changed)
         slicer.app.connect("aboutToQuit()", self.cleanup)
         self.layout.addStretch(1)
 
@@ -122,7 +123,30 @@ class QarosLiveWidget(ScriptedLoadableModuleWidget):
 
     def stop_stream(self, *args):
         if self.transport:
-            self.transport.request_stop()
+            self.transport.request_stop("Stop button")
+
+    def scene_closing(self, *args):
+        if self.transport:
+            self.transport.request_stop("Slicer scene closing")
+
+    def layout_changed(self, layout):
+        transport = self.transport
+        if not transport or not transport.running or transport.stopping:
+            return
+        try:
+            # Slicer emits layoutChanged even when maximizing the same view.
+            # Continue using that view; never silently switch the source.
+            widget = self.layout_manager.threeDWidget(0)
+            if not widget or widget.threeDView() != transport.host.view:
+                raise RuntimeError("The source 3D view was replaced")
+            if not widget.mrmlViewNode().GetMappedInLayout():
+                raise RuntimeError("The source 3D view was removed from the layout")
+            transport.host.validate_source()
+        except Exception as error:
+            transport.request_stop("Slicer layout changed: " + str(error))
+            return
+        transport.diagnostics.event("LAYOUT_CHANGED " + json.dumps(dict(
+            layout=int(layout), action="continue", desktop_size=list(transport.host.window.GetSize()))))
 
     def tick(self):
         if self.transport:
@@ -132,7 +156,7 @@ class QarosLiveWidget(ScriptedLoadableModuleWidget):
                     self.status.text = self.transport.status()
                     self.resolutionStatus.text = self.transport.resolution_status
             except Exception as error:
-                self.transport.request_stop()
+                self.transport.request_stop("GUI error: " + str(error))
                 if not self.cleaned_up:
                     self.status.text = str(error)
             if not self.cleaned_up:
@@ -149,8 +173,9 @@ class QarosLiveWidget(ScriptedLoadableModuleWidget):
         if self.cleaned_up:
             return
         self.cleaned_up = True
-        self.stop_stream()
+        if self.transport:
+            self.transport.request_stop("Module cleanup or application exit")
         slicer.mrmlScene.RemoveObserver(self.scene_observer)
         if self.layout_manager:
-            self.layout_manager.disconnect("layoutChanged(int)", self.stop_stream)
+            self.layout_manager.disconnect("layoutChanged(int)", self.layout_changed)
         slicer.app.disconnect("aboutToQuit()", self.cleanup)

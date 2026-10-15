@@ -175,6 +175,7 @@ class HostTransport:
         self.handle = c.c_void_p()
         self.frame = Frame()
         self.stopping = False
+        self.stop_reason = None
         self._ticking = False
         self.last_status = "Starting live host transport"
         self.resolution_status = "Waiting for viewer resolution"
@@ -188,7 +189,8 @@ class HostTransport:
         if result != 0:
             raise RuntimeError(error.value.decode("utf-8", "replace"))
         self.diagnostics = HostTimingLog(self.log_folder)
-        self.diagnostics.event("r14 one-second frame/focus diagnostics and optional background NVML; "
+        self.diagnostics.event("r15 preserves streaming across same-view layout changes; explicit stop reasons; "
+                               "one-second frame/focus diagnostics and optional background NVML; "
                                "wall times include existing GPU waits; "
                                "native copy/sync timings overlap Python copy calls")
         self.diagnostics.event("SAMPLE_COLUMNS " + json.dumps([
@@ -208,6 +210,8 @@ class HostTransport:
             text = c.create_string_buffer(2048)
             self.dll.qarvtk_host_status(self.handle, text, len(text))
             self.last_status = text.value.decode("utf-8", "replace")
+            if self.stopping:
+                return "Stopping (" + self.stop_reason + "). " + self.last_status
         return self.last_status
 
     def _check(self, result):
@@ -233,7 +237,7 @@ class HostTransport:
             self._tick()
         except Exception as error:
             self.diagnostics.event("ERROR: " + str(error))
-            self.request_stop()
+            self.request_stop("Transport error: " + str(error))
             raise
         finally:
             self._ticking = False
@@ -246,17 +250,17 @@ class HostTransport:
             if self.dll.qarvtk_host_destroy(self.handle):
                 self.handle = c.c_void_p()
                 self.host.close()
-                self.last_status = "Stopped. " + self.last_status
+                self.last_status = "Stopped (" + self.stop_reason + "). " + self.last_status
                 self.diagnostics.flush(force=True)
                 self.diagnostics.event(self.last_status)
             return
         result = self.dll.qarvtk_host_poll(self.handle, c.byref(self.frame))
         if result < 0:
             error = self.status()
-            self.request_stop()
+            self.request_stop("SDK error: " + error)
             raise RuntimeError(error)
         if result == 2:
-            self.request_stop()
+            self.request_stop("SDK session ended")
             return
         if result == 0:
             return
@@ -280,14 +284,15 @@ class HostTransport:
                 "; stream color " + sizes([eye["size"] for eye in eyes]) +
                 "; depth " + sizes([eye["depth_size"] for eye in eyes]) +
                 "; Slicer " + " x ".join(map(str, self.host.last_desktop_size)))
-        except Exception:
-            self.request_stop()
+        except Exception as error:
+            self.request_stop("Frame error: " + str(error))
             raise
 
-    def request_stop(self):
+    def request_stop(self, reason="Stop requested"):
         if self.running and not self.stopping:
             self.stopping = True
+            self.stop_reason = reason
+            self.diagnostics.event("STOP_REQUEST " + json.dumps(dict(reason=reason)))
             self.diagnostics.stop_system_monitor()
             self.dll.qarvtk_host_stop(self.handle)
             self.diagnostics.flush(force=True)
-            self.diagnostics.event("Stop requested")
