@@ -15,6 +15,7 @@ def package(output):
         "slicer/QarosVTK.py": "integrations/slicer/QarosVTK.py",
         "slicer/QarosLive.py": "integrations/slicer/QarosLive.py",
         "slicer/QarosVTKLib/qarvtk_host_view.py": "integrations/slicer/qarvtk_host_view.py",
+        "slicer/QarosVTKLib/qarvtk_host_gpu.py": "integrations/slicer/qarvtk_host_gpu.py",
         "slicer/QarosVTKLib/qarvtk_host_runtime.py": "integrations/slicer/qarvtk_host_runtime.py",
         "slicer/QarosVTKLib/qarvtk_slicer.py": "integrations/slicer/qarvtk_slicer.py",
         "slicer/QarosVTKLib/qarvtk_scene.py": "integrations/qarvtk_scene.py",

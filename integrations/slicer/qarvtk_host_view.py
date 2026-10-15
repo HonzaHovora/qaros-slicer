@@ -5,9 +5,11 @@ are borrowed from the host context, not handles that can be sent to a process.
 """
 import math
 from time import perf_counter
-from contextlib import contextmanager
+from contextlib import contextmanager, nullcontext
 
 import vtk
+
+from .qarvtk_host_gpu import DesktopTextures, single_pass_supported, volume_depth
 
 
 def _items(collection):
@@ -54,6 +56,7 @@ class HostView:
         self.camera = self.renderer.GetActiveCamera()
         self._busy = False
         self.last_timings = {}
+        self.desktop = DesktopTextures(self.window)
         self.scale = .001
         self.center = (0., 0., 0.)
         # Placement is fixed at Start. Live changes never unexpectedly refit it.
@@ -70,6 +73,9 @@ class HostView:
             if not hasattr(self.window, method):
                 raise RuntimeError("This Slicer render window lacks " + method)
         self.volume()  # Fail before connecting if the depth path cannot handle this view.
+
+    def close(self):
+        self.desktop.close()
 
     def volume(self):
         volumes = [v for v in _items(self.renderer.GetVolumes()) if v.GetVisibility()]
@@ -130,7 +136,15 @@ class HostView:
         flip_y = window.GetFramebufferFlipY()
         camera_node = self.view.cameraNode() if hasattr(self.view, "cameraNode") else None
         modifying = camera_node.StartModify() if camera_node else None
+        preserved = False
+        window.MakeCurrent()
+        state = window.GetState()
+        viewport, scissor = [0]*4, [0]*4
+        state.vtkglGetIntegerv(0x0BA2, viewport)  # GL_VIEWPORT
+        state.vtkglGetIntegerv(0x0C10, scissor)  # GL_SCISSOR_BOX
         try:
+            with self._timed("desktop_save_ms"):
+                preserved = self.desktop.begin()
             window.SetFrameBlitMode(vtk.vtkOpenGLRenderWindow.NoBlit)
             window.SetUseOffScreenBuffers(True)
             window.SetSwapBuffers(True)  # Resolve MSAA to the host display textures.
@@ -146,15 +160,24 @@ class HostView:
             window.SetSwapBuffers(swap)
             window.SetStereoRender(stereo)
             window.SetFramebufferFlipY(flip_y)
-            if camera_node:
-                camera_node.EndModify(modifying)
-            # Restore the desktop framebuffer as well as the camera. No Qt event
-            # processing is permitted while either XR eye is installed.
             try:
-                window.Render()
+                self.desktop.restore()
+                state.vtkglViewport(*viewport)
+                state.vtkglScissor(*scissor)
+                if camera_node:
+                    camera_node.EndModify(modifying)
+                # Qt will paint the original attachments after we return. No
+                # event processing is permitted while either XR eye is installed.
+                if not preserved:
+                    self._render_window()
+                    self.last_timings["desktop_restore_render_calls"] = 1.
             finally:
                 self.last_timings["desktop_restore_ms"] = (perf_counter() - restore_start) * 1000
                 self._busy = False
+
+    def _render_window(self):
+        self.last_timings["host_render_calls"] = self.last_timings.get("host_render_calls", 0.) + 1
+        self.window.Render()
 
     def _textures(self):
         framebuffer = self.window.GetDisplayFramebuffer()
@@ -169,7 +192,8 @@ class HostView:
 
         color(index, color, depth, width, height) receives the unmodified host
         image. depth(index, color, depth, volume_color, volume_depth, width,
-        height) receives a supplementary host-mapper depth pass when needed.
+        height) receives a supplementary host-mapper depth pass only when the
+        single-pass volume hook cannot safely be applied to this pipeline.
         All texture arguments are vtkTextureObject, except absent volume planes.
         """
         if len(eyes) != 2:
@@ -177,9 +201,14 @@ class HostView:
         if self._busy:
             raise RuntimeError("Reentrant host rendering is not supported")
         self.last_timings = dict.fromkeys(("color_render_ms", "depth_render_ms",
-                                          "color_copy_call_ms", "depth_copy_call_ms"), 0.)
+                                          "color_copy_call_ms", "depth_copy_call_ms",
+                                          "host_render_calls", "desktop_restore_render_calls",
+                                          "volume_depth_passes"), 0.)
         mapper = self.volume()
-        with self._timed("frame_wall_ms"), self._frame_state():
+        volume = next((v for v in _items(self.renderer.GetVolumes()) if v.GetVisibility()), None)
+        fast_depth = volume is not None and single_pass_supported(self.renderer, volume)
+        depth_scope = volume_depth(volume) if fast_depth else nullcontext()
+        with self._timed("frame_wall_ms"), self._frame_state(), depth_scope:
             for index, eye in enumerate(eyes):
                 width, height = eye["size"]
                 if not (1 <= width <= 8192 and 1 <= height <= 8192):
@@ -187,11 +216,11 @@ class HostView:
                 self._camera_for_eye(eye, near, far)
                 self.window.SetSize(width, height)
                 with self._timed("color_render_ms"):
-                    self.window.Render()
+                    self._render_window()
                 color, depth = self._textures()
                 with self._timed("color_copy_call_ms"):
                     consumer.color(index, color, depth, width, height)
-                if mapper:
+                if mapper and not fast_depth:
                     self._volume_depth(index, mapper, consumer, width, height)
                 else:
                     with self._timed("depth_copy_call_ms"):
@@ -215,7 +244,8 @@ class HostView:
             # texture may contain the preceding eye's data.
             self.renderer.GetCullers().RemoveAllItems()
             with self._timed("depth_render_ms"):
-                self.window.Render()
+                self.last_timings["volume_depth_passes"] += 1
+                self._render_window()
             color, depth = self._textures()
             vc, vd = mapper.GetColorTexture(), mapper.GetDepthTexture()
             if not vc or not vd or not vc.GetHandle() or not vd.GetHandle():

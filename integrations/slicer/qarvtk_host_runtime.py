@@ -113,7 +113,8 @@ class HostTransport:
         if result != 0:
             raise RuntimeError(error.value.decode("utf-8", "replace"))
         self.diagnostics = HostTimingLog(self.log_folder)
-        self.diagnostics.event("r11 live host timing enabled; wall times include existing GPU waits; "
+        self.diagnostics.event("r12 single-pass host depth and preserved desktop textures; "
+                               "wall times include existing GPU waits; "
                                "native copy/sync timings overlap Python copy calls")
 
     @property
@@ -162,6 +163,7 @@ class HostTransport:
             self.status()
             if self.dll.qarvtk_host_destroy(self.handle):
                 self.handle = c.c_void_p()
+                self.host.close()
                 self.last_status = "Stopped. " + self.last_status
                 self.diagnostics.flush(force=True)
                 self.diagnostics.event(self.last_status)

@@ -50,7 +50,7 @@ class HostRuntimeTest(unittest.TestCase):
         transport.last_status = "fixture"
         transport.diagnostics = HostTimingLog(folder)
         transport.host = type("Host", (), {"last_timings": {"frame_wall_ms": 10.},
-                                           "render": staticmethod(render)})()
+                                           "render": staticmethod(render), "close": staticmethod(lambda: None)})()
         return transport
 
     def test_nested_timer_cannot_overwrite_live_frame(self):

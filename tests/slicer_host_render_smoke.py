@@ -24,6 +24,13 @@ def camera_state(camera):
             camera.GetUseExplicitProjectionTransformMatrix())
 
 
+def depths(window):
+    w, h = window.GetSize()
+    data = vtk.vtkFloatArray()
+    window.GetZbufferData(0, 0, w-1, h-1, data)
+    return vtk_to_numpy(data).copy().reshape(h, w)
+
+
 def run():
     assert hasattr(slicer.modules, "qaroslive"), "Packaged live module was not discovered"
     live_widget = slicer.modules.qaroslive.widgetRepresentation().self()
@@ -66,6 +73,8 @@ def run():
     original_blit = window.GetFrameBlitMode()
     original_cullers = tuple(host.renderer.GetCullers())
     mapper = host.volume()
+    volume = next(v for v in renderer.GetVolumes() if v.GetVisibility())
+    original_shader, original_keys = volume.GetShaderProperty(), volume.GetPropertyKeys()
     old_mapper = (mapper.GetRenderToImage(), mapper.GetImageSampleDistance(),
                   mapper.GetAutoAdjustSampleDistances(), mapper.GetDepthImageScalarType())
     eyes = [dict(position=(x, 0., 1.2), orientation=(0., 0., 0., 1.),
@@ -78,21 +87,36 @@ def run():
             assert color.GetWidth() == width and color.GetHeight() == height
             self.colors.append(pixels(window))
         def depth(self, index, color, depth, vc, vd, width, height):
-            assert vc is not None and vd is not None
-            image = vtk.vtkImageData()
-            mapper.GetDepthImage(image)
-            values = vtk_to_numpy(image.GetPointData().GetScalars()).copy().reshape(height, width)
+            if vc is None:
+                values = depths(window)
+            else:
+                image = vtk.vtkImageData()
+                mapper.GetDepthImage(image)
+                values = vtk_to_numpy(image.GetPointData().GetScalars()).copy().reshape(height, width)
             assert np.isfinite(values).all() and values.min() >= 0 and values.max() <= 1
             assert np.count_nonzero(values < .99999) > 100, "No tissue depth"
             assert values[0, 0] == 1, "Empty rays must have far depth"
             self.depths.append(values)
 
     oracle = Oracle()
+    desktop_color, desktop_depth = pixels(window), depths(window)
+    desktop_textures = (window.GetDisplayFramebuffer().GetColorAttachmentAsTextureObject(0),
+                        window.GetRenderFramebuffer().GetDepthAttachmentAsTextureObject())
+    render_events = []
+    render_observer = window.AddObserver(vtk.vtkCommand.StartEvent, lambda *args: render_events.append(1))
     host.render(eyes, oracle)
+    assert len(render_events) == 2, f"Expected two renders, got {len(render_events)}"
+    assert np.array_equal(pixels(window), desktop_color), "Desktop color was not preserved"
+    assert np.array_equal(depths(window), desktop_depth), "Desktop depth was not preserved"
+    assert window.GetDisplayFramebuffer().GetColorAttachmentAsTextureObject(0) == desktop_textures[0]
+    assert window.GetRenderFramebuffer().GetDepthAttachmentAsTextureObject() == desktop_textures[1]
+    assert volume.GetShaderProperty() == original_shader and volume.GetPropertyKeys() == original_keys
     timings = host.last_timings
-    parts = ("color_render_ms", "depth_render_ms", "color_copy_call_ms",
-             "depth_copy_call_ms", "desktop_restore_ms")
+    parts = ("color_render_ms", "color_copy_call_ms", "depth_copy_call_ms",
+             "desktop_save_ms", "desktop_restore_ms")
     assert all(timings[name] > 0 for name in parts)
+    assert timings["depth_render_ms"] == 0 and timings["volume_depth_passes"] == 0
+    assert timings["host_render_calls"] == 2 and timings["desktop_restore_render_calls"] == 0
     assert sum(timings[name] for name in parts) <= timings["frame_wall_ms"]
     assert len(oracle.colors) == 2 and len(oracle.depths) == 2
     assert np.count_nonzero(oracle.colors[0][:, :, 0] > 100) > 100
@@ -102,6 +126,25 @@ def run():
     assert tuple(host.renderer.GetCullers()) == original_cullers
     assert (mapper.GetRenderToImage(), mapper.GetImageSampleDistance(),
             mapper.GetAutoAdjustSampleDistances(), mapper.GetDepthImageScalarType()) == old_mapper
+
+    # Independently compare single-pass tissue depth with VTK's existing
+    # RenderToImage depth. An existing depth override intentionally selects the
+    # compatibility path; it must remain intact after capture.
+    keys = vtk.vtkInformation()
+    if original_keys:
+        keys.Copy(original_keys)
+    keys.Set(vtk.vtkOpenGLActor.GLDepthMaskOverride(), 0)
+    volume.SetPropertyKeys(keys)
+    reference = Oracle()
+    host.render(eyes, reference)
+    assert host.last_timings["host_render_calls"] == 4
+    assert host.last_timings["volume_depth_passes"] == 2
+    assert volume.GetPropertyKeys() == keys
+    volume.SetPropertyKeys(original_keys)
+    for actual, expected_depth in zip(oracle.depths, reference.depths):
+        assert np.max(np.abs(actual - expected_depth)) < 2e-5, "Single-pass tissue depth differs from VTK"
+    for actual, expected_color in zip(oracle.colors, reference.colors):
+        assert np.max(np.abs(actual.astype(int) - expected_color.astype(int))) <= 2
 
     # A live native actor that has no MRML/export representation must appear.
     sphere = vtk.vtkSphereSource()
@@ -120,6 +163,14 @@ def run():
     host.render(eyes, changed)
     assert np.count_nonzero(changed.colors[0][:, :, 1] > 150) > 30, "Host-only actor absent"
     assert not np.array_equal(changed.colors[0], oracle.colors[0])
+    with host._frame_state():
+        host._camera_for_eye(eyes[0], .05, 20.)
+        window.SetSize(*eyes[0]["size"])
+        window.Render()
+        surface_color, surface_depth = pixels(window), depths(window)
+    green = (surface_color[:, :, 1] > 150) & (surface_color[:, :, 0] < 20)
+    assert green.sum() > 30
+    assert np.max(np.abs(changed.depths[0][green] - surface_depth[green])) < 2e-5
     renderer.RemoveActor(actor)
 
     # Color is exactly the normal host pipeline for the same eye, before the
@@ -148,9 +199,8 @@ def run():
 
     class EmptyOracle(Oracle):
         def depth(self, index, color, depth, vc, vd, width, height):
-            image = vtk.vtkImageData()
-            mapper.GetDepthImage(image)
-            values = vtk_to_numpy(image.GetPointData().GetScalars())
+            assert vc is None and vd is None
+            values = depths(window)
             assert np.all(values == 1), "Offscreen volume retained an earlier eye's depth"
     away = [dict(eye, orientation=(0., 1., 0., 0.)) for eye in eyes]
     host.render(away, EmptyOracle())
@@ -168,7 +218,34 @@ def run():
     assert tuple(host.renderer.GetCullers()) == original_cullers
     assert (mapper.GetRenderToImage(), mapper.GetImageSampleDistance(),
             mapper.GetAutoAdjustSampleDistances(), mapper.GetDepthImageScalarType()) == old_mapper
-    print("PASS: live host color/stereo; host-only actor; CT depth; ROI cropping; desktop and mapper restoration after error", flush=True)
+    assert volume.GetShaderProperty() == original_shader and volume.GetPropertyKeys() == original_keys
+
+    # Reuse the private attachments with different eye sizes and with MSAA.
+    # Both desktop textures and their content must survive, including errors.
+    original_samples = window.GetMultiSamples()
+    for samples in (0, 4):
+        window.SetMultiSamples(samples)
+        window.Render()
+        desktop_color, desktop_depth = pixels(window), depths(window)
+        varied = [dict(eyes[0], size=(256, 128)), dict(eyes[1], size=(128, 192))]
+        host.render(varied, Oracle())
+        assert host.last_timings["host_render_calls"] == 2
+        assert np.array_equal(pixels(window), desktop_color), f"Desktop color changed with MSAA {samples}"
+        assert np.array_equal(depths(window), desktop_depth), f"Desktop depth changed with MSAA {samples}"
+        try:
+            host.render(varied, Broken())
+        except RuntimeError as error:
+            assert str(error) == "injected consumer failure"
+        else:
+            raise AssertionError("Consumer failure did not propagate")
+        assert np.array_equal(pixels(window), desktop_color), "Error corrupted desktop color"
+        assert np.array_equal(depths(window), desktop_depth), "Error corrupted desktop depth"
+    window.SetMultiSamples(original_samples)
+    window.Render()
+    window.RemoveObserver(render_observer)
+    host.close()
+    print("PASS: two renders per stereo frame; single-pass CT depth matches VTK; exact desktop texture preservation; "
+          "host-only shader/actor and occlusion; ROI; offscreen rays; MSAA/eye resize/error restoration", flush=True)
     live_widget.cleanup()
 
 
