@@ -9,6 +9,8 @@ from vtk.util.numpy_support import vtk_to_numpy
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "package" / "QAROS-VTK-plugins" / "slicer"))
 from QarosVTKLib.qarvtk_host_view import HostView
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+from test_host_view_math import run as check_placement, sdk_eye
 
 
 def pixels(window):
@@ -32,6 +34,7 @@ def depths(window):
 
 
 def run():
+    check_placement()
     assert hasattr(slicer.modules, "qaroslive"), "Packaged live module was not discovered"
     live_widget = slicer.modules.qaroslive.widgetRepresentation().self()
     assert live_widget.startButton.enabled and not live_widget.stopButton.enabled
@@ -65,7 +68,7 @@ def run():
     slicer.app.processEvents()
     view.resetFocalPoint()
     window.Render()
-    host = HostView(view)
+    host = HostView(view, match_view=False)
     print("HOST: VTK", vtk.vtkVersion.GetVTKVersion(), "window", window.GetClassName(),
           "mapper", host.volume().GetClassName(), "scale", host.scale, flush=True)
     original_camera = camera_state(host.camera)
@@ -77,8 +80,7 @@ def run():
     original_shader, original_keys = volume.GetShaderProperty(), volume.GetPropertyKeys()
     old_mapper = (mapper.GetRenderToImage(), mapper.GetImageSampleDistance(),
                   mapper.GetAutoAdjustSampleDistances(), mapper.GetDepthImageScalarType())
-    eyes = [dict(position=(x, 0., 1.2), orientation=(0., 0., 0., 1.),
-                 fov=(-.4, .4, .4, -.4), size=(192, 160)) for x in (-.032, .032)]
+    eyes = [sdk_eye(host, (x, 0., 1.2)) for x in (-.032, .032)]
 
     class Oracle:
         def __init__(self):
@@ -149,6 +151,31 @@ def run():
     for actual, expected_color in zip(oracle.colors, reference.colors):
         assert np.max(np.abs(actual.astype(int) - expected_color.astype(int))) <= 2
 
+    # Resolution control changes the real host textures. Compare it to an
+    # independently requested smaller eye, including the tissue depth.
+    host.render_scale = .5
+    reduced = Oracle()
+    host.render(eyes, reduced)
+    assert host.last_render_sizes == [(96, 80), (96, 80)]
+    host.render_scale = 1.
+    small = [dict(eye, size=(96, 80)) for eye in eyes]
+    explicit_small = Oracle()
+    host.render(small, explicit_small)
+    for a, b in zip(reduced.colors, explicit_small.colors):
+        assert np.array_equal(a, b), "Render resolution did not select the requested host pixels"
+    for a, b in zip(reduced.depths, explicit_small.depths):
+        assert np.max(np.abs(a-b)) < 2e-5
+    # An incompatible volume shader can still render its supplementary depth
+    # at half width/height while its full-resolution host color stays intact.
+    volume.SetPropertyKeys(keys)
+    half_depth = Oracle()
+    host.render([dict(eye, depth_size=(96, 80)) for eye in eyes], half_depth)
+    volume.SetPropertyKeys(original_keys)
+    assert half_depth.colors[0].shape[:2] == (160, 192)
+    assert half_depth.depths[0].shape == (80, 96)
+    assert np.max(np.abs(half_depth.depths[0] - explicit_small.depths[0])) < 2e-5
+    assert window.GetSize() == original_size
+
     # A live native actor that has no MRML/export representation must appear.
     sphere = vtk.vtkSphereSource()
     sphere.SetCenter(170., 190., 346.5)
@@ -167,7 +194,7 @@ def run():
     assert np.count_nonzero(changed.colors[0][:, :, 1] > 150) > 30, "Host-only actor absent"
     assert not np.array_equal(changed.colors[0], oracle.colors[0])
     with host._frame_state():
-        host._camera_for_eye(eyes[0], .05, 20.)
+        host._camera_for_eye(eyes[0], *host.clip)
         window.SetSize(*eyes[0]["size"])
         window.Render()
         surface_color, surface_depth = pixels(window), depths(window)
@@ -179,7 +206,7 @@ def run():
     # Color is exactly the normal host pipeline for the same eye, before the
     # supplementary depth pass. No new actor/mapper/transfer function is built.
     with host._frame_state():
-        host._camera_for_eye(eyes[0], .05, 20.)
+        host._camera_for_eye(eyes[0], *host.clip)
         window.SetSize(*eyes[0]["size"])
         window.Render()
         expected = pixels(window)
@@ -194,7 +221,7 @@ def run():
         tag + "\ng_fragColor.rgb *= vec3(0.5, 1.0, 1.0);", False)
     try:
         with host._frame_state():
-            host._camera_for_eye(eyes[0], .05, 20.)
+            host._camera_for_eye(eyes[0], *host.clip)
             window.SetSize(*eyes[0]["size"])
             window.Render()
             custom_expected = pixels(window)

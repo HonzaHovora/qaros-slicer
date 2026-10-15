@@ -44,6 +44,16 @@ class QarosLiveWidget(ScriptedLoadableModuleWidget):
         self.fit = qt.QCheckBox("Center and fit into 65 cm workspace at Start")
         self.fit.checked = True
         form.addRow(self.fit)
+        self.matchView = qt.QCheckBox("Use Slicer viewing direction at Start")
+        self.matchView.checked = True
+        form.addRow(self.matchView)
+        self.renderScale = qt.QComboBox()
+        self.renderScale.addItems(["100%", "75%", "50%"])
+        self.renderScale.toolTip = "Render width and height relative to the viewer request. 50% uses one quarter of the pixels. Applied at Start."
+        form.addRow("Render resolution", self.renderScale)
+        self.resolutionStatus = qt.QLabel("Resolution will be shown when the viewer connects.")
+        self.resolutionStatus.wordWrap = True
+        form.addRow(self.resolutionStatus)
         self.dll = ctk.ctkPathLineEdit()
         self.dll.filters = ctk.ctkPathLineEdit.Files
         default_dll = Path(__file__).resolve().parents[2] / "Release" / "qarvtk-host.dll"
@@ -95,7 +105,8 @@ class QarosLiveWidget(ScriptedLoadableModuleWidget):
                 raise RuntimeError("Open a Slicer layout containing a 3D view")
             view = lm.threeDWidget(0).threeDView()
             view.renderWindow().Render()
-            host = HostView(view, fit=self.fit.checked)
+            host = HostView(view, fit=self.fit.checked, match_view=self.matchView.checked,
+                            render_scale=(1., .75, .5)[self.renderScale.currentIndex])
             folder = user_directory() / "live-logs" / datetime.now().strftime("%Y%m%d-%H%M%S-%f")
             self.transport = HostTransport(self.dll.currentPath, self.sdk.currentPath,
                                             self.target.currentText, folder, host)
@@ -119,6 +130,7 @@ class QarosLiveWidget(ScriptedLoadableModuleWidget):
                 self.transport.tick()
                 if not self.cleaned_up:
                     self.status.text = self.transport.status()
+                    self.resolutionStatus.text = self.transport.resolution_status
             except Exception as error:
                 self.transport.request_stop()
                 if not self.cleaned_up:
@@ -126,6 +138,8 @@ class QarosLiveWidget(ScriptedLoadableModuleWidget):
             if not self.cleaned_up:
                 self.startButton.enabled = not self.transport.running
                 self.stopButton.enabled = self.transport.running and not self.transport.stopping
+                for control in (self.fit, self.matchView, self.renderScale):
+                    control.enabled = not self.transport.running
         if self.cleaned_up and (not self.transport or not self.transport.running):
             self.timer.stop()
             self.timer.disconnect("timeout()", self.tick)

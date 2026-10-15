@@ -28,6 +28,32 @@ def _rotate(q, v):
             c + w * tz + x * ty - y * tx)
 
 
+def _unit(vector):
+    norm = math.sqrt(sum(x*x for x in vector))
+    if not math.isfinite(norm) or norm < 1e-12:
+        raise ValueError("Invalid Slicer camera direction or view-up")
+    return tuple(x / norm for x in vector)
+
+
+def _cross(a, b):
+    return (a[1]*b[2] - a[2]*b[1], a[2]*b[0] - a[0]*b[2], a[0]*b[1] - a[1]*b[0])
+
+
+def camera_basis(camera):
+    """App right/up/back axes in the host's world space; a proper rotation."""
+    forward = _unit(tuple(f-p for f, p in zip(camera.GetFocalPoint(), camera.GetPosition())))
+    right = _unit(_cross(forward, camera.GetViewUp()))
+    return right, _cross(right, forward), tuple(-x for x in forward)
+
+
+def app_vector(ras):
+    return (ras[0], ras[2], -ras[1])
+
+
+def ras_vector(app):
+    return (app[0], -app[2], app[1])
+
+
 def projection(fov, near, far):
     if not (0 < near < far) or not all(math.isfinite(x) for x in (*fov, near, far)):
         raise ValueError("Invalid clipping or eye FOV")
@@ -49,15 +75,22 @@ def projection(fov, near, far):
 class HostView:
     """One live Slicer 3D view; all methods run on its GUI/render thread."""
 
-    def __init__(self, view, fit=True):
+    def __init__(self, view, fit=True, match_view=True, render_scale=1.):
         self.view = view
         self.window = view.renderWindow()
         self.renderer = view.renderWindow().GetRenderers().GetFirstRenderer()
         self.camera = self.renderer.GetActiveCamera()
+        if not math.isfinite(render_scale) or not .25 <= render_scale <= 1.:
+            raise ValueError("Render scale must be between 25% and 100%")
+        self.render_scale = render_scale
+        self.match_view = match_view
+        self.last_render_sizes = []
+        self.last_desktop_size = self.window.GetSize()
         self._busy = False
         self.last_timings = {}
         self.desktop = DesktopTextures(self.window)
         self.scale = .001
+        self.app_scale = 1.
         self.center = (0., 0., 0.)
         # Placement is fixed at Start. Live changes never unexpectedly refit it.
         if fit:
@@ -67,8 +100,21 @@ class HostView:
             extent = max(bounds[2*i+1] - bounds[2*i] for i in range(3))
             if extent <= 0:
                 raise ValueError("The visible content has empty bounds")
-            self.scale = .65 / extent
+            self.app_scale = .65 / (extent * self.scale)
             self.center = tuple((bounds[2*i] + bounds[2*i+1]) * .5 for i in range(3))
+        # App content is always world RAS converted to metres/+Y-up. Placement
+        # and fitting belong to the SDK, never to the per-eye camera transform.
+        # Rotate the initial Slicer view's right/up/back axes onto app-volume
+        # X/Y/Z. The transpose is the inverse of this orthonormal camera basis.
+        self.app_orientation = (0., 0., 0., 1.)
+        if match_view:
+            rotation = [list(app_vector(axis)) for axis in camera_basis(self.camera)]
+            q = [0.] * 4  # VTK returns scalar first; QAROS stores scalar last.
+            vtk.vtkMath.Matrix3x3ToQuaternion(rotation, q)
+            self.app_orientation = (*q[1:], q[0])
+        center_m = tuple(x * self.scale for x in app_vector(self.center))
+        self.app_position = tuple(-self.app_scale * x for x in _rotate(self.app_orientation, center_m))
+        self.clip = (.05 / self.app_scale, 20. / self.app_scale)
         for method in ("GetDisplayFramebuffer", "GetFrameBlitMode", "SetUseOffScreenBuffers"):
             if not hasattr(self.window, method):
                 raise RuntimeError("This Slicer render window lacks " + method)
@@ -99,11 +145,9 @@ class HostView:
         position, orientation, fov = eye["position"], eye["orientation"], eye["fov"]
         if not all(math.isfinite(x) for x in (*position, *orientation)):
             raise ValueError("Non-finite eye pose")
-        def ras(vector):
-            return (vector[0], -vector[2], vector[1])
-        p = tuple(c + x / self.scale for c, x in zip(self.center, ras(position)))
-        forward = ras(_rotate(orientation, (0., 0., -1.)))
-        up = ras(_rotate(orientation, (0., 1., 0.)))
+        p = tuple(x / self.scale for x in ras_vector(position))
+        forward = ras_vector(_rotate(orientation, (0., 0., -1.)))
+        up = ras_vector(_rotate(orientation, (0., 1., 0.)))
         self.camera.SetPosition(p)
         self.camera.SetFocalPoint(tuple(a + b / self.scale for a, b in zip(p, forward)))
         self.camera.SetViewUp(up)
@@ -196,7 +240,7 @@ class HostView:
             raise RuntimeError("The host did not expose resolved color/depth GPU textures")
         return color, depth
 
-    def render(self, eyes, consumer, near=.05, far=20.):
+    def render(self, eyes, consumer, near=None, far=None):
         """consumer.color/depth copy borrowed textures synchronously on the GPU.
 
         color(index, color, depth, width, height) receives the unmodified host
@@ -209,6 +253,15 @@ class HostView:
             raise ValueError("Exactly two eye requests are required")
         if self._busy:
             raise RuntimeError("Reentrant host rendering is not supported")
+        near = self.clip[0] if near is None else near
+        far = self.clip[1] if far is None else far
+        self.last_desktop_size = self.window.GetSize()
+        self.last_render_sizes = []
+        for eye in eyes:
+            width, height = eye["size"]
+            if not (1 <= width <= 8192 and 1 <= height <= 8192):
+                raise ValueError("Invalid host render size")
+            self.last_render_sizes.append(tuple(max(1, int(x * self.render_scale + .5)) for x in (width, height)))
         self.last_timings = dict.fromkeys(("color_render_ms", "depth_render_ms",
                                           "color_copy_call_ms", "depth_copy_call_ms",
                                           "host_render_calls", "desktop_restore_render_calls",
@@ -219,18 +272,23 @@ class HostView:
         depth_scope = volume_depth(volume) if fast_depth else nullcontext()
         with self._timed("frame_wall_ms"), self._frame_state(), depth_scope:
             for index, eye in enumerate(eyes):
-                width, height = eye["size"]
-                if not (1 <= width <= 8192 and 1 <= height <= 8192):
-                    raise ValueError("Invalid host render size")
+                width, height = self.last_render_sizes[index]
                 self._camera_for_eye(eye, near, far)
                 self.window.SetSize(width, height)
                 with self._timed("color_render_ms"):
                     self._render_window()
                 color, depth = self._textures()
+                if any((t.GetWidth(), t.GetHeight()) != (width, height) for t in (color, depth)):
+                    raise RuntimeError("Host GPU texture size differs from the selected render size")
                 with self._timed("color_copy_call_ms"):
                     consumer.color(index, color, depth, width, height)
                 if mapper and not fast_depth:
-                    self._volume_depth(index, mapper, consumer, width, height)
+                    dw, dh = eye.get("depth_size", (width, height))
+                    dw, dh = min(dw, width), min(dh, height)
+                    if dw < 1 or dh < 1:
+                        raise ValueError("Invalid depth render size")
+                    self.window.SetSize(dw, dh)
+                    self._volume_depth(index, mapper, consumer, dw, dh)
                 else:
                     with self._timed("depth_copy_call_ms"):
                         consumer.depth(index, color, depth, None, None, width, height)

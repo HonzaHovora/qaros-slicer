@@ -7,6 +7,7 @@
 #include "../apps/wgl_callbacks.hpp"
 #include "../apps/legacy_peer_observer.hpp"
 #include "../apps/legacy_frame_wait.hpp"
+#include "../apps/host_config.hpp"
 #include <array>
 #include <algorithm>
 #include <atomic>
@@ -107,6 +108,7 @@ struct QarvtkHost {
   const Clock::time_point created=Clock::now();
   uint64_t sent{};
   QarvtkHostFrame request{};
+  QarvtkHostPlacement placement{};
   qarvtk::Frame frame;
   std::array<qarvtk::EyeViews,2> views{};
   std::string status="Starting live Slicer transport",sdk_root,target,log_folder;
@@ -176,8 +178,8 @@ struct QarvtkHost {
     std::lock_guard<std::mutex> lock(mutex);
     if(stopping)throw std::runtime_error("Invalid or expired host frame lease");
     lease.check_plane(serial,eye,depth);
-    if(source.width!=request.eyes[eye].width||source.height!=request.eyes[eye].height)
-      throw std::runtime_error("Host image dimensions differ from the requested eye");
+    if(!source.width||!source.height||source.width>request.eyes[eye].width||source.height>request.eyes[eye].height)
+      throw std::runtime_error("Host render size must be positive and no larger than the requested eye");
     auto stamp=Clock::now();
     glFinish(); // Complete host writes before the sharing context reads them.
     timings.host_sync+=milliseconds(stamp);
@@ -264,7 +266,8 @@ struct Session {
   }
   void start(const QarPeerId& peer){
     const QarPeerId* initial[]={&peer};auto app=qar_app_volume_init_default();
-    app.display_name="Slicer live renderer";app.pose.position.z=-1.5F;app.size={1.2F,1.2F,1.2F};app.app_scale=1;
+    app.display_name="Slicer live renderer";app.pose.position.z=-1.5F;app.size={1.2F,1.2F,1.2F};
+    qarvtk::apply_host_placement(app,host.placement);
     app.initial_peers=initial;app.initial_peer_count=1;
     checked(qar_app_volumes_add_volume(session,&app,&volume),"create live app volume");volume_created=true;
     auto gl=qar_stream_params_opengl_default();gl.context_type=QAR_OPENGL_CONTEXT_TYPE_WGL;
@@ -279,6 +282,11 @@ struct Session {
     host.deadline();host.set_status("Creating shared OpenGL sender");
     checked(qar_render_sender_create(session,&init,host.operation,&sender),"create live sender");
     if(!sender)throw std::runtime_error("SDK returned a null sender");
+    auto current=qar_video_frame_layout_default();
+    checked(qar_render_sender_layout(sender,&current),"read negotiated layout");
+    const auto reduced=qarvtk::half_depth_layout(current);
+    checked(qar_render_sender_change_layout(sender,&reduced),"set half-resolution depth layout");
+    host.note("App placement uses SDK app_pose/app_scale; depth requested at half color width and height");
     host.set_status("Waiting for the viewer's first pose");host.pause(std::chrono::milliseconds(1200));
   }
 };
@@ -298,6 +306,7 @@ void QarvtkHost::run() noexcept {
       std::ostringstream line;line<<std::fixed<<std::setprecision(2)
         <<"PERF_NATIVE frames="<<measured<<" submitted_fps="<<count*1000/elapsed
         <<" eye_size="<<request.eyes[0].width<<'x'<<request.eyes[0].height
+        <<" depth_size="<<request.eyes[0].depth_width<<'x'<<request.eyes[0].depth_height
         <<" sdk_wait_ms="<<wait_ms/count<<" metadata_ms="<<metadata_ms/count
         <<" gui_wait_ms="<<gui_ms/count<<" sdk_show_ms="<<show_ms/count
         <<" host_sync_ms="<<totals.host_sync/count<<" composite_cpu_ms="<<totals.composite/count
@@ -319,6 +328,8 @@ void QarvtkHost::run() noexcept {
       auto access=qar_video_frame_opengl_default();checked(qar_render_sender_frame_opengl(sdk.sender,&access),"access frame textures");
       auto next=layout(access);const auto next_views=qarvtk::validate_stereo(next);
       QarvtkHostFrame next_request{};next_request.serial=sent+1;
+      next_request.near_plane=static_cast<float>(.05/placement.app_scale);
+      next_request.far_plane=static_cast<float>(20./placement.app_scale);
       for(unsigned i=0;i<2;++i){
         const auto& view=next.views[next_views[i].color];auto& eye=next_request.eyes[i];
         QarPose pose=qar_pose_default();QarFov fov=qar_fov_default();
@@ -328,6 +339,10 @@ void QarvtkHost::run() noexcept {
         eye.orientation[0]=pose.orientation.x;eye.orientation[1]=pose.orientation.y;eye.orientation[2]=pose.orientation.z;eye.orientation[3]=pose.orientation.w;
         eye.fov[0]=fov.angle_left;eye.fov[1]=fov.angle_right;eye.fov[2]=fov.angle_up;eye.fov[3]=fov.angle_down;
         eye.width=qarvtk::width(view);eye.height=qarvtk::height(view);
+        const auto& depth=next.views[next_views[i].depth];
+        eye.depth_width=qarvtk::width(depth);eye.depth_height=qarvtk::height(depth);
+        if(eye.depth_width!=(eye.width+1)/2||eye.depth_height!=(eye.height+1)/2)
+          throw std::runtime_error("SDK did not retain the requested half-resolution depth layout");
       }
       const auto posted_at=Clock::now();
       FrameTimings copied;
@@ -339,7 +354,8 @@ void QarvtkHost::run() noexcept {
         copied=timings;lease.consume();
       }
       const auto show_at=Clock::now();
-      auto show=qar_render_frame_show_default();show.rendered_near_far={.05F,20.F};show.depth_scale=1;
+      auto show=qar_render_frame_show_default();
+      show.rendered_near_far={static_cast<float>(request.near_plane),static_cast<float>(request.far_plane)};show.depth_scale=1;
       checked(qar_render_sender_show_frame(sdk.sender,&show),"submit live stereo frame");
       ++sent;last=Clock::now();
       totals+=copied;++measured;wait_ms+=milliseconds(cycle_start,ready_at);
@@ -357,15 +373,18 @@ void QarvtkHost::run() noexcept {
 
 extern "C" {
 const char* qarvtk_host_info(){
-  return "{\"host_abi\":1,\"modern_api\":0,\"header_sha256\":\"" QARVTK_HOST_SDK_HASH "\",\"eye_size\":96,\"frame_size\":200}";
+  return "{\"host_abi\":2,\"modern_api\":0,\"header_sha256\":\"" QARVTK_HOST_SDK_HASH "\",\"eye_size\":104,\"frame_size\":232,\"placement_size\":64}";
 }
-int qarvtk_host_create(const char* sdk,const char* target,const char* folder,QarvtkHost** result,char* error,uint32_t size){
+int qarvtk_host_create(const char* sdk,const char* target,const char* folder,const QarvtkHostPlacement* placement,
+                      QarvtkHost** result,char* error,uint32_t size){
   if(result)*result=nullptr;
   bool expected=false;
   if(!active.compare_exchange_strong(expected,true)){message(error,size,"Only one live host transport may run in this Slicer process");return -1;}
   try {
-    if(!sdk||!target||!folder||!result)throw std::invalid_argument("Missing host configuration");
-    auto host=std::make_unique<QarvtkHost>();host->sdk_root=sdk;host->target=target;host->log_folder=folder;host->initialize();
+    if(!sdk||!target||!folder||!placement||!result)throw std::invalid_argument("Missing host configuration");
+    auto probe=qar_app_volume_init_default();qarvtk::apply_host_placement(probe,*placement);
+    auto host=std::make_unique<QarvtkHost>();host->sdk_root=sdk;host->target=target;host->log_folder=folder;
+    host->placement=*placement;host->initialize();
     *result=host.release();return 0;
   } catch(const std::exception& e){message(error,size,e.what());active=false;return -1;}
     catch(...){message(error,size,"Cannot initialize host transport");active=false;return -1;}
@@ -406,4 +425,4 @@ void qarvtk_host_status(QarvtkHost* h,char* text,uint32_t size){
   std::lock_guard<std::mutex> lock(h->mutex);message(text,size,h->status);
 }
 }
-static_assert(sizeof(QarvtkHostEye)==96&&sizeof(QarvtkHostFrame)==200,"Unexpected host C ABI packing");
+static_assert(sizeof(QarvtkHostEye)==104&&sizeof(QarvtkHostFrame)==232&&sizeof(QarvtkHostPlacement)==64,"Unexpected host C ABI packing");

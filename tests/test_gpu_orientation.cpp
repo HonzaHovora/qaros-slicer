@@ -31,6 +31,55 @@ std::size_t address(const View& v,unsigned x,unsigned y){
   const unsigned ty=std::min(v.y0,v.y1)+(v.y1>v.y0?y:h-1-y);
   return ty*tw+tx;
 }
+void resized_planes(GlCopy& copy){
+  constexpr unsigned sw=8,sh=6,cw=16,ch=12,dw=4,dh=3;
+  std::array<unsigned,2> source{};glGenTextures(2,source.data());
+  std::vector<unsigned char> rgba(sw*sh*4);std::vector<float> depths(sw*sh);
+  for(unsigned y=0;y<sh;++y)for(unsigned x=0;x<sw;++x){
+    const auto i=y*sw+x;rgba[i*4]=static_cast<unsigned char>(x*24);rgba[i*4+1]=static_cast<unsigned char>(y*32);
+    rgba[i*4+2]=0;rgba[i*4+3]=255;depths[i]=x<4?.2F:1.F;
+  }
+  for(unsigned i=0;i<2;++i){glBindTexture(GL_TEXTURE_2D,source[i]);
+    glTexParameteri(GL_TEXTURE_2D,GL_TEXTURE_MIN_FILTER,GL_LINEAR);glTexParameteri(GL_TEXTURE_2D,GL_TEXTURE_MAG_FILTER,GL_LINEAR);
+    glTexImage2D(GL_TEXTURE_2D,0,i?GL_DEPTH_COMPONENT32F:GL_RGBA8,sw,sh,0,i?GL_DEPTH_COMPONENT:GL_RGBA,
+      i?GL_FLOAT:GL_UNSIGNED_BYTE,i?static_cast<const void*>(depths.data()):rgba.data());}
+  for(bool nativeDepth:{false,true}){
+    Textures textures;glGenTextures(4,textures.ids.data());Frame frame;
+    for(unsigned i=0;i<4;++i){const bool d=i%2;const unsigned ww=d?dw:cw,hh=d?dh:ch;
+      glBindTexture(GL_TEXTURE_2D,textures.ids[i]);
+      glTexParameteri(GL_TEXTURE_2D,GL_TEXTURE_MIN_FILTER,GL_NEAREST);glTexParameteri(GL_TEXTURE_2D,GL_TEXTURE_MAG_FILTER,GL_NEAREST);
+      glTexImage2D(GL_TEXTURE_2D,0,d?(nativeDepth?GL_DEPTH_COMPONENT32F:GL_R32F):GL_RGBA8,ww,hh,0,
+        d?(nativeDepth?GL_DEPTH_COMPONENT:GL_RED):GL_RGBA,d?GL_FLOAT:GL_UNSIGNED_BYTE,nullptr);
+      frame.textures.push_back({textures.ids[i],ww,hh,1});
+      frame.views.push_back({i<2?Eye::left:Eye::right,d?Plane::depth:Plane::color,i,
+        i>=2?ww:0,0,i>=2?0:ww,hh,0});}
+    const auto eyes=validate_stereo(frame);
+    for(const auto& eye:eyes){
+      copy.copy_plane({source[0],source[1],sw,sh},frame,eye,false);
+      copy.copy_plane({source[0],source[1],sw,sh},frame,eye,true);
+    }
+    copy.finish();
+    for(unsigned eye=0;eye<2;++eye){
+      std::vector<unsigned char> colors(cw*ch*4);std::vector<float> depth(dw*dh);
+      glBindTexture(GL_TEXTURE_2D,textures.ids[eye*2]);glGetTexImage(GL_TEXTURE_2D,0,GL_RGBA,GL_UNSIGNED_BYTE,colors.data());
+      glBindTexture(GL_TEXTURE_2D,textures.ids[eye*2+1]);glGetTexImage(GL_TEXTURE_2D,0,nativeDepth?GL_DEPTH_COMPONENT:GL_RED,GL_FLOAT,depth.data());
+      for(unsigned y=0;y<ch;++y)for(unsigned x=0;x<cw;++x){
+        const double u=(x+.5)/cw,v=(y+.5)/ch;
+        const double sx=std::clamp((eye?1-u:u)*sw-.5,0.,double(sw-1));
+        const double sy=std::clamp((1-v)*sh-.5,0.,double(sh-1));
+        const auto i=(y*cw+x)*4;
+        check(std::abs(colors[i]-sx*24)<1.1&&std::abs(colors[i+1]-sy*32)<1.1,"scaled color flips/filter incorrect");
+      }
+      for(unsigned y=0;y<dh;++y)for(unsigned x=0;x<dw;++x){
+        const auto sx=static_cast<unsigned>((eye?1-(x+.5)/dw:(x+.5)/dw)*sw);
+        check(std::abs(depth[y*dw+x]-(sx<4?.2F:1.F))<1e-6,"half depth interpolated an edge or changed orientation");
+      }
+    }
+  }
+  glDeleteTextures(2,source.data());
+  check(glGetError()==GL_NO_ERROR,"scaled copy left a GL error");
+  std::cout<<"PASS: scaled color and independent half-depth; X/Y flips; nearest depth edges; R32F/D32F\n";
+}
 }
 int main(){try{
   Renderer renderer;GlCopy copy;Clip clip{.1,10};
@@ -97,5 +146,6 @@ int main(){try{
     std::cout<<"PASS: stationary cube, pitch/yaw/roll, translations, asymmetric FOV, per-plane flips, "
       <<(target==GL_TEXTURE_2D_ARRAY?"2D array":"2D")<<", "<<(floatDepth?"R32F":"D32F")<<'\n';
   }
+  renderer.make_current();resized_planes(copy);
   return 0;
 }catch(const std::exception& e){std::cerr<<"ERROR: "<<e.what()<<'\n';return 1;}}

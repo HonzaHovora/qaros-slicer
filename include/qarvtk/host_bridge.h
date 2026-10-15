@@ -1,6 +1,6 @@
 #pragma once
 #include <stdint.h>
-#ifdef _WIN32
+#if defined(_WIN32) && defined(QARVTK_HOST_EXPORTS)
 #define QARVTK_HOST_API __declspec(dllexport)
 #else
 #define QARVTK_HOST_API
@@ -10,23 +10,27 @@ extern "C" {
 #endif
 
 typedef struct QarvtkHost QarvtkHost;
+typedef struct QarvtkHostPlacement {
+  double position[3], orientation[4], app_scale; /* app_pose in volume metres */
+} QarvtkHostPlacement;
 typedef struct QarvtkHostEye {
   double position[3], orientation[4], fov[4]; /* x/y/z/w; left/right/up/down */
-  uint32_t width, height;
+  uint32_t width, height, depth_width, depth_height;
 } QarvtkHostEye;
 typedef struct QarvtkHostFrame {
   uint64_t serial;
   QarvtkHostEye eyes[2];
+  double near_plane, far_plane; /* app metres, also reported to SDK show_frame */
 } QarvtkHostFrame;
 
-/* ABI 1, Windows x64/session SDK only. All calls are on the creating GUI thread.
+/* ABI 2, Windows x64/session SDK only. All calls are on the creating GUI thread.
    poll: 0 waiting, 1 frame leased, 2 stopped, -1 error (message via status).
    Stop is asynchronous; destroy returns 0 until the worker is finished.
    No borrowed GPU texture survives color/depth returning. SDK frame ownership
    remains leased until finish or stop. Never unload this DLL with live handles. */
 QARVTK_HOST_API const char* qarvtk_host_info(void);
 QARVTK_HOST_API int qarvtk_host_create(const char* sdk_root,const char* target,const char* log_folder,
-                                     QarvtkHost** result,char* error,uint32_t error_size);
+                                     const QarvtkHostPlacement*,QarvtkHost** result,char* error,uint32_t error_size);
 QARVTK_HOST_API int qarvtk_host_poll(QarvtkHost*,QarvtkHostFrame*);
 QARVTK_HOST_API int qarvtk_host_color(QarvtkHost*,uint64_t serial,uint32_t eye,
                                      uint32_t color,uint32_t depth,uint32_t width,uint32_t height);

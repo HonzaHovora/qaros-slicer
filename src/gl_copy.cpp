@@ -13,8 +13,20 @@ void main(){vec2 p=vec2((gl_VertexID<<1)&2,gl_VertexID&2);uv=p;gl_Position=vec4(
 )";
 const char* fragment=R"(#version 330 core
 in vec2 uv;out vec4 pixel;uniform sampler2D sourceImage;uniform ivec2 flipAxis;uniform int isDepth;
-void main(){vec2 t=mix(uv,1.0-uv,vec2(flipAxis));vec4 v=texture(sourceImage,t);
-if(isDepth!=0){pixel=vec4(v.r,0,0,1);gl_FragDepth=v.r;}else{pixel=v;}}
+uniform bool resample;
+vec4 sampleColor(vec2 t, ivec2 size){
+  if(!resample)return texture(sourceImage,t);
+  vec2 p=t*vec2(size)-0.5;ivec2 a=ivec2(floor(p));vec2 f=fract(p);
+  vec4 c00=texelFetch(sourceImage,clamp(a,ivec2(0),size-1),0);
+  vec4 c10=texelFetch(sourceImage,clamp(a+ivec2(1,0),ivec2(0),size-1),0);
+  vec4 c01=texelFetch(sourceImage,clamp(a+ivec2(0,1),ivec2(0),size-1),0);
+  vec4 c11=texelFetch(sourceImage,clamp(a+ivec2(1,1),ivec2(0),size-1),0);
+  return mix(mix(c00,c10,f.x),mix(c01,c11,f.x),f.y);
+}
+void main(){vec2 t=mix(uv,1.0-uv,vec2(flipAxis));ivec2 size=textureSize(sourceImage,0);
+// Never interpolate foreground and background depth at silhouettes.
+if(isDepth!=0){float d=texelFetch(sourceImage,clamp(ivec2(t*vec2(size)),ivec2(0),size-1),0).r;
+pixel=vec4(d,0,0,1);gl_FragDepth=d;}else{pixel=sampleColor(t,size);}}
 )";
 unsigned compile(GLenum kind,const char* text){
   const auto shader=glCreateShader(kind);glShaderSource(shader,1,&text,nullptr);glCompileShader(shader);
@@ -136,6 +148,11 @@ void GlCopy::plane(unsigned source,const Texture& t,const View& v,bool depth,boo
   if(nativeDepth){glEnable(GL_DEPTH_TEST);glDepthFunc(GL_ALWAYS);glDepthMask(GL_TRUE);}else{glDisable(GL_DEPTH_TEST);glDepthMask(GL_FALSE);}
   glViewport(std::min(v.x0,v.x1),std::min(v.y0,v.y1),width(v),height(v));
   glBindTexture(GL_TEXTURE_2D,source);
+  GLint sourceWidth=0,sourceHeight=0;
+  glGetTexLevelParameteriv(GL_TEXTURE_2D,0,GL_TEXTURE_WIDTH,&sourceWidth);
+  glGetTexLevelParameteriv(GL_TEXTURE_2D,0,GL_TEXTURE_HEIGHT,&sourceHeight);
+  glUniform1i(glGetUniformLocation(program_,"resample"),
+    sourceWidth!=static_cast<GLint>(width(v))||sourceHeight!=static_cast<GLint>(height(v)));
   // VTK's framebuffer has row zero at the bottom. QAROS view pixels run
   // top-to-bottom (as in its CPU/D3D/Vulkan renderers). Convert that origin
   // for BOTH color and depth, then compose with each view's optional flips.

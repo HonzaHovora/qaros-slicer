@@ -6,6 +6,7 @@ on:
       - 'integrations/**'
       - 'tests/slicer_smoke.py'
       - 'tests/slicer_host_render_smoke.py'
+      - 'tests/test_host_view_math.py'
       - 'tests/process_fixture.cpp'
       - 'tests/fixture_support.py'
       - 'scripts/package_plugins.py'
