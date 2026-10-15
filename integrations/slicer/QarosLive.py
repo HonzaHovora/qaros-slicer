@@ -139,7 +139,7 @@ class QarosLiveWidget(ScriptedLoadableModuleWidget):
             widget = self.layout_manager.threeDWidget(0)
             if not widget or widget.threeDView() != transport.host.view:
                 raise RuntimeError("The source 3D view was replaced")
-            if not widget.mrmlViewNode().GetMappedInLayout():
+            if not widget.mrmlViewNode().IsViewVisibleInLayout():
                 raise RuntimeError("The source 3D view was removed from the layout")
             transport.host.validate_source()
         except Exception as error:
