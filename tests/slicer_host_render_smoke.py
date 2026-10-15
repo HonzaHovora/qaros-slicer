@@ -352,8 +352,6 @@ def run():
     lm = slicer.app.layoutManager()
     main_window = slicer.util.mainWindow()
     try:
-        reference = Oracle()
-        host.render(eyes, reference)
         for label, change in (
                 ("four-up", lambda: lm.setLayout(slicer.vtkMRMLLayoutNode.SlicerLayoutFourUpView)),
                 ("maximize 3D", lambda: lm.addMaximizedViewNode(view.mrmlViewNode())),
@@ -373,10 +371,30 @@ def run():
             assert host.last_timings["host_render_calls"] == 2, label
             assert np.array_equal(pixels(window), before_color), label
             assert np.array_equal(depths(window), before_depth), label
-            for a, b in zip(captured.colors, reference.colors):
-                assert np.max(np.abs(a.astype(int)-b.astype(int))) <= 2, label
+            # A layout can change MRML-managed props. Compare against the
+            # current native pipeline, not a picture from the previous layout.
+            for eye, actual in zip(eyes, captured.colors):
+                with host._frame_state():
+                    host._camera_for_eye(eye, *host.clip)
+                    window.SetSize(*eye["size"])
+                    window.Render()
+                    expected_color = pixels(window)
+                difference = np.max(np.abs(actual.astype(int)-expected_color.astype(int)))
+                assert difference <= 2, (label, "native color", difference)
+            saved_keys = volume.GetPropertyKeys()
+            comparison_keys = vtk.vtkInformation()
+            if saved_keys:
+                comparison_keys.Copy(saved_keys)
+            comparison_keys.Set(vtk.vtkOpenGLActor.GLDepthMaskOverride(), 0)
+            volume.SetPropertyKeys(comparison_keys)
+            try:
+                reference = Oracle()
+                host.render(eyes, reference)
+                assert host.last_timings["volume_depth_passes"] == 2
+            finally:
+                volume.SetPropertyKeys(saved_keys)
             for a, b in zip(captured.depths, reference.depths):
-                assert np.max(np.abs(a-b)) < 2e-5, label
+                assert np.max(np.abs(a-b)) < 2e-5, (label, "VTK tissue depth")
         assert len(transport.events) >= 4, transport.events
         lm.setLayout(slicer.vtkMRMLLayoutNode.SlicerLayoutOneUpRedSliceView)
         slicer.app.processEvents()
