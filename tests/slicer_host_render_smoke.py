@@ -7,8 +7,8 @@ import vtk
 import slicer
 from vtk.util.numpy_support import vtk_to_numpy
 
-sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "integrations" / "slicer"))
-from qarvtk_host_view import HostView
+sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "package" / "QAROS-VTK-plugins" / "slicer"))
+from QarosVTKLib.qarvtk_host_view import HostView
 
 
 def pixels(window):
@@ -25,6 +25,9 @@ def camera_state(camera):
 
 
 def run():
+    assert hasattr(slicer.modules, "qaroslive"), "Packaged live module was not discovered"
+    live_widget = slicer.modules.qaroslive.widgetRepresentation().self()
+    assert live_widget.startButton.enabled and not live_widget.stopButton.enabled
     slicer.app.layoutManager().setLayout(slicer.vtkMRMLLayoutNode.SlicerLayoutOneUp3DView)
     view = slicer.app.layoutManager().threeDWidget(0).threeDView()
     window = view.renderWindow()
@@ -124,7 +127,9 @@ def run():
     assert np.max(np.abs(again.colors[0].astype(int)-expected.astype(int))) <= 2
 
     # Host ROI cropping, explicitly unsupported by the snapshot exporter.
-    roi = vr.GetROINode()
+    roi = slicer.modules.volumerendering.logic().CreateROINode(vr)
+    slicer.modules.volumerendering.logic().FitROIToVolume(vr)
+    roi.GetDisplayNode().SetVisibility(False)
     roi.SetSize(35., 96., 96.)
     vr.SetCroppingEnabled(True)
     slicer.app.processEvents()
@@ -148,6 +153,7 @@ def run():
     assert (mapper.GetRenderToImage(), mapper.GetImageSampleDistance(),
             mapper.GetAutoAdjustSampleDistances(), mapper.GetDepthImageScalarType()) == old_mapper
     print("PASS: live host color/stereo; host-only actor; CT depth; ROI cropping; desktop and mapper restoration after error", flush=True)
+    live_widget.cleanup()
 
 
 try:

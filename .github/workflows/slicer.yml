@@ -40,4 +40,4 @@ jobs:
       - name: Discover packaged module and verify surface and process controls
         run: xvfb-run -a env LIBGL_ALWAYS_SOFTWARE=1 QARVTK_TEST_BACKEND="$PWD/build-fixture/qarvtk-process-fixture" build-slicer/Slicer --no-splash --no-main-window --ignore-slicerrc --additional-module-paths "$PWD/package/QAROS-VTK-plugins/slicer" --python-script tests/slicer_smoke.py
       - name: Render stereo and cropped CT using the live host renderer
-        run: xvfb-run -a env LIBGL_ALWAYS_SOFTWARE=1 build-slicer/Slicer --no-splash --ignore-slicerrc --python-script tests/slicer_host_render_smoke.py
+        run: xvfb-run -a env LIBGL_ALWAYS_SOFTWARE=1 build-slicer/Slicer --no-splash --ignore-slicerrc --additional-module-paths "$PWD/package/QAROS-VTK-plugins/slicer" --python-script tests/slicer_host_render_smoke.py

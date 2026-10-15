@@ -49,7 +49,13 @@ int main(){try{
       if(target==GL_TEXTURE_2D_ARRAY)glBindTexture(target,owned.ids[2]);
       GLint oldArray=0;glGetIntegerv(GL_TEXTURE_BINDING_2D_ARRAY,&oldArray);
       glActiveTexture(GL_TEXTURE3);
-      copy.copy(s,frame,views[eye]);
+      if(eye==0){
+        // The live host copies its normal color before its volume-depth pass.
+        // A depth-only copy must not touch that already submitted color plane.
+        copy.copy_plane(s,frame,views[eye],false);
+        auto depthOnly=s;depthOnly.color=0;
+        copy.copy_plane(depthOnly,frame,views[eye],true);
+      }else copy.copy(s,frame,views[eye]);
       check(glIsEnabled(GL_BLEND)&&glIsEnabled(GL_SCISSOR_TEST),"GL capabilities not restored");
       GLboolean mask[4]{};glGetBooleanv(GL_COLOR_WRITEMASK,mask);check(!mask[0]&&mask[1]&&!mask[2]&&!mask[3],"write mask not restored");
       GLint newProgram=0;glGetIntegerv(GL_CURRENT_PROGRAM,&newProgram);check(oldProgram==newProgram,"program not restored");

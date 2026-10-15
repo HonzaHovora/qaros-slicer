@@ -13,6 +13,9 @@ def package(output):
     bundle = output / "QAROS-VTK-plugins"
     files = {
         "slicer/QarosVTK.py": "integrations/slicer/QarosVTK.py",
+        "slicer/QarosLive.py": "integrations/slicer/QarosLive.py",
+        "slicer/QarosVTKLib/qarvtk_host_view.py": "integrations/slicer/qarvtk_host_view.py",
+        "slicer/QarosVTKLib/qarvtk_host_runtime.py": "integrations/slicer/qarvtk_host_runtime.py",
         "slicer/QarosVTKLib/qarvtk_slicer.py": "integrations/slicer/qarvtk_slicer.py",
         "slicer/QarosVTKLib/qarvtk_scene.py": "integrations/qarvtk_scene.py",
         "slicer/QarosVTKLib/qarvtk_bridge.py": "integrations/qarvtk_bridge.py",
@@ -22,6 +25,7 @@ def package(output):
         "paraview/qarvtk_bridge.py": "integrations/qarvtk_bridge.py",
         "paraview/qarvtk_runtime.py": "integrations/qarvtk_runtime.py",
         "INSTALLATION.md": "docs/INSTALLATION.md",
+        "KHRONOS-LICENSE.txt": "third_party/KHRONOS-LICENSE.txt",
     }
     for relative, source in files.items():
         destination = bundle / relative

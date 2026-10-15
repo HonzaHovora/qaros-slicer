@@ -39,6 +39,8 @@ def package(native_archive, plugins_archive, output):
     for name in native_exes:
         if 'Release/' + name not in payload:
             raise ValueError(f'Missing native executable: {name}')
+    if config.get('host_bridge') and 'Release/qarvtk-host.dll' not in payload:
+        raise ValueError('Live host release is missing qarvtk-host.dll')
     sdk = json.loads(payload['qarvtk-sdk.json'])
     if sdk['header_sha256'] != config['sdk_header_sha256']:
         raise ValueError('SDK fingerprint differs from the selected release')
@@ -63,10 +65,16 @@ def package(native_archive, plugins_archive, output):
                  'plugins/paraview/QarosVTKPlugin.py'):
         if name not in payload:
             raise ValueError(f'Missing plugin file: {name}')
+    if config.get('host_bridge'):
+        for name in ('plugins/slicer/QarosLive.py', 'plugins/slicer/QarosVTKLib/qarvtk_host_view.py',
+                     'plugins/slicer/QarosVTKLib/qarvtk_host_runtime.py'):
+            if name not in payload:
+                raise ValueError(f'Missing live host plugin: {name}')
     for target, source in {
         '01-Preview.cmd': 'scripts/windows/01-Preview.cmd',
         'ZACNI_ZDE.txt': config.get('quickstart', 'docs/WINDOWS_QUICKSTART.txt'),
         'sample/cube-200mm.vtp': 'samples/cube-200mm.vtp',
+        'KHRONOS-LICENSE.txt': 'third_party/KHRONOS-LICENSE.txt',
     }.items():
         payload[target] = (ROOT / source).read_bytes()
     provenance = {

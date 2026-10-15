@@ -20,6 +20,8 @@
 #include <thread>
 #include <vector>
 
+QAR_IMPLEMENT_DYNAMIC_LOADING()
+
 namespace {
 using Clock=std::chrono::steady_clock;
 std::atomic<bool> active{false};
