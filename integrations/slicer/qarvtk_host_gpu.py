@@ -32,7 +32,9 @@ class DesktopTextures:
                 depth = target.GetDepthAttachmentAsTextureObject()
                 if not target.GetFBOIndex() or not all(colors) or not depth:
                     return False
-                originals.append((target, colors, depth, tuple(target.GetLastSize())))
+                size = [0, 0]
+                target.GetLastSize(size)
+                originals.append((target, colors, depth, tuple(size)))
             for index, (target, colors, depth, size) in enumerate(originals):
                 spec = (len(colors), target.GetMultiSamples(),
                         window.GetRenderBufferTargetDepthSize(), window.GetStencilCapable())
