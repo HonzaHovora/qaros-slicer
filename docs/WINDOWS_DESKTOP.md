@@ -15,7 +15,7 @@ Tento postup nepotřebuje přihlášení v prohlížeči, instalaci GitHub CLI a
 Podporovaná grafika a Visual C++ Runtime x64 jsou stále potřeba.
 Při chybě pošli text z otevřeného okna; při hlášení o chybějícím ZIPu dokonči Pull origin.
 
-## Přímý renderer Sliceru: r14
+## Přímý renderer Sliceru: r15
 
 Po aktualizaci otevři **QAROS → QAROS Live Renderer**. Modul používá první
 3D pohled Sliceru. Host bridge DLL je
@@ -38,7 +38,13 @@ R14 doplňuje sekundová měření snímků, aktivního okna a volitelná data N
 Pro další měření nastav 50 %, střídej aktivní okno po 20–30 sekundách bez změny
 pohledu a scény, po 2–3 minutách zastav stream a spusť COLLECT-LOGS.cmd.
 ZIP zahrne host-bridge.log, host-python.log a host-system.log.
-Orientace je potvrzená; příčinu postupného poklesu FPS tato diagnostika teprve hledá.
+R15 zachovává stream při maximalizaci stejného 3D pohledu i při návratu do
+původního rozložení. Při odebrání zdrojového pohledu nebo změně OpenGL kontextu
+stream ukončí s konkrétním důvodem v modulu a v záznamu STOP_REQUEST.
+Poslední měření potvrdilo 960 × 540 na oko i ve fullscreen a teplotní omezení
+GPU při 86–87 °C. Měnila se i SDK kamera; samotné přepínání aktivního okna
+není prokázanou příčinou poklesu. R15 opravuje ukončení při změně rozložení,
+nejde o další potvrzenou opravu FPS. Podrobnosti: [měření](FPS_DIAGNOSTICS.md).
 
 ## Instalace modulu a dosavadní exportní cesta
 
@@ -67,7 +73,7 @@ a odpovídá přesné hlavičce z existujícího SDK:
 Plugin tuto shodu ověřuje automaticky. Toto SDK neposkytuje nové Hub párování;
 pole Hub identity se nepoužívá. SDK runtime a viewer nejsou součástí balíčku.
 
-Balíček odpovídá testovacímu vydání `windows-start-2026-10-15-session022c40b6r13`.
+Balíček odpovídá testovacímu vydání `windows-start-2026-10-15-session022c40b6r15`.
 Nový modul QAROS Live Renderer používá postup uvedený výše. Následující popis
 se týká zachovaného modulu QAROS Streaming s exportem r9.
 R9 přidává osvětlení, barvy, viditelné modely/segmenty a jeden CT/MR objem ze Sliceru.

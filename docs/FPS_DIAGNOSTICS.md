@@ -1,5 +1,86 @@
 # Live Slicer FPS investigation, 2026-10-15
 
+## r14 field results: resolution, fullscreen and GPU temperature
+
+Archive `QAROS-VTK-diagnostics-20261015-174009-305.zip` contains three
+consecutive sessions, in chronological order **3, 2, 1**. The plugin is
+`760df92fe350c36cddc6a10e07fe143534cb1e86`; host DLL SHA-256 is still
+`821fdf85a940e12bf47ca8a7adcebb7444708aa62b72a751f86d9f13e3690704`.
+
+| Run (log suffix) | Actual render per eye | Desktop view | Completed stereo frames | Mean source FPS | Both-eye Render wall time |
+|---|---|---|---:|---:|---:|
+| Full resolution (3) | 1920 × 1080 | 726 × 451 | 780 | 10.78 | 49.18 ms |
+| Half resolution (2) | 960 × 540 | 726 × 451 | 1,820 | 14.94 | 36.63 ms |
+| Half resolution, restarted fullscreen (1) | 960 × 540 | 1453 × 933 | 1,896 | 14.34 | 40.98 ms |
+
+FPS is total completed frames divided by the sum of recorded `elapsed_s`,
+not an unweighted mean of one-second FPS values. Render times are weighted
+by frame count. Startup connection time is outside the frame windows.
+Every frame retains two host renders, zero additional depth passes and zero
+desktop restoration renders. Stream color remains 1920 × 1080 per eye and
+stream depth 960 × 540. Fullscreen does **not** override the selected render size.
+
+These are not controlled performance comparisons: SDK eye poses change in
+all three runs. The eye midpoint starts about 1835 mm from the app-content
+origin and ends at about 901, 950 and 677 mm respectively. The final run also
+starts with a different Slicer viewing direction. Volume dimensions, physical
+matrix, transfer-function/input modification times and sampling settings stay
+unchanged. Moving the camera closer changes the image and ray-casting work.
+
+NVML succeeds on the RTX 2070 Max-Q with no query errors. Temperature reaches
+78 °C in the first run, 86 °C in the second, and 87 °C in the third. The latter
+two record `0x20` (software thermal slowdown); the third also has one `0x24`
+sample (thermal slowdown plus software power cap). During the final run,
+active GPU clocks fall from around 1750 MHz to roughly 1575–1620 MHz. This is
+direct evidence of thermal clock limiting, but does not assign all of the
+render-time increase to temperature. Camera workload changes at the same time.
+The counters describe the entire device, including the viewer.
+
+The final run's unchanged-eye interval is mostly 14–15 FPS, including about a
+minute with Slicer foreground, and about 13.6 FPS in the last partial interval.
+The data do not show a cumulative slowdown after every focus switch. In all
+three runs initial SDK readiness waiting is around 45–50 ms; it falls to about
+13–15 ms near the first SDK camera movement while Visualizer remains foreground.
+That is a correlation, not evidence of a particular internal SDK pacing rule.
+Copy calls remain around 3–4 ms. Windows thread CPU timing is quantized and
+can include driver spinning, so it cannot establish a CPU bottleneck alone.
+Background NVML sampling itself takes roughly 14–18 ms median and occasionally
+over 100 ms; its driver overhead has not been isolated with an on/off experiment.
+
+NVML definitions: [NVIDIA header](https://github.com/NVIDIA/go-nvml/blob/main/pkg/nvml/nvml.h)
+and [API reference](https://docs.nvidia.com/deploy/pdf/NVML_API_Reference_Guide.pdf).
+
+### Fullscreen stop and r15 correction
+
+The half-resolution run stops at **15:37:16.744 UTC** with `Stop requested`
+and normal SDK worker shutdown. All three runs end normally on the source
+side. The archive has no viewer log or recorded Windows crash event; a
+separate viewer crash cannot be proved or excluded from this evidence.
+
+The plugin connected `layoutChanged(int)` directly to `stop_stream`. Slicer
+5.12.4 emits that signal when maximizing a view as well as changing layouts.
+This is a concrete source-side reason for session closure matching the reported
+sequence. R15 retains streaming when the same first 3D view, renderer, camera
+and OpenGL context survive. Hiding/replacing that source, closing the scene,
+or recreating its context still stops safely. The context/source guard also
+runs before each eye-pair capture; the native WGL context guard remains active.
+Each stop now records its first reason in `STOP_REQUEST` and the module status.
+Continued layout changes record `LAYOUT_CHANGED`.
+
+The regression test uses the connected Slicer layout signal, maximizes and
+restores the 3D view, changes between four-up and one-up layouts, and toggles
+application fullscreen. It checks stereo color/depth, preserved desktop pixels
+and two renders per frame after each transition. Removing the 3D source must
+stop explicitly. These tests use Slicer with Mesa and a transport fixture;
+Windows WGL/context sharing and actual viewer behavior during fullscreen still
+require a target-PC check. R15 is a layout/lifecycle fix, not a claimed FPS fix.
+
+For a further performance comparison, use the same SDK camera and volume
+preset throughout and distinguish a cold GPU from sustained 86 °C operation.
+No screenshot capture is needed.
+
+## Earlier r13 report
+
 The user confirmed correct orientation with r13. Two current field reports use
 the accepted r13 DLL (`821fdf85…`) and the same initial app placement.
 

@@ -1,10 +1,10 @@
-QAROS Live Renderer — přímý renderer Sliceru, r14
+QAROS Live Renderer — přímý renderer Sliceru, r15
 
 AKTUALIZACE
 
 1. Zastav přenos a zavři Slicer, Visualizer i náhled kostky.
 2. GitHub Desktop → QAROS_VTK / main → Fetch origin → Pull origin.
-3. Spusť D:\QAROS_VTK\START-PREVIEW.cmd. Ověří a rozbalí r14.
+3. Spusť D:\QAROS_VTK\START-PREVIEW.cmd. Ověří a rozbalí r15.
 4. Zavři náhled kostky a otevři Slicer.
 5. Zvol QAROS → QAROS Live Renderer.
 
@@ -65,7 +65,7 @@ a SDK. Původní renderer na monitoru se po každém stereo snímku obnoví.
 U standardního CT/MR vykreslování ve Sliceru 5.12.4 se barva a hloubka získávají
 společně, jedním vykreslením pro každé oko. Původní desktopové textury se
 uchovají na GPU a vrátí bez dalšího renderu. Dočasné změny kamery nespouštějí
-automatické překreslení Sliceru. R14 zachovává nativní DLL z r13;
+automatické překreslení Sliceru. R15 zachovává nativní DLL z r13;
 aktualizuje Python plugin a diagnostiku. Synchronizace a vlastnictví snímku zůstávají.
 SDK pózy se použijí přímo v původních RAS souřadnicích Sliceru. Převod milimetrů
 na metry, přizpůsobení velikosti i otočení zajišťují app_scale a app_pose.
@@ -81,6 +81,12 @@ s objemem zatím nemají ověřenou hloubku a modul je odmítne. Jedna hloubka n
 pixel je aproximace objemu: první přispívající vzorek, ne všechny vrstvy.
 Přenos panelů a ovládání zpět do Sliceru ještě není součástí.
 ParaView zůstává u dosavadního povrchového exportu.
+
+R15 pokračuje při maximalizaci stejného 3D pohledu a návratu do původního
+rozložení. Odebrání zdrojového pohledu nebo změna OpenGL kontextu vyžaduje
+nový Start. Důvod ukončení se zobrazí v modulu a v logu STOP_REQUEST.
+Při zachování pohledu se zaznamená LAYOUT_CHANGED. Jde o opravu ukončování
+při změně rozložení, nikoli o potvrzenou opravu FPS.
 
 PŘI CHYBĚ
 

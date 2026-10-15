@@ -1,8 +1,8 @@
 {
-  "tag": "windows-start-2026-10-15-session022c40b6r14",
+  "tag": "windows-start-2026-10-15-session022c40b6r15",
   "date": "2026-10-15",
-  "title": "QAROS Live Renderer r14 — frame cadence, focus and GPU diagnostics",
-  "filename": "QAROS_VTK_Windows_session_022c40b6_2026-10-15_r14.zip",
+  "title": "QAROS Live Renderer r15 — keep the stream through Slicer layout changes",
+  "filename": "QAROS_VTK_Windows_session_022c40b6_2026-10-15_r15.zip",
   "native": {
     "run_id": 38749688548,
     "artifact_id": 11980672080,
@@ -10,15 +10,15 @@
     "sha256": "9b32dd558964f446d39e9ddaf73e86f76782b03748e73078dd2abd0a89d2c0ec"
   },
   "plugins": {
-    "run_id": 38759400030,
-    "artifact_id": 11984618174,
-    "commit": "760df92fe350c36cddc6a10e07fe143534cb1e86",
-    "sha256": "73e0b3f637212a9aecc44e521f184ac4cbe244d64bd051ee5d1246bc6c9bb27a"
+    "run_id": 38764857884,
+    "artifact_id": 11987436825,
+    "commit": "46bf78ce91f60f0591125caeb380e7eee6363881",
+    "sha256": "b01b1794ca6bd8496d816ca45b1e21cbe5fd3661e776dfe77c847ce791d40a3d"
   },
   "sdk_header_sha256": "022c40b670f87a066664c37daeb06da525db37fffdf5810e72cff8a5b81e677d",
   "modern_api": 0,
   "host_bridge": true,
   "quickstart": "docs/WINDOWS_LIVE_QUICKSTART.txt",
-  "release_note": "R14 měří postupný pokles FPS při přepínání Sliceru a Visualizeru. Sekundové souhrny obsahují jednotlivé rozestupy snímků, časy renderu na CPU, aktivní proces a změny SDK kamery. Samostatné vlákno jednou za sekundu čte dostupné NVIDIA NVML údaje: takty, teplotu, vytížení, výkonový stav, důvody omezení taktů a paměť. Nepodporované údaje jsou označené, monitor nečeká na GUI a COLLECT-LOGS.cmd přidává host-system.log. Orientace, app_pose/app_scale, poloviční depth a renderovací pipeline z r13 zůstávají zachované. Jde o diagnostické vydání, ne o potvrzenou opravu poklesu FPS. Windows testy a ověření barvy/CT hloubky v oficiálním Sliceru 5.12.4 prošly. Ponech Render resolution na 50 %, střídej aktivní okno po 20–30 sekundách bez změny pohledu/scény a po 2–3 minutách pošli logy.",
+  "release_note": "R15 opravuje bezpodmínečné ukončení streamu při změně layoutu Sliceru. Maximalizace stejného 3D pohledu i návrat mohou pokračovat ve stejné relaci. Zdrojový pohled, renderer, kamera a kontext se kontrolují; odebrání nebo výměna zdroje vyžaduje nový Start. První konkrétní důvod ukončení je ve stavovém řádku a v STOP_REQUEST, pokračující změny layoutu v LAYOUT_CHANGED. Nové logy potvrdily při 50 % skutečný render 960 × 540 na oko i ve fullscreen; pokles výkonu doprovází změny SDK kamery a teplotní omezení GPU při 86–87 °C. Nativní DLL, orientace přes app_pose/app_scale, poloviční depth a diagnostika zůstávají. Jde o opravu životního cyklu streamu, ne o potvrzenou opravu FPS. Test ve Sliceru 5.12.4 kontroluje maximalizaci, návrat, fullscreen, nativní barvu, CT hloubku a obnovu desktopu. Na cílovém Windows PC ověř maximalizaci a návrat během běžícího streamu.",
   "host_abi": 2
 }

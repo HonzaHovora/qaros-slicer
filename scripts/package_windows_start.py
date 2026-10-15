@@ -153,7 +153,9 @@ Umístění, natočení podle výchozího pohledu Sliceru a velikost nastavuje S
 app_pose/app_scale. Hloubka má poloviční šířku i výšku oproti přenášené barvě.
 Render resolution 100/75/50 % ovládá velikost skutečného renderu; rozměry jsou
 viditelné v modulu i v logu. R14 přidává diagnostiku aktivního procesu, časové řady
-snímků a volitelné telemetrie NVIDIA. Nativní DLL z r13 zůstává zachovaná.
+snímků a volitelné telemetrie NVIDIA. R15 zachovává stream při změně rozložení,
+pokud přežije stejný 3D pohled a OpenGL kontext; ukončení má konkrétní důvod.
+Nativní DLL z r13 zůstává zachovaná.
 
 Modul: **QAROS → QAROS Live Renderer**. Před instalací zavři Slicer a Visualizer,
 v GitHub Desktop proveď Fetch/Pull a spusť START-PREVIEW.cmd. Po rozbalení zavři
@@ -165,13 +167,17 @@ zachován. ParaView zatím zůstává u povrchového exportu.
 
 Windows build/ABI a WGL sdílení textur prošly. Test v oficiálním Sliceru 5.12.4
 ověřuje stereo, shodu barvy, vlastní shader, CT hloubku, ROI a obnovu stavu po
-chybě. Orientace a poloviční depth z r13 jsou potvrzené na cílovém PC. Při 50 %
-renderu ale FPS postupně kleslo z přibližně 19 na 13; příčina růstu času renderu
-zatím není určená. **R14 je diagnostické vydání, nikoli ověřená oprava FPS.**
+chybě. Nový test mění rozložení, maximalizuje 3D pohled a přepíná fullscreen;
+ověřuje stereo barvu/hloubku a zachované desktopové textury. Používá Mesa
+a transportní testovací náhradu, nikoli skutečné Windows SDK spojení.
+Orientace a poloviční depth z r13 jsou potvrzené na cílovém PC. Nové logy
+potvrdily 960 × 540 na oko i ve fullscreen, teplotní omezení GPU při 86–87 °C
+a současné změny SDK kamery. **R15 opravuje ukončení streamu při změně rozložení;
+není potvrzenou opravou FPS.**
 Podporovaný je jeden GPU Composite objem a neprůhledné povrchy.
-Pro další test ponech 50 %, střídej aktivní okno po 20–30 sekundách bez změny
-pohledu, po 2–3 minutách zastav stream a spusť COLLECT-LOGS.cmd. Telemetrie
-GPU na konkrétní NVIDIA kartě a její režie musí být ověřeny tímto během.
+Na cílovém PC ověř maximalizaci stejného 3D pohledu během streamu a návrat.
+Při potížích spusť COLLECT-LOGS.cmd; nové důvody ukončení jsou v STOP_REQUEST.
+Pro srovnání FPS drž stejnou SDK kameru a preset a zohledni teplotu GPU.
 
 - Native build: [{config['native']['commit'][:8]}]({provenance['native_run']})
 - Plugins: [{config['plugins']['commit'][:8]}]({provenance['plugins_run']})

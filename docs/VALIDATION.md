@@ -1,5 +1,43 @@
 # Validation and next work
 
+## Live r14 field results and r15 layout fix, 2026-10-15
+
+The three sessions in `QAROS-VTK-diagnostics-20261015-174009-305.zip`
+average 10.78 FPS at full resolution, 14.94 at half resolution and 14.34
+after restarting half resolution in fullscreen. Actual render size remains
+960 × 540 in both half-resolution runs. SDK eye poses change substantially;
+the later runs reach 86–87 °C and NVML reports software thermal slowdown.
+These observations do not isolate focus as the cause of the slowdown.
+See [FPS_DIAGNOSTICS.md](FPS_DIAGNOSTICS.md) for measured timings and limits.
+
+All source sessions stop normally. The plugin's unconditional connection of
+`layoutChanged(int)` to Stop explains a session closure when maximizing a view;
+there is no viewer log to establish or rule out an additional viewer crash.
+R15 keeps the session when the same visible first 3D view, renderer, camera
+and OpenGL context survive. Source removal/replacement/context recreation
+still requires restarting. The source/context guard runs before frame capture.
+The first stop reason is retained in the module status and `STOP_REQUEST`.
+
+Accepted production/plugin source: `46bf78ce91f60f0591125caeb380e7eee6363881`.
+[Build/test 38764857884](https://github.com/HonzaHovora/QAROS_VTK/actions/runs/38764857884)
+passed, including Windows runtime/control-flow tests. The test-only follow-up
+`1ca772db05db8dadafbe6eeebba80fa1d694e3bf` passed
+[Slicer 38765419509](https://github.com/HonzaHovora/QAROS_VTK/actions/runs/38765419509).
+It uses the connected layout signal for four-up/one-up, 3D maximize/restore and
+application fullscreen/normal. After each transition it verifies two renders,
+unchanged desktop pixels, current native pipeline color and independent VTK
+tissue depth. Hiding the source stops with a reason; a changed context stamp
+is rejected. A pre/post-layout image-equality assertion was replaced by current
+native color/depth comparison because layout changes can update MRML props.
+The earlier API spelling error was caught by Slicer and corrected to
+`IsViewVisibleInLayout` before the accepted tests/package.
+
+The Slicer test uses Mesa and a transport fixture; actual Windows SDK/viewer
+fullscreen behavior remains a target-PC check. R15 does not claim an FPS fix.
+Native DLL remains the accepted r13 binary (`821fdf85…`), ABI 2. The assembled
+starter has 75 verified manifest entries, byte-identical accepted plugin sources,
+and SHA-256 `e1e27028e8f303f75f30d5e51aa5749d0319daef6f45a9a503ffd1141d3cd7a9`.
+
 ## Live r13 field results and r14 diagnostics, 2026-10-15
 
 The user now confirms correct orientation. The latest r13 logs confirm two
