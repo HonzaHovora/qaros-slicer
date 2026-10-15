@@ -85,12 +85,18 @@ def run():
     # Animated image data follows the same Render/EndEvent lifecycle as a
     # sequence/video player. A stalled receiver must resume at its newest frame.
     sink.ready = False
+    previous_red, video_changed = before["Red"], False
     for frame in range(12):
         data = base.copy()
         data[:, :, frame*5:frame*5+15] = 1900
         slicer.util.updateVolumeFromArray(ct, data)
         slicer.app.processEvents()
         for window in windows.values(): window.Render()
+        red = pixels(windows["Red"])
+        # Qt can settle the splitter geometry after the initial snapshot. Only
+        # compare equal-sized frames when checking that the video really moves.
+        video_changed |= (red.shape == previous_red.shape and np.count_nonzero(red != previous_red) > 100)
+        previous_red = red
         now[0] += .04
         previews.tick()
     assert len(sink.frames) == 3, "Busy receiver accepted a queued frame"
@@ -102,7 +108,7 @@ def run():
     assert len(sink.frames) == 6 and counts == before_counts
     for name in windows:
         assert np.array_equal(sink.images[name], latest[name]), "Receiver got a stale video frame"
-    assert np.count_nonzero(sink.images["Red"] != before["Red"]) > 100, "Video fixture did not change the image"
+    assert video_changed, "Video fixture did not change the image"
     now[0] += .2
     for _ in range(3): previews.tick()
     assert len(sink.frames) == 6, "Static image triggered a new GPU capture"
