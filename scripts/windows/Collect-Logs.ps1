@@ -42,6 +42,25 @@ foreach ($log in $logs) {
 }
 if ($logs.Count -eq 0) { $notes.Add('No sender.log found in qarvtk-* temporary folders.') }
 
+$liveRoot = Join-Path $env:LOCALAPPDATA 'QAROS_VTK\live-logs'
+if (Test-Path -LiteralPath $liveRoot -PathType Container) {
+    $liveLogs = @(Get-ChildItem -LiteralPath $liveRoot -Directory |
+        ForEach-Object {
+            $path = Join-Path $_.FullName 'host-bridge.log'
+            if (Test-Path -LiteralPath $path -PathType Leaf) { Get-Item -LiteralPath $path }
+        } | Sort-Object LastWriteTimeUtc -Descending | Select-Object -First 3)
+    $liveIndex = 0
+    foreach ($log in $liveLogs) {
+        $liveIndex++
+        $target = Join-Path $folder ("host-bridge-" + $liveIndex + '.log')
+        $notes.Add(('host-bridge-{0}.log: {1}; {2} bytes' -f $liveIndex, $log.FullName, $log.Length))
+        try {
+            Get-Content -LiteralPath $log.FullName -Encoding UTF8 -Tail 10000 |
+                Set-Content -LiteralPath $target -Encoding UTF8
+        } catch { $notes.Add("Cannot read host bridge log: $_") }
+    }
+}
+
 $install = Join-Path $repoRoot 'package\windows-start'
 foreach ($name in @('BUILD_INFO.json', 'qarvtk-sdk.json')) {
     $path = Join-Path $install $name
@@ -49,7 +68,7 @@ foreach ($name in @('BUILD_INFO.json', 'qarvtk-sdk.json')) {
         Copy-Item -LiteralPath $path -Destination (Join-Path $folder $name)
     }
 }
-foreach ($path in @((Join-Path $install 'Release\qarvtk-sender.exe'), (Join-Path $SdkRoot 'include\qar_streaming.h'))) {
+foreach ($path in @((Join-Path $install 'Release\qarvtk-sender.exe'), (Join-Path $install 'Release\qarvtk-host.dll'), (Join-Path $SdkRoot 'include\qar_streaming.h'))) {
     if (Test-Path -LiteralPath $path -PathType Leaf) {
         try {
             $hash = Get-FileHash -LiteralPath $path -Algorithm SHA256

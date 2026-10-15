@@ -106,8 +106,10 @@ def run():
     surface_mapper.SetInputConnection(sphere.GetOutputPort())
     actor = vtk.vtkActor()
     actor.SetMapper(surface_mapper)
-    actor.GetProperty().SetColor(0., 1., 0.)
+    actor.GetProperty().SetColor(1., 0., 0.)
     actor.GetProperty().LightingOff()
+    actor.GetShaderProperty().AddFragmentShaderReplacement("//VTK::Light::Impl", True,
+        "//VTK::Light::Impl\n  gl_FragData[0] = vec4(0.0, 1.0, 0.0, 1.0);", False)
     renderer.AddActor(actor)
     changed = Oracle()
     host.render(eyes, changed)
@@ -138,6 +140,15 @@ def run():
     assert np.count_nonzero(cropped.colors[0][:, :, 0] > 100) < np.count_nonzero(again.colors[0][:, :, 0] > 100)
     assert not np.array_equal(cropped.depths[0], again.depths[0])
     assert vr.GetCroppingEnabled(), "Host crop state was lost"
+
+    class EmptyOracle(Oracle):
+        def depth(self, index, color, depth, vc, vd, width, height):
+            image = vtk.vtkImageData()
+            mapper.GetDepthImage(image)
+            values = vtk_to_numpy(image.GetPointData().GetScalars())
+            assert np.all(values == 1), "Offscreen volume retained an earlier eye's depth"
+    away = [dict(eye, orientation=(0., 1., 0., 0.)) for eye in eyes]
+    host.render(away, EmptyOracle())
 
     class Broken(Oracle):
         def depth(self, *args):

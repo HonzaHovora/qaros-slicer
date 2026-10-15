@@ -117,6 +117,7 @@ class HostView:
         size = window.GetSize()
         blit, offscreen, swap, stereo = (window.GetFrameBlitMode(), window.GetUseOffScreenBuffers(),
                                          window.GetSwapBuffers(), window.GetStereoRender())
+        flip_y = window.GetFramebufferFlipY()
         camera_node = self.view.cameraNode() if hasattr(self.view, "cameraNode") else None
         modifying = camera_node.StartModify() if camera_node else None
         try:
@@ -124,6 +125,7 @@ class HostView:
             window.SetUseOffScreenBuffers(True)
             window.SetSwapBuffers(True)  # Resolve MSAA to the host display textures.
             window.SetStereoRender(False)  # Explicit QAROS eyes, never host anaglyph/interlace.
+            window.SetFramebufferFlipY(False)  # Transport normalizes both planes to top-left.
             yield
         finally:
             self.camera.DeepCopy(saved_camera)
@@ -132,6 +134,7 @@ class HostView:
             window.SetUseOffScreenBuffers(offscreen)
             window.SetSwapBuffers(swap)
             window.SetStereoRender(stereo)
+            window.SetFramebufferFlipY(flip_y)
             if camera_node:
                 camera_node.EndModify(modifying)
             self._busy = False

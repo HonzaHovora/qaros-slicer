@@ -1,0 +1,67 @@
+QAROS Live Renderer — přímý renderer Sliceru, r10
+
+AKTUALIZACE
+
+1. Zastav přenos a zavři Slicer, Visualizer i náhled kostky.
+2. GitHub Desktop → QAROS_VTK / main → Fetch origin → Pull origin.
+3. Spusť D:\QAROS_VTK\START-PREVIEW.cmd. Ověří a rozbalí r10.
+4. Zavři náhled kostky a otevři Slicer.
+5. Zvol QAROS → QAROS Live Renderer.
+
+Je to nový modul. Původní QAROS Streaming dál používá export r9.
+Additional module paths zůstává D:/QAROS_VTK/package/windows-start/plugins/slicer.
+
+PRVNÍ TEST
+
+1. Ve Sliceru otevři stejnou CT scénu, která fungovala v r9.
+2. Ve Volume Rendering zapni její zobrazení a použij VTK GPU / Composite.
+3. Nastav vzhled v prvním 3D pohledu Sliceru. Přenáší se celý tento pohled.
+4. Otevři QAROS Live Renderer a zkontroluj:
+   Host bridge DLL: D:/QAROS_VTK/package/windows-start/Release/qarvtk-host.dll
+   QAROS SDK folder: D:/install
+   Viewer: visualizer
+   Center and fit into 65 cm workspace at Start: zapnuto
+5. Klikni Start live streaming a nech Visualizer viditelný.
+6. Po prvním snímku změň preset / barvu / viditelnost ve Sliceru.
+   Změna se má projevit sama, bez Update scene.
+7. Zapni Crop a posuň ROI. Také ořez se má měnit živě ve Visualizeru.
+8. Stop live streaming ukončí přenos; počkej, až se znovu povolí Start.
+
+Pokud je starý QAROS Streaming spuštěný, nejprve v něm dej Stop streaming.
+Při změně rozložení oken nebo zavření scény se živý přenos zastaví.
+Vystředění a měřítko se určují při Start. Pro nové vystředění přenos restartuj.
+Kamera v headsetu je nezávislá na pohledu na monitoru; stejné jsou scéna a její
+vykreslovací nastavení. Dva různé pohledy proto nemusejí mít stejný obraz.
+
+CO TATO VERZE DĚLÁ
+
+Používá přímo renderer, objekty, shadery a volume mapper běžící ve Sliceru.
+Scéna se neexportuje do VTP/VTM. Obraz se nečte do RAM. Knihovna qarvtk-host.dll
+neobsahuje další VTK/Qt a používá vlastní sdílené OpenGL kontexty pro kopírování
+a SDK. Původní renderer na monitoru se po každém stereo snímku obnoví.
+
+U CT/MR se barva vezme z normálního hostitelského renderu. Hloubka se získá
+doplňkovým průchodem stejného volume mapperu a spojí se s hloubkou povrchů.
+To má výpočetní náklady. Tento balíček řeší správný zdroj obrazu, nezvyšuje
+prokazatelně FPS. FPS diagnostiku necháváme oddělenou.
+
+První verze ověřuje jeden VTK GPU Composite objem a neprůhledné povrchy.
+ROI ořez je podporovaný. Multi-volume, MIP a průhledné povrchy v kombinaci
+s objemem zatím nemají ověřenou hloubku a modul je odmítne. Jedna hloubka na
+pixel je aproximace objemu: první přispívající vzorek, ne všechny vrstvy.
+Přenos panelů a ovládání zpět do Sliceru ještě není součástí.
+ParaView zůstává u dosavadního povrchového exportu.
+
+PŘI CHYBĚ
+
+Zkopíruj text ze stavového řádku nového modulu. Log folder obsahuje jeho logy.
+D:\QAROS_VTK\COLLECT-LOGS.cmd přidá host-bridge.log do diagnostického ZIPu.
+Při aktualizaci musí být Slicer zavřený, jinak Windows drží DLL zamčenou.
+SDK hlavičku ani knihovny v D:\install neměň.
+
+JDE O PRVNÍ TESTOVACÍ VYDÁNÍ
+
+Testy v oficiálním Sliceru 5.12.4 ověřují stereo obraz, CT hloubku, nativní
+objekt se shaderem, živý ROI ořez a obnovu stavu i po chybě. Windows build,
+ABI a sdílení OpenGL textur mají samostatné testy. Přenos z živého Sliceru
+přes skutečný SDK runtime na cílové NVIDIA kartě musí potvrdit tento test.

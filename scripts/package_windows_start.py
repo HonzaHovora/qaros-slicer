@@ -87,6 +87,7 @@ def package(native_archive, plugins_archive, output):
         'plugins_artifact_sha256': config['plugins']['sha256'],
         'sdk_build_metadata': sdk,
         'included_runtime': False,
+        'live_host_renderer': bool(config.get('host_bridge')),
         'gpu_hub_headset_tested': False,
         'notes': 'Original CI DLLs/EXEs and packaged plugins are unchanged. '
                  'Added Czech quickstart, preview launcher and a synthetic 200 mm cube.'
@@ -134,6 +135,33 @@ povrchy. ParaView zatím přenáší povrchy. FPS diagnostika z r8 je zachována
 - Native build: [{config['native']['commit'][:8]}]({provenance['native_run']})
 - Plugins: [{config['plugins']['commit'][:8]}]({provenance['plugins_run']})
 - [Instalační postup]({REPO}/blob/main/{config.get('quickstart', 'docs/WINDOWS_QUICKSTART.txt')})
+'''
+    if config.get('host_bridge'):
+        notes = f'''Windows testovací balíček **QAROS Live Renderer r10**.
+
+Nový modul ve Sliceru čte GPU výstup jeho skutečného 3D pohledu. Scéna se
+neexportuje a nevytváří se náhradní renderer. Barva zůstává výstupem celé
+hostitelské pipeline; pro jeden GPU Composite objem se získává hloubka
+doplňkovým průchodem stejného mapperu. ROI ořez a změny presetu jsou živé.
+
+Modul: **QAROS → QAROS Live Renderer**. Před instalací zavři Slicer a Visualizer,
+v GitHub Desktop proveď Fetch/Pull a spusť START-PREVIEW.cmd. Po rozbalení zavři
+náhled kostky a otevři Slicer. Podrobnosti jsou v ZACNI_ZDE.txt.
+
+Knihovna qarvtk-host.dll neodkazuje na VTK, Qt ani GLFW. SDK zůstává stávající
+session-022c40b6 v D:/install. Původní QAROS Streaming používá export r9 a je
+zachován. ParaView zatím zůstává u povrchového exportu.
+
+Windows build/ABI a WGL sdílení textur prošly. Test v oficiálním Sliceru 5.12.4
+ověřuje stereo, shodu barvy, vlastní shader, CT hloubku, ROI a obnovu stavu po
+chybě. **Spojení živého Sliceru s QAROS na cílové NVIDIA kartě je potřeba ověřit.**
+První verze podporuje jeden GPU Composite objem a neprůhledné povrchy.
+Dodatečný hloubkový průchod má náklady; nejde o optimalizaci FPS.
+
+- Native build: [{config['native']['commit'][:8]}]({provenance['native_run']})
+- Plugins: [{config['plugins']['commit'][:8]}]({provenance['plugins_run']})
+- SHA256 SDK: `{config['sdk_header_sha256']}`
+- [Postup]({REPO}/blob/main/{config.get('quickstart')})
 '''
     (output / 'release-notes.md').write_text(notes, encoding='utf-8')
     print(target)

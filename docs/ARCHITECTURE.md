@@ -9,9 +9,31 @@ QAROS supplies viewer pose/FOV and transports the resulting color and depth.
 Recreating host features in a separate renderer repeats the compatibility and
 maintenance problem identified with the ANARI integration.
 
-**Status:** r9 is a standalone rendering and transport prototype. It reconstructs
-an exported subset of the scene; the host-rendered path is not implemented yet.
-The following is the target, not a capability of the published Windows ZIP.
+**Status, 2026-10-15:** the experimental Slicer host-rendered path is implemented
+as `QarosLive.py`, `qarvtk_host_view.py` and the VTK/Qt-free `qarvtk-host.dll`.
+It is undergoing acceptance and Windows packaging for r10. R9 remains a separate
+snapshot renderer. End-to-end live-host validation on the target NVIDIA/SDK
+installation is still required; the milestone is not yet declared complete.
+
+The live module uses the original view's resolved display framebuffer. The
+normal full host render supplies color; a supplementary render asks the same
+active GPU volume mapper for its first contributing sample depth. GPU composition
+combines that depth with opaque surfaces without replacing the original color.
+It restores mapper, cullers, camera, dimensions and desktop framebuffer even
+when the consumer raises an error. There is no scene export or CPU image path.
+
+The native C ABI receives texture names only inside Slicer's process. Two owned
+WGL contexts share host resources: one copies frames, one is reserved for SDK
+graphics callbacks. SDK session/frame control runs on a worker. A frame lease
+holds SDK textures until the GUI thread has copied both eyes and planes; Stop
+cancels pending SDK work and destruction waits for worker shutdown. The bridge
+uses the pinned session SDK and imports no host VTK/Qt classes. Conservative
+`glFinish` calls and the supplementary depth render are correctness baselines.
+
+Initial depth scope is one GPU Composite volume with opaque surfaces. ROI
+cropping is live. Multi-volume/MIP and volume plus translucent surfaces fail
+explicitly until a valid depth policy is implemented. Color from arbitrary host
+effects does not by itself guarantee meaningful depth for every custom plugin.
 
 ### First milestone: Slicer's live 3D view to Visualizer
 
@@ -42,8 +64,9 @@ The following is the target, not a capability of the published Windows ZIP.
 
 Do not load r9's independently built VTK/Qt libraries into Slicer or ParaView.
 Any C++ extension using their VTK/Qt types must target the matching host build.
-A transport-only bridge may instead expose a narrow native interface without
-linking another VTK; its shared-context integration still needs validation.
+The implemented transport-only bridge exposes a narrow native interface without
+linking another VTK. Real Windows Slicer/SDK shared-context integration still
+needs on-device validation.
 
 ### Acceptance before UI work
 

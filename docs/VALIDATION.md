@@ -1,5 +1,25 @@
 # Validation and next work
 
+## Direct host rendering: r10, 2026-10-15
+
+The user confirmed that the r9 volume test works on the target installation.
+The next test is the separate **QAROS Live Renderer** module, using the actual
+Slicer view and GPU textures. This is not an additional snapshot export mode.
+
+Slicer acceptance uses the official 5.12.4 binary (VTK 9.6.2) under Xvfb/Mesa.
+It checks stereo, matching host color, tissue depth, a renderer-only actor with
+a custom shader, ROI cropping, and restoration of the camera/mapper/cullers and
+window dimensions after success and an injected consumer failure. Pixel readback
+is confined to this test. Windows separately builds the transport with the
+standalone renderer disabled, tests ABI/SDK metadata and missing-context error
+recovery, and verifies shared WGL texture contents and context restoration.
+
+These component checks cannot validate the live Slicer → QAROS runtime →
+Visualizer route on NVIDIA. That remains the on-device acceptance gate. This
+version adds a supplementary volume-depth pass and conservative synchronization;
+it makes no FPS improvement claim. The original r8 pacing investigation remains
+deferred. The published release metadata identifies the exact tested artifacts.
+
 ## Lit scenes and CT/MR volumes: r9, 2026-10-14
 
 Source commit `e92a9f964e42ec596b4bcf9edac6f20cb97a8eea` passed:
@@ -21,8 +41,8 @@ Assembled ZIP SHA-256: `12f3001e2209f4876adc3607d5e459aa4b2e9fed796dd52acc1f4732
 Session sender SHA-256: `415af46214722e4442364ec6306a3114dd4a494664dc85eb7f550283643bf80f`.
 
 This is not an FPS fix. QAROS frame pacing, WGL context handling, SDK layout and
-color/depth origin conversion from r8 are retained. New scenes have not yet been
-observed on the target NVIDIA/Visualizer or in two headsets. Scope: Slicer,
+color/depth origin conversion from r8 are retained. The user confirmed the r9
+volume test on 2026-10-15; operation in two headsets is unverified. Scope: Slicer,
 one scalar volume, Composite mode, no ROI cropping, linear volume transforms,
 opaque surfaces when combined with a volume. ParaView remains surface-only.
 Center/fit is explicit and defaults to 0.65 m; disable it for physical size.
