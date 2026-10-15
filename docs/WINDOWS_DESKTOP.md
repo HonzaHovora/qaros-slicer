@@ -15,13 +15,18 @@ Tento postup nepotřebuje přihlášení v prohlížeči, instalaci GitHub CLI a
 Podporovaná grafika a Visual C++ Runtime x64 jsou stále potřeba.
 Při chybě pošli text z otevřeného okna; při hlášení o chybějícím ZIPu dokonči Pull origin.
 
-## Přímý renderer Sliceru: r15
+## Přímý renderer Sliceru: r16
 
 Po aktualizaci otevři **QAROS → QAROS Live Renderer**. Modul používá první
 3D pohled Sliceru. Host bridge DLL je
 `D:/QAROS_VTK/package/windows-start/Release/qarvtk-host.dll`, SDK `D:/install`
 a Viewer `visualizer`. Přenos spustíš tlačítkem **Start live streaming**.
 Preset, viditelnost a ROI se mění živě, bez Update scene.
+Pracovní kvádr se při Start nastaví podle viditelné scény, natočení a měřítka.
+**Center and fit** zapnuto znamená vystředění a nejdelší hranu 65 cm;
+vypnuto zachová fyzickou velikost i polohu. **Workspace** ukazuje výsledné
+rozměry v centimetrech. Pro přepočet rozsahu po změně dat dej Stop a Start.
+R16 vyžaduje novou DLL i plugin z balíčku, proto aktualizuj se zavřeným Slicerem.
 [Celý postup a rozsah testovací verze](WINDOWS_LIVE_QUICKSTART.txt).
 
 Předchozí QAROS Streaming musí být zastavený. První verze podporuje jeden
@@ -73,7 +78,7 @@ a odpovídá přesné hlavičce z existujícího SDK:
 Plugin tuto shodu ověřuje automaticky. Toto SDK neposkytuje nové Hub párování;
 pole Hub identity se nepoužívá. SDK runtime a viewer nejsou součástí balíčku.
 
-Balíček odpovídá testovacímu vydání `windows-start-2026-10-15-session022c40b6r15`.
+Balíček odpovídá testovacímu vydání `windows-start-2026-10-15-session022c40b6r16`.
 Nový modul QAROS Live Renderer používá postup uvedený výše. Následující popis
 se týká zachovaného modulu QAROS Streaming s exportem r9.
 R9 přidává osvětlení, barvy, viditelné modely/segmenty a jeden CT/MR objem ze Sliceru.

@@ -1,10 +1,10 @@
-QAROS Live Renderer — přímý renderer Sliceru, r15
+QAROS Live Renderer — přímý renderer Sliceru, r16
 
 AKTUALIZACE
 
 1. Zastav přenos a zavři Slicer, Visualizer i náhled kostky.
 2. GitHub Desktop → QAROS_VTK / main → Fetch origin → Pull origin.
-3. Spusť D:\QAROS_VTK\START-PREVIEW.cmd. Ověří a rozbalí r15.
+3. Spusť D:\QAROS_VTK\START-PREVIEW.cmd. Ověří a rozbalí r16 včetně nové DLL.
 4. Zavři náhled kostky a otevři Slicer.
 5. Zvol QAROS → QAROS Live Renderer.
 
@@ -30,11 +30,25 @@ PRVNÍ TEST
 8. Stop live streaming ukončí přenos; počkej, až se znovu povolí Start.
 
 Pokud je starý QAROS Streaming spuštěný, nejprve v něm dej Stop streaming.
-Při změně rozložení oken nebo zavření scény se živý přenos zastaví.
+Maximalizace stejného 3D pohledu a návrat zachovávají přenos. Odebrání zdrojového
+pohledu, změna OpenGL kontextu nebo zavření scény přenos zastaví.
 Natočení, vystředění a měřítko se při Start nastaví přes SDK app_pose/app_scale.
 Výchozí směr odpovídá pohledu ve Sliceru. Další pohyb kamer je nezávislý;
 otáčení desktopové kamery po Start nepřesouvá scénu ve Visualizeru.
-Pro nové výchozí natočení nebo jiné renderovací rozlišení dej Stop a Start.
+Pro nové výchozí natočení, rozsah scény nebo jiné renderovací rozlišení dej Stop a Start.
+
+PRACOVNÍ PROSTOR VE VISUALIZERU
+
+R16 při Start nastaví jeho šířku, výšku a hloubku podle bounds viditelných
+objektů v prvním 3D pohledu Sliceru. Započítá natočení i SDK app_scale.
+Pevná kostka 1,2 m je nahrazena kvádrem odpovídajícím scéně.
+Center and fit zapnuto: střed dat je uprostřed pracovního prostoru a nejdelší
+hrana má 65 cm. Ostatní rozměry zachovají poměr stran.
+Center and fit vypnuto: 1 mm dat zůstane 1 mm v prostoru a poloha dat se zachová;
+pracovní kvádr se umístí kolem dat. Řádek Workspace ukazuje šířku × výšku × hloubku
+v centimetrech. Plochá scéna má minimální tloušťku 1 mm.
+Rozměry se zafixují při Start. Změny ROI/presetu se stále vykreslují živě,
+ale ořez ROI automaticky nezmenšuje bounds ani pracovní prostor.
 
 Pod volbou rozlišení jsou skutečné velikosti: Render, stream color, depth, Slicer.
 Při požadavku 1920 × 1080 pro oko zůstává přenášená barva v tomto rozlišení,
@@ -65,8 +79,9 @@ a SDK. Původní renderer na monitoru se po každém stereo snímku obnoví.
 U standardního CT/MR vykreslování ve Sliceru 5.12.4 se barva a hloubka získávají
 společně, jedním vykreslením pro každé oko. Původní desktopové textury se
 uchovají na GPU a vrátí bez dalšího renderu. Dočasné změny kamery nespouštějí
-automatické překreslení Sliceru. R15 zachovává nativní DLL z r13;
-aktualizuje Python plugin a diagnostiku. Synchronizace a vlastnictví snímku zůstávají.
+automatické překreslení Sliceru. R16 aktualizuje Python plugin i nativní DLL
+(host ABI 3), aby předal rozměry pracovního prostoru SDK. Proto rozbal celý
+balíček se zavřeným Slicerem. Synchronizace a vlastnictví snímku zůstávají.
 SDK pózy se použijí přímo v původních RAS souřadnicích Sliceru. Převod milimetrů
 na metry, přizpůsobení velikosti i otočení zajišťují app_scale a app_pose.
 
@@ -117,5 +132,6 @@ JDE O PRVNÍ TESTOVACÍ VYDÁNÍ
 
 Testy v oficiálním Sliceru 5.12.4 ověřují stereo obraz, CT hloubku, vlastní
 shadery, živý ROI ořez a obnovu stavu i po chybě. Windows build,
-ABI a sdílení OpenGL textur mají samostatné testy. Přenos z živého Sliceru
-přes skutečný SDK runtime na cílové NVIDIA kartě musí potvrdit tento test.
+ABI a sdílení OpenGL textur mají samostatné testy. Přenos na cílovém PC již
+funguje; nové automatické rozměry pracovního prostoru ještě vyžadují
+potvrzení ve Visualizeru.

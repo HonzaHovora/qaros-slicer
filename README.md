@@ -2,9 +2,12 @@
 
 Pluginy pro **ParaView a 3D Slicer** a OpenGL přenos do QAROS.
 
-**R14: měření postupného poklesu FPS a vlivu aktivního okna.**
-Sekundové souhrny, rozestupy jednotlivých snímků a volitelná telemetrie GPU
-na samostatném vlákně pomohou určit příčinu; opravu poklesu FPS zatím neslibujeme.
+**R16: pracovní prostor Visualizeru podle rozsahu scény Sliceru.**
+Při Start se nastaví kvádr podle viditelných objektů, jejich natočení a měřítka.
+Zapnuté **Center and fit** vystředí scénu a nastaví nejdelší hranu na 65 cm;
+vypnuté zachová skutečnou velikost a polohu. Rozměry zobrazí řádek **Workspace**.
+R15 maximalizace a návrat do původního rozložení jsou potvrzené na cílovém PC.
+Sekundová diagnostika výkonu zůstává; příčina celého poklesu FPS není určená.
 [Dosavadní zjištění a další měření](docs/FPS_DIAGNOSTICS.md).
 
 R13 umístění přes app_pose/app_scale a poloviční hloubka zůstávají zachované. Modul přebírá GPU
@@ -40,7 +43,7 @@ QAROS/mixeru/přijímače; podrobnosti jsou v [VALIDATION.md](docs/VALIDATION.md
 Údaj přibližně 44 FPS ve Visualizeru měří jinou část přenosu. Dosažení cíle
 60 FPS ještě není potvrzené. Před rozbalením zavři Slicer i Visualizer;
 cesty k pluginu a senderu zůstávají stejné. Logy lze zabalit pomocí `COLLECT-LOGS.cmd`.
-Samostatné stažení je také v [GitHub Release](https://github.com/HonzaHovora/QAROS_VTK/releases/tag/windows-start-2026-10-15-session022c40b6r15).
+Samostatné stažení je také v [GitHub Release](https://github.com/HonzaHovora/QAROS_VTK/releases/tag/windows-start-2026-10-15-session022c40b6r16).
 Původní [moderní Hub varianta](https://github.com/HonzaHovora/QAROS_VTK/releases/tag/windows-start-2026-10-14)
 zůstává dostupná pro jiné SDK. Každý sender vyžaduje odpovídající kompletní runtime.
 

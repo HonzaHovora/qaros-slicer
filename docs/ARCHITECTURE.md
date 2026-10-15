@@ -53,14 +53,25 @@ uses the pinned session SDK and imports no host VTK/Qt classes. Conservative
 ownership/fence design. R12 changes the Python host capture, not the native SDK
 transport. Two actual eye renders still consume time on the host GUI/GPU thread.
 
-R13 uses host ABI 2: creation receives SDK placement; each frame reports both
+R16 uses host ABI 3: creation receives SDK placement, workspace XYZ dimensions
+and room centre (112 bytes); each frame still reports both
 color/depth dimensions and the exact near/far supplied to `show_frame`.
 App coordinates are the original Slicer world RAS numbers, without a per-frame
 matrix, centering or scaling. `app_scale=.001` maps one native coordinate unit to 0.001 room metres;
-fit uses `.65 / max_extent_in_native_units` instead.
+fit uses `.65 / max_extent_in_workspace_axes` instead.
 `app_pose` rotates the initial Slicer camera basis onto the app-volume basis
 and translates the scaled, rotated bounds centre to the volume origin.
 SDK poses already account for placement and scale and are used directly by VTK.
+At Start, `ComputeVisiblePropBounds` supplies the visible scene's world AABB.
+All eight corners are rotated into workspace axes before calculating size,
+including oblique camera orientations. With fit enabled the longest edge is
+65 cm and the workspace centre is `(0, 0, -1.5)` room metres. Without fit,
+physical size and the old world placement are retained by moving the workspace
+centre to the scaled, rotated scene centre and compensating with `app_pose`.
+XYZ dimensions are assigned by name to the SDK's X/Z/Y width/length/height
+fields; degenerate axes have a 1 mm minimum thickness. Bounds and placement
+stay fixed until restart, with no new per-frame work. ROI rendering remains
+live, but clipping does not tighten the mapper bounds or workspace automatically.
 Clip values are `.05/app_scale` and `20/app_scale` at Start, in app units;
 the exact same values accompany the depth stream, with `depth_scale=1`.
 

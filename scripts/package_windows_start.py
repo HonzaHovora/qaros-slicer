@@ -90,6 +90,7 @@ def package(native_archive, plugins_archive, output):
         'sdk_build_metadata': sdk,
         'included_runtime': False,
         'live_host_renderer': bool(config.get('host_bridge')),
+        'host_abi': config.get('host_abi'),
         'gpu_hub_headset_tested': False,
         'notes': 'Original CI DLLs/EXEs and packaged plugins are unchanged. '
                  'Added Czech quickstart, preview launcher and a synthetic 200 mm cube.'
@@ -155,7 +156,10 @@ Render resolution 100/75/50 % ovládá velikost skutečného renderu; rozměry j
 viditelné v modulu i v logu. R14 přidává diagnostiku aktivního procesu, časové řady
 snímků a volitelné telemetrie NVIDIA. R15 zachovává stream při změně rozložení,
 pokud přežije stejný 3D pohled a OpenGL kontext; ukončení má konkrétní důvod.
-Nativní DLL z r13 zůstává zachovaná.
+R16 nastavuje pracovní kvádr podle rozsahu scény v osách pracovního prostoru.
+Při Center and fit má nejdelší hranu 65 cm; vypnuté zachová skutečnou velikost
+i polohu dat. Rozměry se přepočítají při Start a zobrazí v řádku Workspace.
+Balíček obsahuje novou nativní DLL i plugin pro host ABI 3.
 
 Modul: **QAROS → QAROS Live Renderer**. Před instalací zavři Slicer a Visualizer,
 v GitHub Desktop proveď Fetch/Pull a spusť START-PREVIEW.cmd. Po rozbalení zavři
@@ -167,16 +171,17 @@ zachován. ParaView zatím zůstává u povrchového exportu.
 
 Windows build/ABI a WGL sdílení textur prošly. Test v oficiálním Sliceru 5.12.4
 ověřuje stereo, shodu barvy, vlastní shader, CT hloubku, ROI a obnovu stavu po
-chybě. Nový test mění rozložení, maximalizuje 3D pohled a přepíná fullscreen;
+chybě. Test kontroluje rozměry z world bounds skutečného CT včetně mm spacing,
+mění rozložení, maximalizuje 3D pohled a přepíná fullscreen;
 ověřuje stereo barvu/hloubku a zachované desktopové textury. Používá Mesa
 a transportní testovací náhradu, nikoli skutečné Windows SDK spojení.
-Orientace a poloviční depth z r13 jsou potvrzené na cílovém PC. Nové logy
+Orientace, poloviční depth a r15 přepínání fullscreen jsou potvrzené na cílovém PC. Logy
 potvrdily 960 × 540 na oko i ve fullscreen, teplotní omezení GPU při 86–87 °C
-a současné změny SDK kamery. **R15 opravuje ukončení streamu při změně rozložení;
-není potvrzenou opravou FPS.**
+a současné změny SDK kamery. R16 upravuje pracovní prostor, nikoli výkon renderu.
 Podporovaný je jeden GPU Composite objem a neprůhledné povrchy.
-Na cílovém PC ověř maximalizaci stejného 3D pohledu během streamu a návrat.
-Při potížích spusť COLLECT-LOGS.cmd; nové důvody ukončení jsou v STOP_REQUEST.
+Na cílovém PC ověř, že pracovní kvádr obklopuje data a rozměry odpovídají řádku Workspace.
+Při potížích spusť COLLECT-LOGS.cmd; rozměry a umístění jsou v PLACEMENT,
+důvody ukončení v STOP_REQUEST.
 Pro srovnání FPS drž stejnou SDK kameru a preset a zohledni teplotu GPU.
 
 - Native build: [{config['native']['commit'][:8]}]({provenance['native_run']})

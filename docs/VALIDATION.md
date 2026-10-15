@@ -1,5 +1,41 @@
 # Validation and next work
 
+## Live r16: workspace dimensions from the Slicer scene, 2026-10-15
+
+The former fixed 1.2 m cube is replaced with the visible scene bounds rotated
+into workspace axes and multiplied by SDK `app_scale`. All eight AABB corners
+are used, including oblique starting cameras. Center and fit makes the longest
+edge 65 cm; physical mode retains 1 mm = 1 mm and the existing world placement,
+with the workspace centred around the content. Degenerate axes have a 1 mm
+minimum. Actor/data transforms and the render pipeline remain unchanged.
+Placement and dimensions are fixed at Start; live ROI clipping does not shrink
+the source world bounds. The UI shows width × height × depth in centimetres.
+
+Host ABI 3 adds workspace XYZ size and room centre to Placement (112 bytes).
+The SDK's struct order is X/Z/Y; named assignments and an asymmetric fixture
+check width/length/height independently. Older ABI 2 DLLs are rejected by the
+plugin before binding creation. The package must update Python and DLL together.
+
+Accepted source: `00f48c9a8f318f03513413792fa6e0788528acce`.
+[Build/test 38771695514](https://github.com/HonzaHovora/QAROS_VTK/actions/runs/38771695514)
+and [Slicer 38771694756](https://github.com/HonzaHovora/QAROS_VTK/actions/runs/38771694756)
+passed. Independent matrix checks cover anterior/posterior/oblique orientation,
+physical placement, distant/hidden/UseBoundsOff props and flat geometry.
+The real Slicer 5.12.4 / VTK 9.6.2 test verifies 32 voxels at 3 mm spacing give
+93 mm world extents, and 65 cm fitted workspace extents. Existing stereo color,
+CT depth, ROI, two-render accounting, desktop preservation and layout/fullscreen
+checks pass with Mesa and a transport fixture. Actual new workspace sizing in
+the Windows Visualizer still needs the target-PC check. No FPS improvement is
+claimed; bounds calculation adds no per-frame work.
+
+[Windows native 38771694919](https://github.com/HonzaHovora/QAROS_VTK/actions/runs/38771694919)
+passed, including all ten host/core tests, real DLL ABI 3 loading and WGL sharing.
+Both pinned release artifacts come from the same accepted source commit.
+The starter has 75 verified manifest entries, byte-identical plugin sources,
+and host DLL SHA-256 `cf9c31abaac79077d3c9130e62a9d31ce07bc2bc32599af6157ad691025b7089`.
+Its embedded metadata reports Placement 112 / Eye 104 / Frame 232 bytes.
+Starter SHA-256: `4a78f5c9acb2a688499eb13ff1cf7d38803b02a2acb01bbfc44f7853c3c9d219`.
+
 ## Live r14 field results and r15 layout fix, 2026-10-15
 
 The three sessions in `QAROS-VTK-diagnostics-20261015-174009-305.zip`
@@ -32,8 +68,14 @@ native color/depth comparison because layout changes can update MRML props.
 The earlier API spelling error was caught by Slicer and corrected to
 `IsViewVisibleInLayout` before the accepted tests/package.
 
-The Slicer test uses Mesa and a transport fixture; actual Windows SDK/viewer
-fullscreen behavior remains a target-PC check. R15 does not claim an FPS fix.
+The Slicer test uses Mesa and a transport fixture. The user subsequently
+confirmed fullscreen/restore on the target Windows SDK/viewer installation.
+Before this confirmation startup rejected the actual CPU mapper
+`vtkFixedPointVolumeRayCastMapper` / `vtkMRMLCPURayCastVolumeRenderingDisplayNode`.
+Calling `ChangeVolumeRenderingMethod("vtkMRMLGPURayCastVolumeRenderingDisplayNode")`
+restored streaming; the user confirmed it helped. Why CPU rendering became
+active is unknown, so this is not evidence of a proven r15 renderer regression.
+R15 does not claim an FPS fix.
 Native DLL remains the accepted r13 binary (`821fdf85…`), ABI 2. The assembled
 starter has 75 verified manifest entries, byte-identical accepted plugin sources,
 and SHA-256 `e1e27028e8f303f75f30d5e51aa5749d0319daef6f45a9a503ffd1141d3cd7a9`.
