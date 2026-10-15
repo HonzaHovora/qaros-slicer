@@ -266,10 +266,16 @@ struct Session {
   }
   void start(const QarPeerId& peer){
     const QarPeerId* initial[]={&peer};auto app=qar_app_volume_init_default();
-    app.display_name="Slicer live renderer";app.pose.position.z=-1.5F;app.size={1.2F,1.2F,1.2F};
+    app.display_name="Slicer live renderer";
     qarvtk::apply_host_placement(app,host.placement);
     app.initial_peers=initial;app.initial_peer_count=1;
     checked(qar_app_volumes_add_volume(session,&app,&volume),"create live app volume");volume_created=true;
+    {
+      std::ostringstream line;line<<"Workspace metres XYZ="<<app.size.width_meters<<','
+        <<app.size.height_meters<<','<<app.size.length_meters<<"; room centre="
+        <<app.pose.position.x<<','<<app.pose.position.y<<','<<app.pose.position.z;
+      host.note(line.str());
+    }
     auto gl=qar_stream_params_opengl_default();gl.context_type=QAR_OPENGL_CONTEXT_TYPE_WGL;
     gl.display_or_device_context=host.graphics->dc;gl.context=host.graphics->context;host.callbacks->configure(gl);
     auto init=qar_render_sender_init_default();init.graphics_api=QAR_GRAPHICS_API_OPENGL;init.header.next=&gl.header;
@@ -373,7 +379,7 @@ void QarvtkHost::run() noexcept {
 
 extern "C" {
 const char* qarvtk_host_info(){
-  return "{\"host_abi\":2,\"modern_api\":0,\"header_sha256\":\"" QARVTK_HOST_SDK_HASH "\",\"eye_size\":104,\"frame_size\":232,\"placement_size\":64}";
+  return "{\"host_abi\":3,\"modern_api\":0,\"header_sha256\":\"" QARVTK_HOST_SDK_HASH "\",\"eye_size\":104,\"frame_size\":232,\"placement_size\":112}";
 }
 int qarvtk_host_create(const char* sdk,const char* target,const char* folder,const QarvtkHostPlacement* placement,
                       QarvtkHost** result,char* error,uint32_t size){
@@ -425,4 +431,4 @@ void qarvtk_host_status(QarvtkHost* h,char* text,uint32_t size){
   std::lock_guard<std::mutex> lock(h->mutex);message(text,size,h->status);
 }
 }
-static_assert(sizeof(QarvtkHostEye)==104&&sizeof(QarvtkHostFrame)==232&&sizeof(QarvtkHostPlacement)==64,"Unexpected host C ABI packing");
+static_assert(sizeof(QarvtkHostEye)==104&&sizeof(QarvtkHostFrame)==232&&sizeof(QarvtkHostPlacement)==112,"Unexpected host C ABI packing");

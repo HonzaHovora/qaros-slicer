@@ -4,6 +4,7 @@ The consumer must copy the supplied GPU textures before returning. Texture names
 are borrowed from the host context, not handles that can be sent to a process.
 """
 import math
+from itertools import product
 from time import perf_counter, thread_time
 from contextlib import contextmanager, nullcontext
 
@@ -84,18 +85,14 @@ class HostView:
         self.desktop = DesktopTextures(self.window)
         # One app coordinate unit is one native Slicer RAS millimetre. The SDK
         # alone maps these units into the room, including the mm -> m scale.
-        self.app_scale = .001
-        self.center = (0., 0., 0.)
-        # Placement is fixed at Start. Live changes never unexpectedly refit it.
-        if fit:
-            bounds = self.renderer.ComputeVisiblePropBounds()
-            if not all(math.isfinite(x) for x in bounds) or any(bounds[2*i] > bounds[2*i+1] for i in range(3)):
-                raise ValueError("The selected Slicer 3D view has no visible content")
-            extent = max(bounds[2*i+1] - bounds[2*i] for i in range(3))
-            if extent <= 0:
-                raise ValueError("The visible content has empty bounds")
-            self.app_scale = .65 / extent
-            self.center = tuple((bounds[2*i] + bounds[2*i+1]) * .5 for i in range(3))
+        self.fit = bool(fit)
+        # Use the same visible-prop bounds as Slicer's view framing. The SDK
+        # workspace, placement and scale are fixed together at Start.
+        self.scene_bounds = tuple(self.renderer.ComputeVisiblePropBounds())
+        bounds = self.scene_bounds
+        if not all(math.isfinite(x) for x in bounds) or any(bounds[2*i] > bounds[2*i+1] for i in range(3)):
+            raise ValueError("The selected Slicer 3D view has no visible content")
+        self.center = tuple((bounds[2*i] + bounds[2*i+1]) * .5 for i in range(3))
         # App content uses unmodified world RAS coordinates. Axis conversion,
         # placement and scale belong to the SDK, never the per-eye camera.
         # Rotate the initial Slicer view's right/up/back axes onto app-volume
@@ -106,7 +103,24 @@ class HostView:
             q = [0.] * 4  # VTK returns scalar first; QAROS stores scalar last.
             vtk.vtkMath.Matrix3x3ToQuaternion(rotation, q)
             self.app_orientation = (*q[1:], q[0])
-        self.app_position = tuple(-self.app_scale * x for x in _rotate(self.app_orientation, self.center))
+        # A world-axis box must be transformed into the actual workspace axes;
+        # swapping width/height alone fails for an oblique starting camera.
+        corners = [_rotate(self.app_orientation, p)
+                   for p in product(bounds[0:2], bounds[2:4], bounds[4:6])]
+        extents = tuple(max(p[i] for p in corners) - min(p[i] for p in corners) for i in range(3))
+        extent = max(extents)
+        if not math.isfinite(extent) or extent <= 0:
+            raise ValueError("The visible content has empty bounds")
+        self.app_scale = .65 / extent if fit else .001
+        scaled_center = tuple(self.app_scale * x for x in _rotate(self.app_orientation, self.center))
+        self.app_position = tuple(-x for x in scaled_center)
+        # Without Center and fit, keep the previous physical scene position:
+        # shift the workspace centre and compensate with app_pose, not actors.
+        self.workspace_position = tuple(base + (0. if fit else offset)
+                                        for base, offset in zip((0., 0., -1.5), scaled_center))
+        # Flat surface scenes still need a positive thickness. Other axes match
+        # the transformed scene bounds exactly; dimensions are XYZ in metres.
+        self.workspace_size = tuple(max(.001, x * self.app_scale) for x in extents)
         self.clip = (.05 / self.app_scale, 20. / self.app_scale)
         for method in ("GetDisplayFramebuffer", "GetFrameBlitMode", "SetUseOffScreenBuffers"):
             if not hasattr(self.window, method):

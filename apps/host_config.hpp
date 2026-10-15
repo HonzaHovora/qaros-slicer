@@ -13,10 +13,20 @@ inline void apply_host_placement(QarAppVolumeInit& app,const QarvtkHostPlacement
   if(norm<1e-12||!std::isfinite(norm)||!std::isfinite(p.app_scale)||p.app_scale<1e-6||p.app_scale>1e6)
     throw std::invalid_argument("Invalid app orientation or scale");
   for(double v:p.position)if(!std::isfinite(v)||std::abs(v)>1e12)throw std::invalid_argument("Invalid app position");
+  for(double v:p.workspace_position)if(!std::isfinite(v)||std::abs(v)>1e12)
+    throw std::invalid_argument("Invalid workspace position");
+  for(double v:p.workspace_size)if(!std::isfinite(v)||v<=0||v>1e12)
+    throw std::invalid_argument("Invalid workspace size");
   app.app_pose.position={static_cast<float>(p.position[0]),static_cast<float>(p.position[1]),static_cast<float>(p.position[2])};
   app.app_pose.orientation={static_cast<float>(p.orientation[0]/norm),static_cast<float>(p.orientation[1]/norm),
     static_cast<float>(p.orientation[2]/norm),static_cast<float>(p.orientation[3]/norm)};
   app.app_scale=static_cast<float>(p.app_scale);
+  app.pose.position={static_cast<float>(p.workspace_position[0]),static_cast<float>(p.workspace_position[1]),
+    static_cast<float>(p.workspace_position[2])};
+  // The SDK struct is X/Z/Y (width/length/height), unlike our XYZ ABI arrays.
+  app.size.width_meters=static_cast<float>(p.workspace_size[0]);
+  app.size.height_meters=static_cast<float>(p.workspace_size[1]);
+  app.size.length_meters=static_cast<float>(p.workspace_size[2]);
 }
 
 // Rebuild as separate planes. Preserve per-plane flips, formats and eye order;

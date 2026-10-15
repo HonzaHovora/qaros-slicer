@@ -122,7 +122,8 @@ class HostTimingLog:
 
 
 class Placement(c.Structure):
-    _fields_ = [("position", c.c_double * 3), ("orientation", c.c_double * 4), ("app_scale", c.c_double)]
+    _fields_ = [("position", c.c_double * 3), ("orientation", c.c_double * 4), ("app_scale", c.c_double),
+                ("workspace_size", c.c_double * 3), ("workspace_position", c.c_double * 3)]
 
 
 class Eye(c.Structure):
@@ -143,7 +144,7 @@ def library(path):
     dll.qarvtk_host_info.restype = c.c_char_p
     info = json.loads(dll.qarvtk_host_info())
     if (info.get("host_abi"), info.get("header_sha256"), info.get("modern_api"),
-        info.get("eye_size"), info.get("frame_size"), info.get("placement_size")) != (2, EXPECTED_SDK, 0, c.sizeof(Eye), c.sizeof(Frame), c.sizeof(Placement)):
+        info.get("eye_size"), info.get("frame_size"), info.get("placement_size")) != (3, EXPECTED_SDK, 0, c.sizeof(Eye), c.sizeof(Frame), c.sizeof(Placement)):
         raise RuntimeError("Host DLL ABI or SDK fingerprint does not match this plugin")
     signatures = {
         "create": ([c.c_char_p, c.c_char_p, c.c_char_p, c.POINTER(Placement), c.POINTER(c.c_void_p), c.c_char_p, c.c_uint32], c.c_int),
@@ -183,13 +184,16 @@ class HostTransport:
         self.host.window.MakeCurrent()
         error = c.create_string_buffer(2048)
         placement = Placement((c.c_double*3)(*self.host.app_position),
-                              (c.c_double*4)(*self.host.app_orientation), self.host.app_scale)
+                              (c.c_double*4)(*self.host.app_orientation), self.host.app_scale,
+                              (c.c_double*3)(*self.host.workspace_size),
+                              (c.c_double*3)(*self.host.workspace_position))
         result = self.dll.qarvtk_host_create(str(sdk).encode("utf-8"), target.encode("utf-8"),
             str(self.log_folder).encode("utf-8"), c.byref(placement), c.byref(self.handle), error, len(error))
         if result != 0:
             raise RuntimeError(error.value.decode("utf-8", "replace"))
         self.diagnostics = HostTimingLog(self.log_folder)
-        self.diagnostics.event("r15 preserves streaming across same-view layout changes; explicit stop reasons; "
+        self.diagnostics.event("r16 workspace size follows Slicer scene bounds and SDK placement; "
+                               "same-view layout changes preserve streaming; explicit stop reasons; "
                                "one-second frame/focus diagnostics and optional background NVML; "
                                "wall times include existing GPU waits; "
                                "native copy/sync timings overlap Python copy calls")
@@ -199,6 +203,8 @@ class HostTransport:
         self.diagnostics.start_system_monitor(getattr(self.host, "diagnostic_state", None))
         self.diagnostics.event("PLACEMENT " + json.dumps(dict(app_position=self.host.app_position,
             app_orientation=self.host.app_orientation, app_scale=self.host.app_scale,
+            workspace_size_m=self.host.workspace_size, workspace_position_m=self.host.workspace_position,
+            scene_bounds=self.host.scene_bounds, center_and_fit=self.host.fit,
             render_scale=self.host.render_scale, match_view=self.host.match_view)))
 
     @property

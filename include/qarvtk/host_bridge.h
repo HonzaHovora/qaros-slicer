@@ -12,6 +12,8 @@ extern "C" {
 typedef struct QarvtkHost QarvtkHost;
 typedef struct QarvtkHostPlacement {
   double position[3], orientation[4], app_scale; /* app_pose in volume metres */
+  double workspace_size[3]; /* full extents along volume X/Y/Z, in metres */
+  double workspace_position[3]; /* cuboid centre in room metres */
 } QarvtkHostPlacement;
 typedef struct QarvtkHostEye {
   double position[3], orientation[4], fov[4]; /* x/y/z/w; left/right/up/down */
@@ -20,10 +22,10 @@ typedef struct QarvtkHostEye {
 typedef struct QarvtkHostFrame {
   uint64_t serial;
   QarvtkHostEye eyes[2];
-  double near_plane, far_plane; /* app metres, also reported to SDK show_frame */
+  double near_plane, far_plane; /* app coordinates, also reported to SDK show_frame */
 } QarvtkHostFrame;
 
-/* ABI 2, Windows x64/session SDK only. All calls are on the creating GUI thread.
+/* ABI 3, Windows x64/session SDK only. All calls are on the creating GUI thread.
    poll: 0 waiting, 1 frame leased, 2 stopped, -1 error (message via status).
    Stop is asynchronous; destroy returns 0 until the worker is finished.
    No borrowed GPU texture survives color/depth returning. SDK frame ownership

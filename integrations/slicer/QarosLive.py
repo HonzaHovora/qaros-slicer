@@ -44,10 +44,15 @@ class QarosLiveWidget(ScriptedLoadableModuleWidget):
         form.addRow(label)
         self.fit = qt.QCheckBox("Center and fit into 65 cm workspace at Start")
         self.fit.checked = True
+        self.fit.toolTip = "At Start, center the scene and fit the workspace's longest edge to 65 cm. " \
+                           "Off keeps physical size (1 mm = 1 mm) and scene position. Workspace dimensions always follow scene bounds."
         form.addRow(self.fit)
         self.matchView = qt.QCheckBox("Use Slicer viewing direction at Start")
         self.matchView.checked = True
         form.addRow(self.matchView)
+        self.workspaceStatus = qt.QLabel("Dimensions follow the visible scene at Start.")
+        self.workspaceStatus.wordWrap = True
+        form.addRow("Workspace", self.workspaceStatus)
         self.renderScale = qt.QComboBox()
         self.renderScale.addItems(["100%", "75%", "50%"])
         self.renderScale.toolTip = "Render width and height relative to the viewer request. 50% uses one quarter of the pixels. Applied at Start."
@@ -111,6 +116,7 @@ class QarosLiveWidget(ScriptedLoadableModuleWidget):
             folder = user_directory() / "live-logs" / datetime.now().strftime("%Y%m%d-%H%M%S-%f")
             self.transport = HostTransport(self.dll.currentPath, self.sdk.currentPath,
                                             self.target.currentText, folder, host)
+            self.workspaceStatus.text = " × ".join(f"{x * 100:.1f}" for x in host.workspace_size) + " cm (width × height × depth)"
             self.settings.setValue("QAROS_LIVE/Dll", self.dll.currentPath)
             self.settings.setValue("QAROS_VTK/Sdk", self.sdk.currentPath)
             self.logPath.text = str(folder)

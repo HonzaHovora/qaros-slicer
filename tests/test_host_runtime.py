@@ -5,9 +5,10 @@ from pathlib import Path
 import sys
 import tempfile
 import unittest
+from unittest.mock import patch
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "integrations" / "slicer"))
-from qarvtk_host_runtime import Frame, HostTimingLog, HostTransport
+from qarvtk_host_runtime import EXPECTED_SDK, Frame, HostTimingLog, HostTransport, library
 
 
 class FakeDll:
@@ -41,6 +42,14 @@ class FakeDll:
 
 
 class HostRuntimeTest(unittest.TestCase):
+    def test_old_placement_abi_is_rejected_before_binding_create(self):
+        old_info = dict(host_abi=2, header_sha256=EXPECTED_SDK, modern_api=0,
+                        eye_size=104, frame_size=232, placement_size=64)
+        old_dll = type("OldDll", (), {"qarvtk_host_info": staticmethod(lambda: json.dumps(old_info).encode())})()
+        with patch("qarvtk_host_runtime.c.CDLL", return_value=old_dll):
+            with self.assertRaisesRegex(RuntimeError, "ABI or SDK fingerprint"):
+                library("old-host.dll")
+
     def transport(self, folder, render):
         # Bypass Windows/SDK creation; exercise the actual poll/render/finish
         # lifecycle with a render callback that emulates nested Qt events.
