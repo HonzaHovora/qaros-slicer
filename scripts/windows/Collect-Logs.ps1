@@ -15,7 +15,7 @@ $notes = New-Object 'System.Collections.Generic.List[string]'
 $notes.Add('Collected at: ' + (Get-Date -Format o))
 $notes.Add('PowerShell: ' + $PSVersionTable.PSVersion.ToString())
 $notes.Add('This collector does not launch, stop or modify the sender or viewer.')
-$notes.Add('Only sender/live-host logs, installed build metadata and related crash events are collected.')
+$notes.Add('Only sender/live-host/SDK logs, installed build metadata and related crash events are collected.')
 
 # Each Slicer/ParaView plugin instance has a separate qarvtk-* directory.
 # Copy only sender.log, never scene.vtp, invites or onboarding identities.
@@ -72,21 +72,58 @@ if (Test-Path -LiteralPath $liveRoot -PathType Container) {
                     Set-Content -LiteralPath (Join-Path $folder ("host-system-" + $liveIndex + '.log')) -Encoding UTF8
             } catch { $notes.Add("Cannot read live system log: $_") }
         }
+        # qar_library_init writes its detailed SDK logs into this exact run's
+        # log_folder_path. Previously the collector omitted them, losing the
+        # receiver/stream-negotiation evidence behind QueryMatchingStream.
+        $sdkLogs = @(Get-ChildItem -LiteralPath $log.DirectoryName -File -Recurse |
+            Where-Object {
+                $_.Name -match '\.log(?:\.\d+)?$' -and
+                $_.Name -notmatch '^host-(bridge|python|system)\.log$'
+            } | Sort-Object LastWriteTimeUtc -Descending | Select-Object -First 12)
+        $sdkIndex = 0
+        foreach ($sdkLog in $sdkLogs) {
+            $sdkIndex++
+            $sdkTarget = 'host-sdk-{0}-{1}.log' -f $liveIndex, $sdkIndex
+            $notes.Add(('{0}: {1}; modified {2:o}; {3} bytes' -f $sdkTarget, $sdkLog.FullName, $sdkLog.LastWriteTime, $sdkLog.Length))
+            try {
+                Get-Content -LiteralPath $sdkLog.FullName -Encoding UTF8 -Tail 10000 |
+                    Set-Content -LiteralPath (Join-Path $folder $sdkTarget) -Encoding UTF8
+            } catch { $notes.Add("Cannot read live SDK log: $_") }
+        }
+        if ($sdkLogs.Count -eq 0) {
+            $notes.Add("No additional .log files in live run $liveIndex. File names:")
+            Get-ChildItem -LiteralPath $log.DirectoryName -File -Recurse |
+                Select-Object -First 30 | ForEach-Object { $notes.Add($_.FullName) }
+        }
     }
 }
 
 $install = Join-Path $repoRoot 'package\windows-start'
-foreach ($name in @('BUILD_INFO.json', 'qarvtk-sdk.json')) {
+foreach ($name in @('BUILD_INFO.json', 'HOST_UPDATE_INFO.json', 'qarvtk-sdk.json')) {
     $path = Join-Path $install $name
     if (Test-Path -LiteralPath $path -PathType Leaf) {
+        if ($name -eq 'HOST_UPDATE_INFO.json') {
+            try {
+                $update = Get-Content -LiteralPath $path -Raw -Encoding UTF8 | ConvertFrom-Json
+                $installedHash = (Get-FileHash -LiteralPath (Join-Path $install 'Release\qarvtk-host.dll') -Algorithm SHA256).Hash
+                if ($installedHash -ne $update.dll_sha256) {
+                    $notes.Add('HOST_UPDATE_INFO.json is stale (DLL hash differs, for example after restoring r17); omitted.')
+                    continue
+                }
+            } catch { $notes.Add("Cannot validate host update metadata: $_"); continue }
+        }
         Copy-Item -LiteralPath $path -Destination (Join-Path $folder $name)
     }
 }
-foreach ($path in @((Join-Path $install 'Release\qarvtk-sender.exe'), (Join-Path $install 'Release\qarvtk-host.dll'), (Join-Path $SdkRoot 'include\qar_streaming.h'))) {
+foreach ($path in @((Join-Path $install 'Release\qarvtk-sender.exe'), (Join-Path $install 'Release\qarvtk-host.dll'), (Join-Path $SdkRoot 'include\qar_streaming.h'), (Join-Path $SdkRoot 'bin\qar-streaming-c.dll'))) {
     if (Test-Path -LiteralPath $path -PathType Leaf) {
         try {
             $hash = Get-FileHash -LiteralPath $path -Algorithm SHA256
             $notes.Add('SHA256 ' + $hash.Hash + '  ' + $path)
+            if ($path -match '\.(exe|dll)$') {
+                $version = (Get-Item -LiteralPath $path).VersionInfo
+                $notes.Add(('VERSION {0}; product {1}; {2}' -f $version.FileVersion, $version.ProductVersion, $path))
+            }
         } catch { $notes.Add("Cannot hash file: $_") }
     } else { $notes.Add('Missing file: ' + $path) }
 }

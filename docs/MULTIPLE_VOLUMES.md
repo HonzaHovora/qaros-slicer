@@ -5,6 +5,28 @@ QAROS app volume a stereo sender pro každý viditelný GPU objem z prvního 3D
 pohledu Sliceru. Všechny používají jednu SDK relaci a jedno pozvání vieweru.
 Kostky mají různá ID, vlastní umístění a lze s nimi manipulovat samostatně.
 
+## Oprava startu po testu 16. října
+
+První Windows pokus s nezávislými kostkami vytvořil sender pro MRHead, ale
+druhý sender pro MRBrainTumor1 skončil na `QueryMatchingStream` timeoutu po
+přibližně 51 sekundách. Původní implementace čekala na všechny sendery před
+odesláním prvního snímku, takže odeslala nula snímků a při chybě zavřela relaci.
+V záznamech Windows je starší pád Sliceru ze 14:23; aktuální běh z 15:07 skončil
+zaznamenaným timeoutem a řízeným ukončením transportu.
+
+Build **independent-startup-r2** nejprve zveřejní všechny pracovní objemy a
+negociaci senderů přesune na samostatné vlákno. Připravený sender posílá snímky
+okamžitě, i když další stále čeká. Selhání připojení jedné kostky se vypíše do
+statusu a neukončí již připravené streamy. Stop zruší čekající připojení a před
+zrušením relace počká na jeho dokončení. Log obsahuje ID kostek a `FIRST_FRAME`
+pro každý sender; `COLLECT-LOGS.cmd` nově přibalí i SDK logy z adresářů běhů
+a `HOST_UPDATE_INFO.json` se skutečnou verzí experimentální DLL.
+
+Regresní test simuluje příjemce, který nepotvrdí druhý stream, dokud první
+nepošle obraz, a samostatný timeout druhého streamu. Příčina timeoutu uvnitř
+SDK/vieweru ale ze starého ZIPu není prokázaná: oprava blokování neprokazuje,
+že instalovaný Visualizer zvládne oba streamy. To vyžaduje nový cílový pokus.
+
 ## Vyzkoušení na Windows
 
 1. Zastav streaming a zavři Slicer.
@@ -47,9 +69,10 @@ Po jeho použití je pro návrat k experimentu potřeba znovu spustit aktualizac
 ## Přenos a výkon
 
 Každá kostka má vlastní `QarAppVolumeId`, render sender, SDK oční pózy a sdílený
-WGL kontext. GUI zpracovává jeden snímek v daný okamžik a střídá připravené
+WGL kontext. Připojování běží odděleně od zpracování snímků. GUI zpracovává jeden snímek v daný okamžik a střídá připravené
 sendery. Čekající nebo reconnectující sender neblokuje snímky ostatních.
-Zastavení uvolní všechny sendery a kostky před zánikem relace.
+Neúspěšné připojení je viditelné ve statusu, ostatní kostky pokračují.
+Zastavení zruší probíhající připojení a uvolní všechny sendery a kostky před zánikem relace.
 
 Pro oddělené objemy se standardně použije rychlá cesta: dva renderovací průchody
 na stereo snímek **každé kostky**, bez doplňkového průchodu hloubky. Více streamů
