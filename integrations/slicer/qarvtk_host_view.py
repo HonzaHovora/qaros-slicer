@@ -6,7 +6,7 @@ are borrowed from the host context, not handles that can be sent to a process.
 import math
 from itertools import product
 from time import perf_counter, thread_time
-from contextlib import contextmanager, nullcontext
+from contextlib import ExitStack, contextmanager, nullcontext
 
 import vtk
 
@@ -125,7 +125,7 @@ class HostView:
         for method in ("GetDisplayFramebuffer", "GetFrameBlitMode", "SetUseOffScreenBuffers"):
             if not hasattr(self.window, method):
                 raise RuntimeError("This Slicer render window lacks " + method)
-        self.volume()  # Fail before connecting if the depth path cannot handle this view.
+        self.volumes()  # Fail before connecting if the depth path cannot handle this view.
 
     def close(self):
         self.desktop.close()
@@ -140,23 +140,25 @@ class HostView:
         if self.renderer.GetActiveCamera() != self.camera:
             raise RuntimeError("The Slicer view camera changed; restart live streaming")
 
-    def volume(self):
+    def volumes(self):
+        """Validate the visible volume props, including newly shown live data."""
         volumes = [v for v in _items(self.renderer.GetVolumes()) if v.GetVisibility()]
-        if len(volumes) > 1:
-            raise ValueError("Live rendering currently validates depth for one GPU volume at a time")
-        if not volumes:
-            return None
-        volume = volumes[0]
-        mapper = volume.GetMapper()
-        if not mapper or not mapper.IsA("vtkOpenGLGPUVolumeRayCastMapper"):
-            raise ValueError("Live volume depth requires Slicer's VTK GPU volume rendering method")
-        if volume.IsA("vtkMultiVolume") or mapper.GetBlendMode() != vtk.vtkVolumeMapper.COMPOSITE_BLEND:
-            raise ValueError("Live volume depth currently requires one Composite volume")
-        if mapper.GetRenderToImage():
-            raise ValueError("The host volume mapper is already in RenderToImage mode")
-        if any(a.GetVisibility() and a.GetProperty().GetOpacity() < 1 for a in _items(self.renderer.GetActors())):
+        for volume in volumes:
+            mapper = volume.GetMapper()
+            if volume.IsA("vtkMultiVolume"):
+                raise ValueError("VTK Multi-Volume fusion is not supported by live depth; use separate VTK GPU Ray Casting volumes")
+            if not mapper or not mapper.IsA("vtkOpenGLGPUVolumeRayCastMapper"):
+                raise ValueError("Live volume depth requires Slicer's VTK GPU volume rendering method")
+            if mapper.GetBlendMode() != vtk.vtkVolumeMapper.COMPOSITE_BLEND:
+                raise ValueError("Live volume depth requires Composite rendering for every visible volume")
+            if mapper.GetRenderToImage():
+                raise ValueError("A host volume mapper is already in RenderToImage mode")
+        if volumes and any(a.GetVisibility() and a.GetProperty().GetOpacity() < 1 for a in _items(self.renderer.GetActors())):
             raise ValueError("Live depth for a volume combined with translucent surfaces is not validated")
-        return mapper
+        if len(volumes) > 1 and not all(single_pass_supported(self.renderer, v) for v in volumes):
+            raise ValueError("Multiple-volume live depth requires Slicer 5.12 / VTK 9.6 with standard GPU Composite rendering, "
+                             "opaque surfaces, no SSAO/shadows/custom render pass, and no conflicting depth shader")
+        return volumes
 
     def _camera_for_eye(self, eye, near, far):
         position, orientation, fov = eye["position"], eye["orientation"], eye["fov"]
@@ -257,11 +259,13 @@ class HostView:
         """Read existing settings once per second; never update a VTK pipeline."""
         result = dict(desired_update_rate=self.window.GetDesiredUpdateRate(),
                       view_visible=bool(self.view.isVisible()))
-        volume = next((v for v in _items(self.renderer.GetVolumes()) if v.GetVisibility()), None)
-        if volume:
+        volumes = [v for v in _items(self.renderer.GetVolumes()) if v.GetVisibility()]
+        result["volume_count"] = len(volumes)
+        result["volumes"] = []
+        for volume in volumes:
             mapper = volume.GetMapper()
             image = mapper.GetInput()
-            result["volume"] = dict(
+            result["volumes"].append(dict(
                 mapper=mapper.GetClassName(), sample_distance=mapper.GetSampleDistance(),
                 image_sample_distance=mapper.GetImageSampleDistance(),
                 auto_adjust=bool(mapper.GetAutoAdjustSampleDistances()),
@@ -271,7 +275,9 @@ class HostView:
                 input_mtime=image.GetMTime() if image else None,
                 spacing=image.GetSpacing() if image else None,
                 dimensions=image.GetDimensions() if image else None,
-                matrix=[volume.GetMatrix().GetElement(r, c) for r in range(4) for c in range(4)])
+                matrix=[volume.GetMatrix().GetElement(r, c) for r in range(4) for c in range(4)]))
+        if volumes:
+            result["volume"] = result["volumes"][0]  # Existing diagnostic readers.
         return result
 
     def _textures(self):
@@ -308,8 +314,9 @@ class HostView:
                                           "color_copy_call_ms", "depth_copy_call_ms",
                                           "host_render_calls", "desktop_restore_render_calls",
                                           "volume_depth_passes"), 0.)
-        mapper = self.volume()
-        volume = next((v for v in _items(self.renderer.GetVolumes()) if v.GetVisibility()), None)
+        volumes = self.volumes()
+        volume = volumes[0] if len(volumes) == 1 else None
+        mapper = volume.GetMapper() if volume else None
         fast_depth = volume is not None and single_pass_supported(self.renderer, volume)
         depth_scope = volume_depth(volume) if fast_depth else nullcontext()
         with self._timed("frame_wall_ms"), self._frame_state(), depth_scope:
@@ -324,16 +331,37 @@ class HostView:
                     raise RuntimeError("Host GPU texture size differs from the selected render size")
                 with self._timed("color_copy_call_ms"):
                     consumer.color(index, color, depth, width, height)
-                if mapper and not fast_depth:
+                if len(volumes) > 1 or (mapper and not fast_depth):
                     dw, dh = eye.get("depth_size", (width, height))
                     dw, dh = min(dw, width), min(dh, height)
                     if dw < 1 or dh < 1:
                         raise ValueError("Invalid depth render size")
                     self.window.SetSize(dw, dh)
-                    self._volume_depth(index, mapper, consumer, dw, dh)
+                    if len(volumes) > 1:
+                        self._multiple_volume_depth(index, volumes, consumer, dw, dh)
+                    else:
+                        self._volume_depth(index, mapper, consumer, dw, dh)
                 else:
                     with self._timed("depth_copy_call_ms"):
                         consumer.depth(index, color, depth, None, None, width, height)
+
+    def _multiple_volume_depth(self, index, volumes, consumer, width, height):
+        # Keep the first (color) render completely native. Enabling depth writes
+        # while capturing several translucent volumes would change their color
+        # compositing. Only this supplementary depth render installs the hooks.
+        # Normal depth testing retains the nearest contributing sample across
+        # all volumes and opaque surfaces, independent of volume draw order.
+        with ExitStack() as scope:
+            for volume in volumes:
+                scope.enter_context(volume_depth(volume))
+            with self._timed("depth_render_ms"):
+                self.last_timings["volume_depth_passes"] += 1
+                self._render_window()
+            color, depth = self._textures()
+            if any((t.GetWidth(), t.GetHeight()) != (width, height) for t in (color, depth)):
+                raise RuntimeError("Multi-volume depth texture size differs from the requested render size")
+            with self._timed("depth_copy_call_ms"):
+                consumer.depth(index, color, depth, None, None, width, height)
 
     def _volume_depth(self, index, mapper, consumer, width, height):
         # The first render is the host's complete color output, including custom
@@ -370,3 +398,4 @@ class HostView:
             self.renderer.GetCullers().RemoveAllItems()
             for culler in cullers:
                 self.renderer.GetCullers().AddItem(culler)
+

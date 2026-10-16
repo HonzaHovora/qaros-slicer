@@ -77,12 +77,12 @@ def run():
     physical.close()
     print("PASS: real Slicer CT world bounds set fitted and physical workspace dimensions", flush=True)
     print("HOST: VTK", vtk.vtkVersion.GetVTKVersion(), "window", window.GetClassName(),
-          "mapper", host.volume().GetClassName(), "app_scale", host.app_scale, flush=True)
+          "mapper", host.volumes()[0].GetMapper().GetClassName(), "app_scale", host.app_scale, flush=True)
     original_camera = camera_state(host.camera)
     original_size = window.GetSize()
     original_blit = window.GetFrameBlitMode()
     original_cullers = tuple(host.renderer.GetCullers())
-    mapper = host.volume()
+    mapper = host.volumes()[0].GetMapper()
     volume = next(v for v in renderer.GetVolumes() if v.GetVisibility())
     original_shader, original_keys = volume.GetShaderProperty(), volume.GetPropertyKeys()
     old_mapper = (mapper.GetRenderToImage(), mapper.GetImageSampleDistance(),
@@ -436,3 +436,4 @@ except Exception:
     slicer.app.exit(1)
 else:
     slicer.app.exit(0)
+

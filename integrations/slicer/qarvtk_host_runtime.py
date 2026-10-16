@@ -200,7 +200,8 @@ class HostTransport:
         if result != 0:
             raise RuntimeError(error.value.decode("utf-8", "replace"))
         self.diagnostics = HostTimingLog(self.log_folder)
-        self.diagnostics.event("r17 read-only slice video panels; workspace follows Slicer bounds and SDK placement; "
+        self.diagnostics.event("multi-volume prototype: native color plus combined tissue depth; read-only slice video panels; "
+                               "workspace follows Slicer bounds and SDK placement; "
                                "same-view layout changes preserve streaming; explicit stop reasons; "
                                "one-second frame/focus diagnostics and optional background NVML; "
                                "wall times include existing GPU waits; "
@@ -351,3 +352,4 @@ class HostTransport:
             self.diagnostics.stop_system_monitor()
             self.dll.qarvtk_host_stop(self.handle)
             self.diagnostics.flush(force=True)
+

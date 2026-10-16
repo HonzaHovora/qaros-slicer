@@ -41,7 +41,8 @@ class QarosLiveWidget(ScriptedLoadableModuleWidget):
         form = qt.QFormLayout()
         self.layout.addLayout(form)
         label = qt.QLabel("Live first 3D view. Changes in Slicer are rendered automatically. "
-                         "Experimental: one VTK GPU Composite volume with opaque surfaces; ROI cropping is supported.")
+                         "Multiple VTK GPU Composite volumes with opaque surfaces; ROI cropping is supported. "
+                         "Several volumes share one QAROS workspace and use an extra depth render per eye.")
         label.wordWrap = True
         form.addRow(label)
         self.fit = qt.QCheckBox("Center and fit into 65 cm workspace at Start")
@@ -203,3 +204,4 @@ class QarosLiveWidget(ScriptedLoadableModuleWidget):
         if self.layout_manager:
             self.layout_manager.disconnect("layoutChanged(int)", self.layout_changed)
         slicer.app.disconnect("aboutToQuit()", self.cleanup)
+
