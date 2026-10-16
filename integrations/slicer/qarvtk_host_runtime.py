@@ -32,6 +32,8 @@ class HostTimingLog:
         self.previous_frame_start = None
         self.previous_eye_state = None
         self.last_eyes = []
+        self.volume_frames = {}
+        self.volume_eye_states = {}
         self.foreground = None
         self.monitor = None
         self.state_provider = None
@@ -69,10 +71,11 @@ class HostTimingLog:
             pass  # A diagnostic write must not invalidate a live SDK frame.
 
     def record(self, serial, timings, eyes, started, render_sizes=None, desktop_size=None,
-               foreground_pid=None):
+               foreground_pid=None, volume_index=0):
         if self.started is None:
             self.started = started
         self.count += 1
+        self.volume_frames[volume_index] = self.volume_frames.get(volume_index, 0) + 1
         self.last_serial = serial
         self.eye_sizes = [list(eye["size"]) for eye in eyes]
         self.depth_sizes = [list(eye.get("depth_size", eye["size"])) for eye in eyes]
@@ -89,7 +92,9 @@ class HostTimingLog:
                                  round(timings.get("color_render_ms", 0.), 3),
                                  round(timings.get("host_render_thread_cpu_ms", 0.), 3),
                                  foreground_pid,
-                                 self.previous_eye_state is not None and eye_state != self.previous_eye_state])
+                                 volume_index in self.volume_eye_states and eye_state != self.volume_eye_states[volume_index],
+                                 volume_index])
+        self.volume_eye_states[volume_index] = eye_state
         self.previous_frame_start, self.previous_eye_state = started, eye_state
         self.last_eyes = eyes
         for key, value in timings.items():
@@ -107,7 +112,9 @@ class HostTimingLog:
                       rendered_fps=round(self.count / max(elapsed, 1e-9), 2), eye_sizes=self.eye_sizes,
                       depth_sizes=self.depth_sizes, render_sizes=self.render_sizes, desktop_size=self.desktop_size,
                       elapsed_s=round(elapsed, 6), samples=self.samples,
-                      samples_omitted=max(0, self.count - len(self.samples)), eyes=self.last_eyes)
+                      samples_omitted=max(0, self.count - len(self.samples)), eyes=self.last_eyes,
+                      volume_frames=self.volume_frames,
+                      volume_fps={str(i): round(n/max(elapsed, 1e-9), 2) for i, n in self.volume_frames.items()})
         record.update({key: round(value / self.count, 3) for key, value in self.sums.items()})
         if self.state_provider:
             try:
@@ -119,11 +126,16 @@ class HostTimingLog:
         self.count = 0
         self.sums = {}
         self.samples = []
+        self.volume_frames = {}
 
 
 class Placement(c.Structure):
     _fields_ = [("position", c.c_double * 3), ("orientation", c.c_double * 4), ("app_scale", c.c_double),
                 ("workspace_size", c.c_double * 3), ("workspace_position", c.c_double * 3)]
+
+
+class Volume(c.Structure):
+    _fields_ = [("placement", Placement), ("name", c.c_char_p)]
 
 
 class Eye(c.Structure):
@@ -133,7 +145,8 @@ class Eye(c.Structure):
 
 
 class Frame(c.Structure):
-    _fields_ = [("serial", c.c_uint64), ("eyes", Eye * 2), ("near_plane", c.c_double), ("far_plane", c.c_double)]
+    _fields_ = [("serial", c.c_uint64), ("eyes", Eye * 2), ("near_plane", c.c_double), ("far_plane", c.c_double),
+                ("volume_index", c.c_uint32), ("reserved", c.c_uint32)]
 
 
 def library(path):
@@ -144,10 +157,11 @@ def library(path):
     dll.qarvtk_host_info.restype = c.c_char_p
     info = json.loads(dll.qarvtk_host_info())
     if (info.get("host_abi"), info.get("header_sha256"), info.get("modern_api"),
-        info.get("eye_size"), info.get("frame_size"), info.get("placement_size")) != (4, EXPECTED_SDK, 0, c.sizeof(Eye), c.sizeof(Frame), c.sizeof(Placement)):
-        raise RuntimeError("Host DLL ABI or SDK fingerprint does not match this plugin")
+        info.get("eye_size"), info.get("frame_size"), info.get("placement_size"), info.get("volume_size")) != (5, EXPECTED_SDK, 0, c.sizeof(Eye), c.sizeof(Frame), c.sizeof(Placement), c.sizeof(Volume)):
+        raise RuntimeError("Host DLL ABI or SDK fingerprint does not match this plugin. Close Slicer and install the ABI 5 DLL with UPDATE-LIVE-PLUGIN.cmd.")
     signatures = {
         "create": ([c.c_char_p, c.c_char_p, c.c_char_p, c.POINTER(Placement), c.POINTER(c.c_void_p), c.c_char_p, c.c_uint32], c.c_int),
+        "create_volumes": ([c.c_char_p, c.c_char_p, c.c_char_p, c.POINTER(Volume), c.c_uint32, c.POINTER(c.c_void_p), c.c_char_p, c.c_uint32], c.c_int),
         "poll": ([c.c_void_p, c.POINTER(Frame)], c.c_int),
         "color": ([c.c_void_p, c.c_uint64] + [c.c_uint32] * 5, c.c_int),
         "depth": ([c.c_void_p, c.c_uint64] + [c.c_uint32] * 7, c.c_int),
@@ -177,7 +191,12 @@ class HostTransport:
         header = sdk / "include" / "qar_streaming.h"
         if not header.is_file() or hashlib.sha256(header.read_bytes()).hexdigest() != EXPECTED_SDK:
             raise RuntimeError("SDK header differs from the host DLL; select the complete matching D:/install SDK")
-        self.host = host_view
+        self.hosts = list(host_view) if isinstance(host_view, (list, tuple)) else [host_view]
+        if not 1 <= len(self.hosts) <= 32:
+            raise ValueError("Expected 1 to 32 workspaces")
+        self.host = self.hosts[0]  # Shared source window for layout and panel handling.
+        if any(h.window != self.host.window for h in self.hosts):
+            raise ValueError("All workspaces must use the same Slicer render window")
         self.dll = library(dll_path)
         self.handle = c.c_void_p()
         self.frame = Frame()
@@ -191,29 +210,31 @@ class HostTransport:
         self.log_folder = Path(log_folder)
         self.host.window.MakeCurrent()
         error = c.create_string_buffer(2048)
-        placement = Placement((c.c_double*3)(*self.host.app_position),
-                              (c.c_double*4)(*self.host.app_orientation), self.host.app_scale,
-                              (c.c_double*3)(*self.host.workspace_size),
-                              (c.c_double*3)(*self.host.workspace_position))
-        result = self.dll.qarvtk_host_create(str(sdk).encode("utf-8"), target.encode("utf-8"),
-            str(self.log_folder).encode("utf-8"), c.byref(placement), c.byref(self.handle), error, len(error))
+        volumes = (Volume * len(self.hosts))(*(Volume(Placement(
+            (c.c_double*3)(*host.app_position), (c.c_double*4)(*host.app_orientation), host.app_scale,
+            (c.c_double*3)(*host.workspace_size), (c.c_double*3)(*host.workspace_position)),
+            host.name.encode("utf-8")) for host in self.hosts))
+        result = self.dll.qarvtk_host_create_volumes(str(sdk).encode("utf-8"), target.encode("utf-8"),
+            str(self.log_folder).encode("utf-8"), volumes, len(volumes), c.byref(self.handle), error, len(error))
         if result != 0:
             raise RuntimeError(error.value.decode("utf-8", "replace"))
         self.diagnostics = HostTimingLog(self.log_folder)
-        self.diagnostics.event("r17 read-only slice video panels; workspace follows Slicer bounds and SDK placement; "
+        self.diagnostics.event("ABI 5 independent app volumes in one session; isolated native rendering per workspace; read-only slice video panels; "
+                               "workspace follows Slicer bounds and SDK placement; "
                                "same-view layout changes preserve streaming; explicit stop reasons; "
                                "one-second frame/focus diagnostics and optional background NVML; "
                                "wall times include existing GPU waits; "
                                "native copy/sync timings overlap Python copy calls")
         self.diagnostics.event("SAMPLE_COLUMNS " + json.dumps([
             "serial", "start_monotonic_s", "start_interval_ms", "color_render_ms",
-            "host_render_thread_cpu_ms", "foreground_pid", "sdk_eye_changed"]))
-        self.diagnostics.start_system_monitor(getattr(self.host, "diagnostic_state", None))
-        self.diagnostics.event("PLACEMENT " + json.dumps(dict(app_position=self.host.app_position,
-            app_orientation=self.host.app_orientation, app_scale=self.host.app_scale,
-            workspace_size_m=self.host.workspace_size, workspace_position_m=self.host.workspace_position,
-            scene_bounds=self.host.scene_bounds, center_and_fit=self.host.fit,
-            render_scale=self.host.render_scale, match_view=self.host.match_view)))
+            "host_render_thread_cpu_ms", "foreground_pid", "sdk_eye_changed", "volume_index"]))
+        self.diagnostics.start_system_monitor(lambda: [h.diagnostic_state() for h in self.hosts])
+        for index, host in enumerate(self.hosts):
+            self.diagnostics.event("PLACEMENT " + json.dumps(dict(volume_index=index, name=host.name,
+                app_position=host.app_position, app_orientation=host.app_orientation, app_scale=host.app_scale,
+                workspace_size_m=host.workspace_size, workspace_position_m=host.workspace_position,
+                scene_bounds=host.scene_bounds, center_and_fit=host.fit,
+                render_scale=host.render_scale, match_view=host.match_view)))
 
     @property
     def running(self):
@@ -301,7 +322,8 @@ class HostTransport:
             self.status()
             if self.dll.qarvtk_host_destroy(self.handle):
                 self.handle = c.c_void_p()
-                self.host.close()
+                for host in self.hosts:
+                    host.close()
                 self.last_status = "Stopped (" + self.stop_reason + "). " + self.last_status
                 self.diagnostics.flush(force=True)
                 self.diagnostics.event(self.last_status)
@@ -316,26 +338,29 @@ class HostTransport:
             return
         if result == 0:
             return
+        if self.frame.volume_index >= len(self.hosts) or self.frame.reserved:
+            raise RuntimeError("SDK requested an unknown workspace")
+        host = self.hosts[self.frame.volume_index]
         eyes = [dict(position=tuple(eye.position), orientation=tuple(eye.orientation),
                      fov=tuple(eye.fov), size=(eye.width, eye.height),
                      depth_size=(eye.depth_width, eye.depth_height)) for eye in self.frame.eyes]
         started = perf_counter()
         foreground_pid = self.diagnostics.foreground_pid()
         try:
-            self.host.render(eyes, self, near=self.frame.near_plane, far=self.frame.far_plane)
+            host.render(eyes, self, near=self.frame.near_plane, far=self.frame.far_plane)
             submit = perf_counter()
             self._check(self.dll.qarvtk_host_finish(self.handle, self.frame.serial))
-            timings = dict(self.host.last_timings)
+            timings = dict(host.last_timings)
             timings["finish_call_ms"] = (perf_counter() - submit) * 1000
             self.diagnostics.record(self.frame.serial, timings, eyes, started,
-                                    self.host.last_render_sizes, self.host.last_desktop_size, foreground_pid)
+                                    host.last_render_sizes, host.last_desktop_size, foreground_pid, self.frame.volume_index)
             def sizes(values):
                 labels = [f"{w} x {h}" for w, h in values]
                 return labels[0] + " / eye" if labels[0] == labels[1] else "L " + labels[0] + ", R " + labels[1]
-            self.resolution_status = ("Render " + sizes(self.host.last_render_sizes) +
+            self.resolution_status = (host.name + ": render " + sizes(host.last_render_sizes) +
                 "; stream color " + sizes([eye["size"] for eye in eyes]) +
                 "; depth " + sizes([eye["depth_size"] for eye in eyes]) +
-                "; Slicer " + " x ".join(map(str, self.host.last_desktop_size)))
+                "; Slicer " + " x ".join(map(str, host.last_desktop_size)))
         except Exception as error:
             self.request_stop("Frame error: " + str(error))
             raise
@@ -351,3 +376,4 @@ class HostTransport:
             self.diagnostics.stop_system_monitor()
             self.dll.qarvtk_host_stop(self.handle)
             self.diagnostics.flush(force=True)
+

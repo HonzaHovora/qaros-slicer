@@ -1,6 +1,8 @@
 #include "qarvtk/gl.hpp"
 #include "qarvtk/host_bridge.h"
 #include "qarvtk/host_frame_lease.hpp"
+#include "qarvtk/host_stream_scheduler.hpp"
+#include "qarvtk/host_stream_startup.hpp"
 #include "qarvtk/host_panels.hpp"
 #include "qarvtk/host_wgl.hpp"
 #include "qarvtk/gl_copy.hpp"
@@ -47,6 +49,11 @@ void checked(QarResult result,const char* operation){
   char text[1024]{};qar_result_message(result,text,sizeof(text));
   throw std::runtime_error(std::string(operation)+" ("+std::to_string(result.code)+"): "+text);
 }
+std::string volume_id_text(const QarAppVolumeId& id){
+  std::ostringstream text;text<<std::hex<<std::setfill('0');
+  for(auto b:id.data)text<<std::setw(2)<<static_cast<unsigned>(b);
+  return text.str();
+}
 bool extension(const char* wanted){
   GLint count=0;glGetIntegerv(GL_NUM_EXTENSIONS,&count);
   for(GLint i=0;i<count;++i){const auto* name=glGetStringi(GL_EXTENSIONS,i);if(name&&std::strcmp(reinterpret_cast<const char*>(name),wanted)==0)return true;}
@@ -91,26 +98,31 @@ void on_peer(QarPeerSpec* spec,void* state) noexcept {
 }
 
 struct QarvtkHost {
+  struct Volume {
+    QarvtkHostPlacement placement{};
+    std::string name;
+    std::unique_ptr<qarvtk::HostSharedWgl> graphics;
+    std::unique_ptr<qarvtk::WglCallbacks> callbacks;
+  };
   const DWORD owner=GetCurrentThreadId();
   HGLRC host_context{};
-  std::unique_ptr<qarvtk::HostSharedWgl> copying,graphics;
+  std::unique_ptr<qarvtk::HostSharedWgl> copying;
   std::unique_ptr<qarvtk::GlCopy> copier;
   std::unique_ptr<qarvtk::GlComposite> compositor;
-  std::unique_ptr<qarvtk::WglCallbacks> callbacks;
+  std::vector<Volume> volumes;
   std::unique_ptr<qarvtk::HostPanels> panels;
   QarGraphicsDeviceId adapter=qar_graphics_device_id_default();
   std::thread worker;
   std::mutex mutex,cancel_mutex;
   std::condition_variable condition;
   std::atomic<bool> stopping{false},done{false};
-  QarCancelToken* operation{}; // Protected by cancel_mutex, destroyed before library unload.
+  QarCancelToken *operation{},*connection_operation{}; // Protected by cancel_mutex; outlive SDK calls.
   bool failed{};
   qarvtk::HostFrameLease lease;
   FrameTimings timings;
   const Clock::time_point created=Clock::now();
   uint64_t sent{};
   QarvtkHostFrame request{};
-  QarvtkHostPlacement placement{};
   qarvtk::Frame frame;
   std::array<qarvtk::EyeViews,2> views{};
   std::string status="Starting live Slicer transport",sdk_root,target,log_folder;
@@ -142,6 +154,7 @@ struct QarvtkHost {
     condition.notify_all();
     std::lock_guard<std::mutex> lock(cancel_mutex);
     if(operation)qar_cancel_token_cancel(operation);
+    if(connection_operation)qar_cancel_token_cancel(connection_operation);
   }
   bool pause(std::chrono::milliseconds duration){
     std::unique_lock<std::mutex> lock(mutex);
@@ -162,16 +175,21 @@ struct QarvtkHost {
     std::filesystem::create_directories(std::filesystem::u8path(log_folder));
     log.open(std::filesystem::u8path(log_folder)/"host-bridge.log",std::ios::app);
     if(!log)throw std::runtime_error("Cannot open host bridge log");
+    log<<"Host build: independent-startup-r2 (ABI 5)"<<std::endl;
     copying=std::make_unique<qarvtk::HostSharedWgl>(dc,host_context);
-    graphics=std::make_unique<qarvtk::HostSharedWgl>(dc,host_context);
     {
       qarvtk::WglBinding binding(*copying);qarvtk::hostgl::load();adapter=device();
       copier=std::make_unique<qarvtk::GlCopy>();compositor=std::make_unique<qarvtk::GlComposite>();
       log<<"Host GPU: "<<glGetString(GL_VENDOR)<<" / "<<glGetString(GL_RENDERER)<<" / "<<glGetString(GL_VERSION)<<std::endl;
     }
-    callbacks=std::make_unique<qarvtk::WglCallbacks>(graphics->dc,graphics->context);
-    const auto probe=callbacks->probe_on_worker();
-    if(!probe.get_string_i||!probe.memory_import)throw std::runtime_error("Shared SDK context lacks required OpenGL interop functions");
+    // SDK senders may invoke graphics callbacks concurrently. Give each its
+    // own context, all sharing Slicer's objects, instead of competing for one.
+    for(auto& volume:volumes){
+      volume.graphics=std::make_unique<qarvtk::HostSharedWgl>(dc,host_context);
+      volume.callbacks=std::make_unique<qarvtk::WglCallbacks>(volume.graphics->dc,volume.graphics->context);
+      const auto probe=volume.callbacks->probe_on_worker();
+      if(!probe.get_string_i||!probe.memory_import)throw std::runtime_error("Shared SDK context lacks required OpenGL interop functions");
+    }
     panels=std::make_unique<qarvtk::HostPanels>([this](const std::string& text){note(text);});
     worker=std::thread([this]{run();});
   }
@@ -205,22 +223,42 @@ struct QarvtkHost {
 };
 
 namespace {
-// All SDK control operations are serialized on one worker. Only its callback
-// graphics context is used by SDK graphics threads; no VTK runs on a worker.
+// One worker pumps frames; another negotiates senders. A blocked later sender
+// must never prevent a ready earlier sender from delivering its first frame.
+// SDK graphics callbacks use per-sender contexts; no VTK runs on either worker.
 struct Session {
+  struct Stream {
+    QarAppVolumeId volume=qar_app_volume_id_default();
+    bool volume_created{};
+    QarRenderSender* sender{};
+    uint64_t sent{};
+    Clock::time_point retry_after{};
+    qarvtk::HostStreamStartup::State reported=qarvtk::HostStreamStartup::State::pending;
+  };
   QarvtkHost& host;
-  bool loaded{},initialized{},volume_created{};
-  QarRuntime* runtime{};QarSession* session{};QarRenderSender* sender{};
+  bool loaded{},initialized{};
+  QarRuntime* runtime{};QarSession* session{};
   QarCancelToken* subscription{};
-  QarAppVolumeId volume=qar_app_volume_id_default();
+  std::vector<Stream> streams;
+  std::unique_ptr<qarvtk::HostStreamStartup> startup;
+  QarPeerId target_peer=qar_peer_id_default();
+  bool panels_started{};
   qarvtk::LegacyPeerObserver peers;
   explicit Session(QarvtkHost& h):host(h){}
   ~Session(){
+    if(startup){
+      startup->request_stop();
+      {std::lock_guard<std::mutex> lock(host.cancel_mutex);
+       if(host.connection_operation)qar_cancel_token_cancel(host.connection_operation);}
+      startup->join();
+    }
     // Panel video uses this session concurrently, but never outlives it.
     if(host.panels){host.panels->request_stop();host.panels->join();}
     if(subscription)qar_cancel_token_cancel(subscription);
-    if(sender)qar_render_stream_handle_destroy(sender);
-    if(volume_created)qar_app_volumes_close_volume(session,&volume);
+    for(auto& stream:streams){
+      if(stream.sender)qar_render_stream_handle_destroy(stream.sender);
+      if(stream.volume_created)qar_app_volumes_close_volume(session,&stream.volume);
+    }
     if(session)qar_session_destroy(session);
     if(runtime)qar_runtime_destroy(runtime);
     if(subscription)qar_cancel_token_handle_destroy(subscription);
@@ -271,36 +309,101 @@ struct Session {
     throw std::runtime_error(host.stopping?"Live stream stopped":"No viewer peer update before timeout");
   }
   void start(const QarPeerId& peer){
+    target_peer=peer;
+    streams.resize(host.volumes.size());
+    // Announce the full workspace set before negotiating any sender, so the
+    // receiver need not discover another volume halfway through stream setup.
+    for(std::size_t i=0;i<streams.size()&&!host.stopping;++i)add_volume(peer,i);
+    if(host.stopping)return;
+    startup=std::make_unique<qarvtk::HostStreamStartup>(streams.size());
+    host.set_status("Connecting "+std::to_string(streams.size())+" workspaces; ready streams render immediately");
+    startup->start([this,peer](std::size_t i){start_stream(peer,i);},[this]{return host.stopping.load();});
+  }
+  void add_volume(const QarPeerId& peer,std::size_t index){
+    auto& stream=streams[index];const auto& config=host.volumes[index];
     const QarPeerId* initial[]={&peer};auto app=qar_app_volume_init_default();
-    app.display_name="Slicer live renderer";
-    qarvtk::apply_host_placement(app,host.placement);
+    app.display_name=config.name.c_str();
+    qarvtk::apply_host_placement(app,config.placement);
     app.initial_peers=initial;app.initial_peer_count=1;
-    checked(qar_app_volumes_add_volume(session,&app,&volume),"create live app volume");volume_created=true;
+    checked(qar_app_volumes_add_volume(session,&app,&stream.volume),"create live app volume");stream.volume_created=true;
+    for(std::size_t i=0;i<index;++i)if(qar_app_volume_id_equals(&stream.volume,&streams[i].volume))
+      throw std::runtime_error("SDK returned a duplicate app volume ID");
     {
-      std::ostringstream line;line<<"Workspace metres XYZ="<<app.size.width_meters<<','
+      std::ostringstream line;line<<"Volume "<<index<<" ("<<config.name<<") id="<<volume_id_text(stream.volume)
+        <<" workspace metres XYZ="<<app.size.width_meters<<','
         <<app.size.height_meters<<','<<app.size.length_meters<<"; room centre="
         <<app.pose.position.x<<','<<app.pose.position.y<<','<<app.pose.position.z;
       host.note(line.str());
     }
+  }
+  void start_stream(const QarPeerId& peer,std::size_t index){
+    auto& stream=streams[index];const auto& config=host.volumes[index];
+    // This token belongs only to this blocking connection attempt. GUI Stop
+    // and Session teardown can cancel it without touching a running sender.
+    struct Operation {
+      QarvtkHost& host;QarCancelToken* token{};
+      Operation(QarvtkHost& h,const qarvtk::HostStreamStartup& startup):host(h){
+        std::lock_guard<std::mutex> lock(host.cancel_mutex);
+        if(host.stopping||startup.stopping())throw std::runtime_error("Live stream stopped");
+        checked(qar_cancel_token_create_with_timeout(&token,60000),"create sender timeout");
+        host.connection_operation=token;
+      }
+      ~Operation(){
+        std::lock_guard<std::mutex> lock(host.cancel_mutex);
+        host.connection_operation=nullptr;if(token)qar_cancel_token_handle_destroy(token);
+      }
+    } operation(host,*startup);
     auto gl=qar_stream_params_opengl_default();gl.context_type=QAR_OPENGL_CONTEXT_TYPE_WGL;
-    gl.display_or_device_context=host.graphics->dc;gl.context=host.graphics->context;host.callbacks->configure(gl);
+    gl.display_or_device_context=config.graphics->dc;gl.context=config.graphics->context;config.callbacks->configure(gl);
     auto init=qar_render_sender_init_default();init.graphics_api=QAR_GRAPHICS_API_OPENGL;init.header.next=&gl.header;
-    init.peer_id=peer;init.app_volume_id=&volume;init.enable_auto_reconnects=true;
+    init.peer_id=peer;init.app_volume_id=&stream.volume;init.enable_auto_reconnects=true;
     init.texture_layout=QAR_FRAME_LAYOUT_SEPARATED_TEXTURES;
     init.color_format=QAR_PIXEL_FORMAT_R8G8B8A8;init.depth_format=QAR_PIXEL_FORMAT_D32_FLOAT;init.frame_views_count=4;
     for(unsigned i=0;i<4;++i){init.frame_views[i]=qar_render_frame_view_default();
       init.frame_views[i].eye=i<2?QAR_VIDEO_FRAME_VIEW_EYE_LEFT:QAR_VIDEO_FRAME_VIEW_EYE_RIGHT;
       init.frame_views[i].data_type=i%2?QAR_VIDEO_FRAME_VIEW_TYPE_DEPTH:QAR_VIDEO_FRAME_VIEW_TYPE_COLOR;init.frame_views[i].texture_index=i;}
-    host.deadline();host.set_status("Creating shared OpenGL sender");
-    checked(qar_render_sender_create(session,&init,host.operation,&sender),"create live sender");
+    host.note("Connecting sender "+std::to_string(index)+" ("+config.name+")");
+    QarRenderSender* raw{};
+    const auto result=qar_render_sender_create(session,&init,operation.token,&raw);
+    std::unique_ptr<QarRenderSender,decltype(&qar_render_stream_handle_destroy)> sender(raw,qar_render_stream_handle_destroy);
+    checked(result,"create live sender");
     if(!sender)throw std::runtime_error("SDK returned a null sender");
     auto current=qar_video_frame_layout_default();
-    checked(qar_render_sender_layout(sender,&current),"read negotiated layout");
+    checked(qar_render_sender_layout(sender.get(),&current),"read negotiated layout");
     const auto reduced=qarvtk::half_depth_layout(current);
-    checked(qar_render_sender_change_layout(sender,&reduced),"set half-resolution depth layout");
-    host.note("App placement uses SDK app_pose/app_scale; depth requested at half color width and height");
-    if(!host.stopping)host.panels->start(session,peer);
-    host.set_status("Waiting for the viewer's first pose");host.pause(std::chrono::milliseconds(1200));
+    checked(qar_render_sender_change_layout(sender.get(),&reduced),"set half-resolution depth layout");
+    stream.sender=sender.release(); // Published by HostStreamStartup's ready handoff.
+    host.note("Sender "+std::to_string(index)+" ready; half-resolution depth layout set");
+  }
+  std::size_t ready_count() const {
+    std::size_t count=0;
+    if(startup)for(std::size_t i=0;i<streams.size();++i)if(startup->ready(i))++count;
+    return count;
+  }
+  std::string progress() const {
+    std::string text="Live host renderer: "+std::to_string(ready_count())+"/"+std::to_string(streams.size())+" workspaces connected";
+    if(startup)for(std::size_t i=0;i<streams.size();++i){
+      const auto state=startup->state(i);
+      if(state==qarvtk::HostStreamStartup::State::failed)text+="; FAILED "+host.volumes[i].name+": "+startup->error(i).substr(0,220);
+      else if(state!=qarvtk::HostStreamStartup::State::ready)text+="; waiting for "+host.volumes[i].name;
+    }
+    return text;
+  }
+  void refresh(){
+    if(!startup)return;
+    bool changed=false;
+    for(std::size_t i=0;i<streams.size();++i){
+      const auto state=startup->state(i);
+      if(state==streams[i].reported)continue;
+      streams[i].reported=state;changed=true;
+      if(state==qarvtk::HostStreamStartup::State::failed)
+        host.note("WORKSPACE_FAILED index="+std::to_string(i)+" name="+host.volumes[i].name+" error="+startup->error(i));
+    }
+    if(changed)host.set_status(progress());
+    if(startup->done()&&!host.stopping){
+      if(!ready_count())throw std::runtime_error(progress());
+      if(!panels_started){host.panels->start(session,target_peer);panels_started=true;}
+    }
   }
 };
 }
@@ -312,6 +415,7 @@ void QarvtkHost::run() noexcept {
     FrameTimings totals;
     double wait_ms=0,metadata_ms=0,gui_ms=0,show_ms=0;
     uint64_t measured=0;
+    qarvtk::HostStreamScheduler scheduler;
     auto report=[&](bool force){
       const double elapsed=milliseconds(window_start);
       if(!measured||(!force&&elapsed<5000))return;
@@ -323,24 +427,42 @@ void QarvtkHost::run() noexcept {
         <<" sdk_wait_ms="<<wait_ms/count<<" metadata_ms="<<metadata_ms/count
         <<" gui_wait_ms="<<gui_ms/count<<" sdk_show_ms="<<show_ms/count
         <<" host_sync_ms="<<totals.host_sync/count<<" composite_cpu_ms="<<totals.composite/count
-        <<" copy_cpu_ms="<<totals.copy/count<<" copy_finish_ms="<<totals.copy_finish/count;
+        <<" copy_cpu_ms="<<totals.copy/count<<" copy_finish_ms="<<totals.copy_finish/count
+        <<" volume_frames=";
+      for(std::size_t i=0;i<sdk.streams.size();++i)line<<(i?",":"")<<i<<':'<<sdk.streams[i].sent;
       note(line.str());totals={};wait_ms=metadata_ms=gui_ms=show_ms=0;measured=0;window_start=Clock::now();
     };
     while(!stopping){
-      if(Clock::now()-last>std::chrono::seconds(60))throw std::runtime_error("No viewer frame/pose for 60 seconds");
-      QarRenderFrameInfo* raw{};bool ready=false;
-      const auto result=qar_render_sender_try_begin_frame(sdk.sender,&raw,&ready);
-      std::unique_ptr<QarRenderFrameInfo,decltype(&qar_render_frame_info_handle_destroy)> info(raw,qar_render_frame_info_handle_destroy);
-      if(qarvtk::legacy_begin_frame_wait(result,sent==0)!=qarvtk::LegacyFrameWait::none){pause(std::chrono::milliseconds(100));continue;}
-      if(qar_result_has_code(result,QAR_STATUS_MEDIA_STREAMING_STREAM_IS_RECONNECTING)||
-         qar_result_has_code(result,QAR_STATUS_MEDIA_STREAMING_NO_ACTIVE_TRANSFERS)) {pause(std::chrono::milliseconds(2));continue;}
-      checked(result,"begin live frame");
-      if(!ready){pause(std::chrono::milliseconds(2));continue;}
-      if(!info)throw std::runtime_error("Ready frame has no metadata");
+      sdk.refresh();
+      if(!sdk.ready_count())last=Clock::now(); // Pose deadline starts when a sender is usable.
+      else if(Clock::now()-last>std::chrono::seconds(60))throw std::runtime_error("No viewer frame/pose for 60 seconds");
+      std::unique_ptr<QarRenderFrameInfo,decltype(&qar_render_frame_info_handle_destroy)> info(nullptr,qar_render_frame_info_handle_destroy);
+      const auto selected=scheduler.select(sdk.streams.size(),[&](std::size_t index){
+        auto& stream=sdk.streams[index];
+        if(stopping||!sdk.startup||!sdk.startup->ready(index)||Clock::now()<stream.retry_after)return false;
+        QarRenderFrameInfo* raw{};bool ready=false;
+        const auto result=qar_render_sender_try_begin_frame(stream.sender,&raw,&ready);
+        info.reset(raw);
+        if(qarvtk::legacy_begin_frame_wait(result,stream.sent==0)!=qarvtk::LegacyFrameWait::none){
+          stream.retry_after=Clock::now()+std::chrono::milliseconds(100);info.reset();return false;
+        }
+        if(qar_result_has_code(result,QAR_STATUS_MEDIA_STREAMING_STREAM_IS_RECONNECTING)||
+           qar_result_has_code(result,QAR_STATUS_MEDIA_STREAMING_NO_ACTIVE_TRANSFERS)){
+          stream.retry_after=Clock::now()+std::chrono::milliseconds(2);info.reset();return false;
+        }
+        checked(result,"begin live frame");
+        if(!ready){info.reset();return false;}
+        if(!info)throw std::runtime_error("Ready frame has no metadata");
+        return true;
+      });
+      if(!selected){pause(std::chrono::milliseconds(2));continue;}
+      auto& stream=sdk.streams[*selected];
+      const auto& placement=volumes[*selected].placement;
       const auto ready_at=Clock::now();
-      auto access=qar_video_frame_opengl_default();checked(qar_render_sender_frame_opengl(sdk.sender,&access),"access frame textures");
+      auto access=qar_video_frame_opengl_default();checked(qar_render_sender_frame_opengl(stream.sender,&access),"access frame textures");
       auto next=layout(access);const auto next_views=qarvtk::validate_stereo(next);
       QarvtkHostFrame next_request{};next_request.serial=sent+1;
+      next_request.volume_index=static_cast<uint32_t>(*selected);
       next_request.near_plane=static_cast<float>(.05/placement.app_scale);
       next_request.far_plane=static_cast<float>(20./placement.app_scale);
       for(unsigned i=0;i<2;++i){
@@ -369,12 +491,13 @@ void QarvtkHost::run() noexcept {
       const auto show_at=Clock::now();
       auto show=qar_render_frame_show_default();
       show.rendered_near_far={static_cast<float>(request.near_plane),static_cast<float>(request.far_plane)};show.depth_scale=1;
-      checked(qar_render_sender_show_frame(sdk.sender,&show),"submit live stereo frame");
-      ++sent;last=Clock::now();
+      checked(qar_render_sender_show_frame(stream.sender,&show),"submit live stereo frame");
+      ++sent;++stream.sent;last=Clock::now();
+      if(stream.sent==1)note("FIRST_FRAME volume="+std::to_string(*selected)+" name="+volumes[*selected].name);
       totals+=copied;++measured;wait_ms+=milliseconds(cycle_start,ready_at);
       metadata_ms+=milliseconds(ready_at,posted_at);gui_ms+=milliseconds(posted_at,show_at);
       show_ms+=milliseconds(show_at,last);cycle_start=last;report(false);
-      if(sent==1||sent%120==0)set_status("Live host renderer: submitted "+std::to_string(sent)+" stereo frames");
+      if(sent==1||sent%120==0)set_status(sdk.progress()+"; submitted "+std::to_string(sent)+" stereo frames total");
     }
     report(true);
   } catch(const std::exception& e){if(!stopping)fail(e.what());}
@@ -386,18 +509,28 @@ void QarvtkHost::run() noexcept {
 
 extern "C" {
 const char* qarvtk_host_info(){
-  return "{\"host_abi\":4,\"modern_api\":0,\"header_sha256\":\"" QARVTK_HOST_SDK_HASH "\",\"eye_size\":104,\"frame_size\":232,\"placement_size\":112}";
+  return "{\"host_abi\":5,\"modern_api\":0,\"header_sha256\":\"" QARVTK_HOST_SDK_HASH "\",\"eye_size\":104,\"frame_size\":240,\"placement_size\":112,\"volume_size\":120}";
 }
 int qarvtk_host_create(const char* sdk,const char* target,const char* folder,const QarvtkHostPlacement* placement,
                       QarvtkHost** result,char* error,uint32_t size){
+  QarvtkHostVolume volume{};if(placement)volume.placement=*placement;volume.name="Slicer live renderer";
+  return qarvtk_host_create_volumes(sdk,target,folder,placement?&volume:nullptr,1,result,error,size);
+}
+int qarvtk_host_create_volumes(const char* sdk,const char* target,const char* folder,
+    const QarvtkHostVolume* volumes,uint32_t count,QarvtkHost** result,char* error,uint32_t size){
   if(result)*result=nullptr;
   bool expected=false;
   if(!active.compare_exchange_strong(expected,true)){message(error,size,"Only one live host transport may run in this Slicer process");return -1;}
   try {
-    if(!sdk||!target||!folder||!placement||!result)throw std::invalid_argument("Missing host configuration");
-    auto probe=qar_app_volume_init_default();qarvtk::apply_host_placement(probe,*placement);
+    if(!sdk||!target||!folder||!volumes||!count||count>32||!result)throw std::invalid_argument("Expected 1 to 32 host workspaces");
     auto host=std::make_unique<QarvtkHost>();host->sdk_root=sdk;host->target=target;host->log_folder=folder;
-    host->placement=*placement;host->initialize();
+    for(uint32_t i=0;i<count;++i){
+      auto probe=qar_app_volume_init_default();qarvtk::apply_host_placement(probe,volumes[i].placement);
+      QarvtkHost::Volume volume;volume.placement=volumes[i].placement;
+      volume.name=volumes[i].name&&*volumes[i].name?volumes[i].name:"Slicer volume "+std::to_string(i+1);
+      host->volumes.push_back(std::move(volume));
+    }
+    host->initialize();
     *result=host.release();return 0;
   } catch(const std::exception& e){message(error,size,e.what());active=false;return -1;}
     catch(...){message(error,size,"Cannot initialize host transport");active=false;return -1;}
@@ -464,4 +597,4 @@ void qarvtk_host_panel_status(QarvtkHost* h,QarvtkHostPanel* p,char* text,uint32
   catch(const std::exception& e){message(text,size,e.what());}
 }
 }
-static_assert(sizeof(QarvtkHostEye)==104&&sizeof(QarvtkHostFrame)==232&&sizeof(QarvtkHostPlacement)==112,"Unexpected host C ABI packing");
+static_assert(sizeof(QarvtkHostEye)==104&&sizeof(QarvtkHostFrame)==240&&sizeof(QarvtkHostPlacement)==112&&sizeof(QarvtkHostVolume)==120,"Unexpected host C ABI packing");

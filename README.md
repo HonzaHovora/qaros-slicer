@@ -2,6 +2,14 @@
 
 Pluginy pro **ParaView a 3D Slicer** a OpenGL přenos do QAROS.
 
+**Experiment: vlastní QAROS kostka pro každý objem.** Výchozí volba
+**Separate QAROS workspace for each volume** vytvoří samostatné pracovní objemy
+vedle sebe, každý s vlastním streamem, měřítkem a živým ROI. Sdílejí jednu relaci
+a jeden Visualizer/Quest. Vypnutím volby se přenáší celá scéna společně.
+Instalace přes `UPDATE-LIVE-PLUGIN.cmd` aktualizuje Python i přibalenou DLL ABI 5;
+SDK v `D:/install` zůstává stejné. Postup a omezení jsou v
+[postupu pro více objemů](docs/MULTIPLE_VOLUMES.md).
+
 **R17: živé náhledy řezů jako samostatné QAROS panely.**
 Volba **Show slice views as panels (preview only)** přenáší hotové GPU obrazy
 viditelných řezů, včetně videa a časových sekvencí. Výchozí limit je 15 FPS
@@ -152,5 +160,6 @@ Další podklady:
 SDK runtime DLL, pozvánky a párovací identity nejsou součástí repozitáře.
 Pro reprodukovatelné sestavení session senderu je uložená přesná dodaná hlavička
 v `ci/sdk-headers/`; do instalovaného SDK ji nekopíruj.
+
 
 
