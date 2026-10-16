@@ -1,70 +1,83 @@
-# Více objemů v jednom živém 3D pohledu
+# Samostatný pracovní objem pro každá data
 
-Experimentální rozšíření Python pluginu nad Windows balíčkem r17 (host ABI 4).
-Přenáší všechny viditelné běžné GPU Composite objemy z prvního 3D pohledu
-Sliceru do jednoho společného QAROS pracovního prostoru. Zachovává jejich
-barvy, transformace, viditelnost a ROI ořez nastavené ve Sliceru.
+Experiment na větvi `codex/slicer-multiple-volumes` rozšiřuje r17 o vlastní
+QAROS app volume a stereo sender pro každý viditelný GPU objem z prvního 3D
+pohledu Sliceru. Všechny používají jednu SDK relaci a jedno pozvání vieweru.
+Kostky mají různá ID, vlastní umístění a lze s nimi manipulovat samostatně.
 
 ## Vyzkoušení na Windows
 
 1. Zastav streaming a zavři Slicer.
-2. V GitHub Desktop dej Fetch origin a přepni Current branch na
-   `codex/slicer-multiple-volumes`.
-3. V kořeni checkoutu spusť `UPDATE-LIVE-PLUGIN.cmd`. Použije již rozbalený
-   r17; nativní DLL a SDK se nemění. Pokud r17 dosud není rozbalený, spusť
-   nejdříve `START-PREVIEW.cmd`, zavři kostku a teprve potom aktualizační skript.
-4. Otevři Slicer. V modulu QAROS Live Renderer musí být nový text
-   **Multiple VTK GPU Composite volumes**.
-5. V prvním 3D pohledu zobraz oba objemy. Pro každý použij **VTK GPU Ray Casting**
-   a **Composite with shading**. Zpočátku je umísti vedle sebe.
-6. Klikni Start live streaming. Oba objemy se mají objevit společně.
-   Vyzkoušej skrytí jednoho, změnu presetu, transformaci a ROI ořez.
+2. V GitHub Desktop přepni na `codex/slicer-multiple-volumes` a dej Fetch/Pull.
+3. Spusť `UPDATE-LIVE-PLUGIN.cmd`. Ověří přibalený ZIP a aktualizuje Python
+   plugin i `package/windows-start/Release/qarvtk-host.dll` na ABI 5.
+   Pokud r17 dosud není rozbalený, nejdřív spusť `START-PREVIEW.cmd` a zavři náhled.
+4. Otevři Slicer. V QAROS Live Renderer nech zapnuté
+   **Separate QAROS workspace for each volume** (výchozí stav).
+5. V prvním 3D pohledu zobraz oba objemy přes **VTK GPU Ray Casting** a
+   **Composite with shading**. Data mohou být i na stejných souřadnicích.
+6. Dej Start. Očekávaný výsledek jsou dvě pracovní kostky vedle sebe,
+   každá pouze se svými daty. Vyzkoušej přesun/natočení jedné v QAROS,
+   změnu presetu a ROI pouze jednoho objemu ve Sliceru a Stop/Start.
 
-Při načtení druhého objemu nebo změně celkového rozsahu scény dej Stop a Start,
-aby pracovní prostor znovu zahrnul celou scénu. Viditelnost již načtených objemů
-a jejich vzhled se za běhu aktualizují automaticky.
+SDK v `D:/install` se nemění. Nový plugin vyžaduje přibalenou DLL ABI 5;
+starou DLL odmítne s vysvětlením. Pokud máš v poli **Host bridge DLL** vlastní
+cestu, vyber aktualizovanou DLL z `package/windows-start/Release`.
 
-`START-PREVIEW.cmd` vždy rozbaluje původní r17 a tím tuto úpravu odstraní.
-Pro návrat k experimentu potom znovu spusť `UPDATE-LIVE-PLUGIN.cmd`.
+`START-PREVIEW.cmd` obnovuje původní r17, včetně jeho DLL a pluginu.
+Po jeho použití je pro návrat k experimentu potřeba znovu spustit aktualizaci.
 
-## Co se přenáší a jaké jsou náklady
+## Chování
 
-Barva obou očí pochází z nezměněného rendereru Sliceru. Pro více objemů se pro
-každé oko přidá samostatný průchod pro hloubku všech objemů a neprůhledných
-povrchů. Standardně používá požadované poloviční rozlišení hloubky: při barvě
-1920 × 1080 je hloubka 960 × 540. V logu je `host_render_calls=4` a
-`volume_depth_passes=2` na stereo snímek. Při jediném viditelném objemu zůstává
-rychlá cesta `2` / `0`, pokud ji umožňuje původní hostitelská pipeline.
+- Každý objem dostane jméno odpovídající datům ve Sliceru (případně `Slicer volume N`).
+- Se zapnutým **Center and fit** má každá kostka nejdelší hranu 65 cm.
+  Vypnutí zachová fyzickou velikost dat. Kostky se v obou případech rozmístí
+  vedle sebe s mezerou 12 cm. Řádek Workspace vypíše rozměry jednotlivě.
+- Data, transfer funkce, transformace a ROI zůstávají původní živé VTK objekty.
+  Během zachycení se dočasně skryje ostatní obsah; desktop se pak obnoví.
+  Povrchy, segmentace a dekorace nejsou v samostatných kostkách přiřazovány k datům.
+- Skrytí zdrojového objemu vyprázdní jeho kostku; ostatní data do ní nepřeskočí.
+  Po přidání, odebrání či výměně rendereru objemu je potřeba Stop/Start.
+  Odebrání zdroje za běhu stream ukončí s vysvětlením. Rozměry kostek se určují při Start.
+- Náhledy řezů tvoří jednu společnou řadu pod skupinou kostek.
+- Vypnutí **Separate QAROS workspace for each volume** zachovává společný
+  pracovní objem s celou scénou, včetně neprůhledných povrchů.
+- Speciální fúzní renderer **VTK Multi-Volume** zůstává nepodporovaný.
 
-Dodatečný průchod může snížit FPS; skutečný dopad se musí změřit na cílové
-NVIDIA kartě. Pro první srovnání lze vypnout náhledy řezů a poté je opět zapnout.
-Záznam diagnostiky nově zahrnuje `volume_count` a nastavení každého objemu.
+## Přenos a výkon
 
-Každý pixel má stále jednu hloubku, určenou nejbližším přispívajícím vzorkem
-nebo neprůhledným povrchem. Nejde o přenos všech průhledných vrstev objemu.
-Barva zachovává i případná omezení původního Slicer rendereru při překrývání
-objemů. Tato změna neopravuje pořadí jejich nativního barevného skládání.
+Každá kostka má vlastní `QarAppVolumeId`, render sender, SDK oční pózy a sdílený
+WGL kontext. GUI zpracovává jeden snímek v daný okamžik a střídá připravené
+sendery. Čekající nebo reconnectující sender neblokuje snímky ostatních.
+Zastavení uvolní všechny sendery a kostky před zánikem relace.
 
-Samostatné QAROS objekty pro každý objem/pohled nejsou součástí této změny.
-Speciální renderer **VTK Multi-Volume** pro společnou fúzi je stále odmítnutý.
-Víceobjemová cesta vyžaduje VTK 9.6 (testovaná verze Sliceru 5.12.4), Composite,
-neprůhledné povrchy a standardní pipeline bez SSAO, stínů, vlastního renderovacího
-průchodu nebo konfliktního shaderu hloubky. Kontrola se provádí i za běhu.
+Pro oddělené objemy se standardně použije rychlá cesta: dva renderovací průchody
+na stereo snímek **každé kostky**, bez doplňkového průchodu hloubky. Více streamů
+ale vyžaduje více renderování a enkódování. Začni se dvěma objemy a případně
+vypni slice panely nebo sniž Render resolution. Limity a FPS musí ověřit cílová
+NVIDIA karta. Diagnostika `volume_frames`/`volume_fps` rozlišuje jednotlivé kostky;
+celkový počet snímků v statusu je součet za všechny streamy.
 
-## Ověření
+Společná víceobjemová scéna používá nezměněnou barvu Sliceru a doplňkový průchod
+nejbližší hloubky pro každé oko, standardně s polovičním rozlišením hloubky.
+Vyžaduje VTK 9.6, Composite a standardní pipeline bez SSAO/stínů/konfliktního
+shaderu. Každý pixel nese jednu hloubku, ne všechny průhledné vrstvy.
 
-Lokálně prošel tento test na skutečném rendereru VTK 9.6.2 přes EGL/Mesa,
-bez grafického okna (`python tests/slicer_multivolume_smoke.py --vtk-egl`).
-Prošly také testy umístění a transportního stavu. GitHub Actions pro tento
-prototyp skončily před prvním krokem, bez spuštěného runneru. Plný test v
-Sliceru 5.12.4 proto zatím nemá nový úspěšný výsledek; místní prostředí
-neumožňuje spustit jeho grafické okno. EGL ověřuje GPU výpočet, ne MRML/Qt.
+## Ověření a sestavení
 
-`tests/slicer_multivolume_smoke.py` porovnává výslednou barvu s nativním Slicerem
-a hloubku s minimem nezávislých VTK RenderToImage průchodů jednotlivých objemů.
-Zahrnuje oba stereo pohledy, opačné pořadí objemů, transformace, projekční překryv,
-neprůhledný povrch, živý ROI ořez, poloviční hloubku, prázdné paprsky,
-skrytí nepodporovaného objemu a obnovu desktopu i po chybě příjemce.
+Prošlo skutečné GPU renderování ve VTK 9.6.2 přes EGL/Mesa: oddělená barva
+porovnaná s nativním renderem každého objemu, hloubka s nezávislým VTK
+RenderToImage, vlastní bounds, obnovení desktopu a viditelnosti, skrytí/smazání
+zdroje a chyba při předání snímku. Prošla také původní společná víceobjemová cesta,
+Python testy směrování snímků/ukončení a C++ test střídání senderů.
 
-Samotný úspěch renderovacích testů nepotvrzuje NVIDIA enkodér ani přenos do
-Visualizeru na Windows. Ten musí ověřit první cílový pokus.
+Přibalená Windows x64 DLL byla sestavena z tohoto zdroje pomocí MinGW-w64/GCC
+13.2 (Ubuntu noble); C++ runtime je přilinkovaný staticky a importy jsou pouze
+standardní systémové knihovny Windows. Kompilace ověřuje velikosti ABI struktur.
+Reprodukovat ji lze přes `scripts/build_host_cross.sh`; standardní MSVC build
+zůstává dostupný přes CMake s `QARVTK_BUILD_HOST_BRIDGE=ON`.
+
+Plné spuštění v Sliceru na Windows, NVIDIA enkodéry a manipulace více kostkami
+ve Visualizeru/Questu zatím v tomto prostředí ověřené nejsou. Nový Windows ABI
+smoke test je připravený pro CI. Dřívější GitHub Actions končily před prvním krokem
+bez runneru; přibalená DLL na jejich dokončení nezávisí.

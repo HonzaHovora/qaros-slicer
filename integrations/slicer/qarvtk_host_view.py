@@ -68,12 +68,16 @@ def projection(fov, near, far):
 class HostView:
     """One live Slicer 3D view; all methods run on its GUI/render thread."""
 
-    def __init__(self, view, fit=True, match_view=True, render_scale=1.):
+    def __init__(self, view, fit=True, match_view=True, render_scale=1., volume=None, name="Slicer live renderer"):
         self.view = view
         self.window = view.renderWindow()
         self.context_creation_time = self.window.GetContextCreationTime()
         self.renderer = view.renderWindow().GetRenderers().GetFirstRenderer()
         self.camera = self.renderer.GetActiveCamera()
+        self.selected_volume = volume
+        self.name = str(name)
+        if volume is not None and volume not in _items(self.renderer.GetVolumes()):
+            raise ValueError("The selected volume is not in the source Slicer view")
         if not math.isfinite(render_scale) or not .25 <= render_scale <= 1.:
             raise ValueError("Render scale must be between 25% and 100%")
         self.render_scale = render_scale
@@ -88,7 +92,7 @@ class HostView:
         self.fit = bool(fit)
         # Use the same visible-prop bounds as Slicer's view framing. The SDK
         # workspace, placement and scale are fixed together at Start.
-        self.scene_bounds = tuple(self.renderer.ComputeVisiblePropBounds())
+        self.scene_bounds = tuple(volume.GetBounds() if volume is not None else self.renderer.ComputeVisiblePropBounds())
         bounds = self.scene_bounds
         if not all(math.isfinite(x) for x in bounds) or any(bounds[2*i] > bounds[2*i+1] for i in range(3)):
             raise ValueError("The selected Slicer 3D view has no visible content")
@@ -139,10 +143,13 @@ class HostView:
             raise RuntimeError("The Slicer renderer changed; restart live streaming")
         if self.renderer.GetActiveCamera() != self.camera:
             raise RuntimeError("The Slicer view camera changed; restart live streaming")
+        if self.selected_volume is not None and self.selected_volume not in _items(self.renderer.GetVolumes()):
+            raise RuntimeError("Source volume '" + self.name + "' was removed or its rendering method changed; restart live streaming")
 
     def volumes(self):
         """Validate the visible volume props, including newly shown live data."""
-        volumes = [v for v in _items(self.renderer.GetVolumes()) if v.GetVisibility()]
+        source = _items(self.renderer.GetVolumes()) if self.selected_volume is None else [self.selected_volume]
+        volumes = [v for v in source if v.GetVisibility()]
         for volume in volumes:
             mapper = volume.GetMapper()
             if volume.IsA("vtkMultiVolume"):
@@ -153,12 +160,31 @@ class HostView:
                 raise ValueError("Live volume depth requires Composite rendering for every visible volume")
             if mapper.GetRenderToImage():
                 raise ValueError("A host volume mapper is already in RenderToImage mode")
-        if volumes and any(a.GetVisibility() and a.GetProperty().GetOpacity() < 1 for a in _items(self.renderer.GetActors())):
+        if self.selected_volume is None and volumes and any(a.GetVisibility() and a.GetProperty().GetOpacity() < 1 for a in _items(self.renderer.GetActors())):
             raise ValueError("Live depth for a volume combined with translucent surfaces is not validated")
         if len(volumes) > 1 and not all(single_pass_supported(self.renderer, v) for v in volumes):
             raise ValueError("Multiple-volume live depth requires Slicer 5.12 / VTK 9.6 with standard GPU Composite rendering, "
                              "opaque surfaces, no SSAO/shadows/custom render pass, and no conflicting depth shader")
         return volumes
+
+    @contextmanager
+    def _isolated_props(self):
+        # Keep the original live actor, mapper, transfer functions and ROI.
+        # Hide other content only inside the protected eye-render scope. Restore
+        # visibility BEFORE _frame_state restores/renders the desktop, including
+        # when copying a frame fails. Hidden sources yield an empty workspace.
+        saved = []
+        try:
+            if self.selected_volume is not None:
+                for renderer in _items(self.window.GetRenderers()):
+                    for prop in _items(renderer.GetViewProps()):
+                        if prop != self.selected_volume and prop.GetVisibility():
+                            saved.append((prop, prop.GetVisibility()))
+                            prop.SetVisibility(False)
+            yield
+        finally:
+            for prop, visible in saved:
+                prop.SetVisibility(visible)
 
     def _camera_for_eye(self, eye, near, far):
         position, orientation, fov = eye["position"], eye["orientation"], eye["fov"]
@@ -259,7 +285,9 @@ class HostView:
         """Read existing settings once per second; never update a VTK pipeline."""
         result = dict(desired_update_rate=self.window.GetDesiredUpdateRate(),
                       view_visible=bool(self.view.isVisible()))
-        volumes = [v for v in _items(self.renderer.GetVolumes()) if v.GetVisibility()]
+        volumes = self.volumes()
+        result["workspace_name"] = self.name
+        result["isolated_volume"] = self.selected_volume is not None
         result["volume_count"] = len(volumes)
         result["volumes"] = []
         for volume in volumes:
@@ -314,12 +342,13 @@ class HostView:
                                           "color_copy_call_ms", "depth_copy_call_ms",
                                           "host_render_calls", "desktop_restore_render_calls",
                                           "volume_depth_passes"), 0.)
-        volumes = self.volumes()
-        volume = volumes[0] if len(volumes) == 1 else None
-        mapper = volume.GetMapper() if volume else None
-        fast_depth = volume is not None and single_pass_supported(self.renderer, volume)
-        depth_scope = volume_depth(volume) if fast_depth else nullcontext()
-        with self._timed("frame_wall_ms"), self._frame_state(), depth_scope:
+        self.volumes()  # Reject unsupported pipelines before touching the desktop.
+        with self._timed("frame_wall_ms"), self._frame_state(), self._isolated_props(), ExitStack() as scope:
+            volumes = self.volumes()
+            volume = volumes[0] if len(volumes) == 1 else None
+            mapper = volume.GetMapper() if volume else None
+            fast_depth = volume is not None and single_pass_supported(self.renderer, volume)
+            scope.enter_context(volume_depth(volume) if fast_depth else nullcontext())
             for index, eye in enumerate(eyes):
                 width, height = self.last_render_sizes[index]
                 self._camera_for_eye(eye, near, far)
@@ -398,4 +427,39 @@ class HostView:
             self.renderer.GetCullers().RemoveAllItems()
             for culler in cullers:
                 self.renderer.GetCullers().AddItem(culler)
+
+
+def create_host_views(view, separate=True, names=None, **options):
+    """Freeze workspace membership at Start; all data/shaders remain live."""
+    renderer = view.renderWindow().GetRenderers().GetFirstRenderer()
+    visible = [v for v in _items(renderer.GetVolumes()) if v.GetVisibility()]
+    if not separate or not visible:
+        return [HostView(view, **options)]
+    hosts = []
+    try:
+        for i, volume in enumerate(visible):
+            name = names(volume) if names else None
+            hosts.append(HostView(view, volume=volume, name=name or "Slicer volume " + str(i+1), **options))
+            # Captures are serialized on the GUI thread. Reuse spare attachments
+            # instead of allocating another full eye framebuffer for every cube.
+            hosts[-1].desktop = hosts[0].desktop
+        # Place independent boxes side by side, centred as a group. Physical
+        # size mode keeps millimetres; only the initial room positions change.
+        gap = .12
+        cursor = -(sum(h.workspace_size[0] for h in hosts) + gap * (len(hosts)-1)) / 2
+        for host in hosts:
+            host.workspace_position = (cursor + host.workspace_size[0]/2, 0., -1.5)
+            cursor += host.workspace_size[0] + gap
+        return hosts
+    except Exception:
+        for host in hosts:
+            host.close()
+        raise
+
+
+def workspace_envelope(hosts):
+    """Bounds of the initial workspace group, for the shared slice panel row."""
+    low = [min(h.workspace_position[i] - h.workspace_size[i]/2 for h in hosts) for i in range(3)]
+    high = [max(h.workspace_position[i] + h.workspace_size[i]/2 for h in hosts) for i in range(3)]
+    return tuple((a+b)/2 for a, b in zip(low, high)), tuple(b-a for a, b in zip(low, high))
 

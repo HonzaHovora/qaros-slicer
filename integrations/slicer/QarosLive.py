@@ -10,12 +10,12 @@ from slicer.ScriptedLoadableModule import ScriptedLoadableModule, ScriptedLoadab
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 if (Path(__file__).resolve().parent / "QarosVTKLib").is_dir():
-    from QarosVTKLib.qarvtk_host_view import HostView
+    from QarosVTKLib.qarvtk_host_view import create_host_views, workspace_envelope
     from QarosVTKLib.qarvtk_host_runtime import HostTransport
     from QarosVTKLib.qarvtk_host_panels import SlicePanels
     from QarosVTKLib.qarvtk_runtime import user_directory
 else:
-    from qarvtk_host_view import HostView
+    from qarvtk_host_view import create_host_views, workspace_envelope
     from qarvtk_host_runtime import HostTransport
     from qarvtk_host_panels import SlicePanels
     sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
@@ -41,14 +41,20 @@ class QarosLiveWidget(ScriptedLoadableModuleWidget):
         form = qt.QFormLayout()
         self.layout.addLayout(form)
         label = qt.QLabel("Live first 3D view. Changes in Slicer are rendered automatically. "
-                         "Experimental. Multiple VTK GPU Composite volumes with opaque surfaces; ROI cropping is supported. "
-                         "Several volumes share one QAROS workspace and use an extra depth render per eye.")
+                         "Experimental. Each visible VTK GPU Composite volume can have its own movable QAROS workspace. "
+                         "Transfer functions and ROI cropping stay live.")
         label.wordWrap = True
         form.addRow(label)
+        self.separateVolumes = qt.QCheckBox("Separate QAROS workspace for each volume")
+        self.separateVolumes.checked = True
+        self.separateVolumes.toolTip = "One cube and stereo stream per visible volume, placed side by side. " \
+            "Each cube contains only its volume; surfaces and view decorations stay in Slicer. " \
+            "Turn off to stream the whole scene in one workspace. Restart streaming after adding/removing a volume."
+        form.addRow(self.separateVolumes)
         self.fit = qt.QCheckBox("Center and fit into 65 cm workspace at Start")
         self.fit.checked = True
         self.fit.toolTip = "At Start, center the scene and fit the workspace's longest edge to 65 cm. " \
-                           "Off keeps physical size (1 mm = 1 mm) and scene position. Workspace dimensions always follow scene bounds."
+                           "Off keeps physical size (1 mm = 1 mm). Separate workspaces are arranged side by side."
         form.addRow(self.fit)
         self.matchView = qt.QCheckBox("Use Slicer viewing direction at Start")
         self.matchView.checked = True
@@ -113,6 +119,8 @@ class QarosLiveWidget(ScriptedLoadableModuleWidget):
         self.layout.addStretch(1)
 
     def start_stream(self):
+        hosts = []
+        created_transport = None
         try:
             if self.transport and self.transport.running:
                 return
@@ -126,15 +134,23 @@ class QarosLiveWidget(ScriptedLoadableModuleWidget):
                 raise RuntimeError("Open a Slicer layout containing a 3D view")
             view = lm.threeDWidget(0).threeDView()
             view.renderWindow().Render()
-            host = HostView(view, fit=self.fit.checked, match_view=self.matchView.checked,
-                            render_scale=(1., .75, .5)[self.renderScale.currentIndex])
+            manager = view.displayableManagerByClassName("vtkMRMLVolumeRenderingDisplayableManager")
+            get_actor = getattr(manager, "GetVolumeActor", None)
+            names = [(get_actor(node), node.GetName())
+                     for node in slicer.util.getNodesByClass("vtkMRMLVolumeNode")] if get_actor else []
+            hosts = create_host_views(view, separate=self.separateVolumes.checked,
+                names=lambda actor: next((name for prop, name in names if prop == actor), None),
+                fit=self.fit.checked, match_view=self.matchView.checked,
+                render_scale=(1., .75, .5)[self.renderScale.currentIndex])
             folder = user_directory() / "live-logs" / datetime.now().strftime("%Y%m%d-%H%M%S-%f")
             self.transport = HostTransport(self.dll.currentPath, self.sdk.currentPath,
-                                            self.target.currentText, folder, host)
+                                            self.target.currentText, folder, hosts)
+            created_transport = self.transport
             if self.slicePreviews.checked:
-                self.transport.panels = SlicePanels(lm, self.transport, host.workspace_position,
-                                                   host.workspace_size, fps=int(self.sliceFps.currentText))
-            self.workspaceStatus.text = " × ".join(f"{x * 100:.1f}" for x in host.workspace_size) + " cm (width × height × depth)"
+                position, size = workspace_envelope(hosts)
+                self.transport.panels = SlicePanels(lm, self.transport, position, size, fps=int(self.sliceFps.currentText))
+            self.workspaceStatus.text = "\n".join(host.name + ": " + " × ".join(f"{x * 100:.1f}" for x in host.workspace_size)
+                                                 + " cm" for host in hosts)
             self.settings.setValue("QAROS_LIVE/Dll", self.dll.currentPath)
             self.settings.setValue("QAROS_VTK/Sdk", self.sdk.currentPath)
             self.logPath.text = str(folder)
@@ -142,6 +158,11 @@ class QarosLiveWidget(ScriptedLoadableModuleWidget):
             self.stopButton.enabled = True
             self.status.text = "Connecting the live Slicer renderer..."
         except Exception as error:
+            if created_transport:
+                created_transport.request_stop("Startup error: " + str(error))
+            else:
+                for host in hosts:
+                    host.close()
             self.status.text = str(error)
             slicer.util.errorDisplay(str(error))
 
@@ -165,7 +186,8 @@ class QarosLiveWidget(ScriptedLoadableModuleWidget):
                 raise RuntimeError("The source 3D view was replaced")
             if not widget.mrmlViewNode().IsViewVisibleInLayout():
                 raise RuntimeError("The source 3D view was removed from the layout")
-            transport.host.validate_source()
+            for host in transport.hosts:
+                host.validate_source()
         except Exception as error:
             transport.request_stop("Slicer layout changed: " + str(error))
             return
@@ -187,7 +209,7 @@ class QarosLiveWidget(ScriptedLoadableModuleWidget):
             if not self.cleaned_up:
                 self.startButton.enabled = not self.transport.running
                 self.stopButton.enabled = self.transport.running and not self.transport.stopping
-                for control in (self.fit, self.matchView, self.renderScale, self.slicePreviews, self.sliceFps):
+                for control in (self.separateVolumes, self.fit, self.matchView, self.renderScale, self.slicePreviews, self.sliceFps):
                     control.enabled = not self.transport.running
         if self.cleaned_up and (not self.transport or not self.transport.running):
             self.timer.stop()

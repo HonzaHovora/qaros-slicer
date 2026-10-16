@@ -43,7 +43,7 @@ class FakeDll:
 
 class HostRuntimeTest(unittest.TestCase):
     def test_old_placement_abi_is_rejected_before_binding_create(self):
-        for abi, size in ((2, 64), (3, 112)):
+        for abi, size in ((2, 64), (3, 112), (4, 112)):
             old_info = dict(host_abi=abi, header_sha256=EXPECTED_SDK, modern_api=0,
                             eye_size=104, frame_size=232, placement_size=size)
             old_dll = type("OldDll", (), {"qarvtk_host_info": staticmethod(lambda: json.dumps(old_info).encode())})()
@@ -78,9 +78,41 @@ class HostRuntimeTest(unittest.TestCase):
         transport.last_status = "fixture"
         transport.diagnostics = HostTimingLog(folder)
         transport.host = type("Host", (), {"last_timings": {"frame_wall_ms": 10.},
+                                           "name": "Fixture",
                                            "last_render_sizes": [(320, 240)]*2, "last_desktop_size": (800, 600),
                                            "render": staticmethod(render), "close": staticmethod(lambda: None)})()
+        transport.hosts = [transport.host]
         return transport
+
+    def test_frames_route_by_workspace_and_all_hosts_close(self):
+        with tempfile.TemporaryDirectory() as folder:
+            rendered, closed = [], []
+            t = self.transport(folder, lambda *args, **kwargs: rendered.append(0))
+            second = type("Host", (), dict(name="Second", last_timings={}, last_render_sizes=[(320, 240)]*2,
+                last_desktop_size=(800, 600), render=staticmethod(lambda *a, **k: rendered.append(1)),
+                close=staticmethod(lambda: closed.append(1))))()
+            t.host.close = lambda: closed.append(0)
+            t.hosts.append(second)
+            for index in (0, 1, 1, 0):
+                t.frame.volume_index = index
+                t.tick()
+            self.assertEqual(rendered, [0, 1, 1, 0])
+            self.assertEqual(t.dll.finished, [1, 2, 3, 4])
+            self.assertEqual(t.diagnostics.volume_frames, {0: 2, 1: 2})
+            t.request_stop()
+            t.tick()
+            self.assertEqual(closed, [0, 1])
+
+    def test_invalid_workspace_never_renders_or_submits(self):
+        with tempfile.TemporaryDirectory() as folder:
+            t = self.transport(folder, lambda *a, **k: self.fail("Rendered invalid workspace"))
+            t.frame.volume_index = 2
+            with self.assertRaisesRegex(RuntimeError, "unknown workspace"):
+                t.tick()
+            self.assertEqual(t.dll.finished, [])
+            self.assertEqual(t.dll.stops, 1)
+            t.tick()
+            self.assertFalse(t.running)
 
     def test_nested_timer_cannot_overwrite_live_frame(self):
         with tempfile.TemporaryDirectory() as folder:
@@ -143,3 +175,4 @@ class HostRuntimeTest(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+

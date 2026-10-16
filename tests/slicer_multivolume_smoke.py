@@ -17,7 +17,7 @@ if not EGL:
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "package" / "QAROS-VTK-plugins" / "slicer"))
 sys.path.insert(0, str(Path(__file__).resolve().parent))
-from QarosVTKLib.qarvtk_host_view import HostView
+from QarosVTKLib.qarvtk_host_view import HostView, create_host_views, workspace_envelope
 from test_host_view_math import sdk_eye
 
 
@@ -262,8 +262,88 @@ def run():
     finally:
         renderer.SetUseSSAO(False)
     host.render(eyes, Oracle())
-    host.close()
     print("PASS: multi-volume failure cleanup, hidden unsupported data, live visibility and conservative validation", flush=True)
+
+    # Independent workspaces use the SAME actors but must never capture another
+    # dataset, opaque/translucent surfaces or decorations from the source view.
+    renderer.AddActor(surface)
+    surface.GetProperty().SetOpacity(.4)
+    independent = create_host_views(view, match_view=False,
+        names=lambda v: "red data" if v == volumes[0] else "blue data")
+    assert len(independent) == 2
+    assert independent[0].desktop is independent[1].desktop
+    centre, size = workspace_envelope(independent)
+    assert abs(centre[0]) < 1e-10
+    assert np.isclose(size[0], sum(h.workspace_size[0] for h in independent) + .12)
+    for h in independent:
+        selected = h.selected_volume
+        assert h.scene_bounds == selected.GetBounds()
+        assert np.isclose(max(h.workspace_size), .65)
+        assert h.diagnostic_state()["volume_count"] == 1
+        requests = [sdk_eye(h, (x, 0., 1.2)) for x in (-.032, .032)]
+        # Independent native color and VTK RenderToImage depth with explicit
+        # manual visibility, not the isolation context under test.
+        saved = [(p, p.GetVisibility()) for p in (surface, *volumes)]
+        native = []
+        old_keys = selected.GetPropertyKeys()
+        try:
+            for p, visible in saved:
+                p.SetVisibility(visible if p == selected else False)
+            for eye in requests:
+                with host._frame_state():
+                    host._camera_for_eye(eye, *h.clip)
+                    window.SetSize(*eye["size"])
+                    window.Render()
+                    native.append(pixels(window))
+            keys = vtk.vtkInformation()
+            if old_keys:
+                keys.Copy(old_keys)
+            keys.Set(vtk.vtkOpenGLActor.GLDepthMaskOverride(), 0)
+            selected.SetPropertyKeys(keys)
+            reference = Oracle(selected.GetMapper())
+            host.render(requests, reference, near=h.clip[0], far=h.clip[1])
+        finally:
+            selected.SetPropertyKeys(old_keys)
+            for p, visible in saved:
+                p.SetVisibility(visible)
+        window.Render()
+        desktop = pixels(window), pixels(window, True)
+        state_before = [state(v) for v in volumes]
+        actual = Oracle()
+        h.render(requests, actual)
+        assert h.last_timings["host_render_calls"] == 2 + int(EGL)
+        assert h.last_timings["volume_depth_passes"] == 0
+        assert [state(v) for v in volumes] == state_before
+        assert all(p.GetVisibility() == visible for p, visible in saved)
+        assert all(np.array_equal(a, pixels(window, depth)) for a, depth in zip(desktop, (False, True)))
+        for a, b, d, expected in zip(actual.colors, native, actual.depths, reference.depths):
+            assert np.max(np.abs(a.astype(int)-b.astype(int))) <= 2, (h.name, "foreign content in workspace")
+            assert np.max(np.abs(d-expected)) < 2e-5, (h.name, "wrong depth")
+            assert np.count_nonzero(d < 1) > 30
+        try:
+            h.render(requests, Broken())
+            raise AssertionError("Isolated consumer failure swallowed")
+        except RuntimeError as error:
+            assert str(error) == "injected multi-volume consumer failure"
+        assert all(p.GetVisibility() == visible for p, visible in saved)
+        assert all(np.array_equal(a, pixels(window, depth)) for a, depth in zip(desktop, (False, True)))
+        selected.VisibilityOff()
+        empty = Oracle()
+        h.render(requests, empty)
+        assert all(np.all(d == 1.) for d in empty.depths), "Hidden workspace captured another volume"
+        selected.VisibilityOn()
+        renderer.RemoveVolume(selected)
+        try:
+            h.render(requests, Oracle())
+            raise AssertionError("Removed source silently switched to another volume")
+        except RuntimeError as error:
+            assert "removed" in str(error)
+        finally:
+            renderer.AddVolume(selected)
+        print("PASS: independent workspace", h.name, "isolated color/depth, own bounds, hidden/removed source, failure cleanup", flush=True)
+    for h in independent:
+        h.close()
+    host.close()
 
 
 try:

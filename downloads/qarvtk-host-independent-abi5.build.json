@@ -1,0 +1,33 @@
+{
+  "host_abi": 5,
+  "architecture": "Windows x64",
+  "sdk_header_sha256": "022c40b670f87a066664c37daeb06da525db37fffdf5810e72cff8a5b81e677d",
+  "compiler": "MinGW-w64 GCC 13.2.0-6ubuntu1+26.1 (posix), Ubuntu noble",
+  "native_base_commit": "536c556daa442c8169d7e6b13ee08c8e0a873560",
+  "changed_native_sources_sha256": {
+    "src/host_bridge.cpp": "f9296c32fc6aa58e9a1eb8a7dbde3af7c63dcacdb857fc1fcc846a9e1d7493a1",
+    "include/qarvtk/host_bridge.h": "d9da599a7121e634500b0d45d7ac5041533b097ee2cc770db9c601105c65c195",
+    "include/qarvtk/host_stream_scheduler.hpp": "f8bff2ae14f9e7988f38bf94e20188287443af330ce7604d65a09136ca5cab8e"
+  },
+  "dll_sha256": "00edfe1351ad62454335a0f746a1bea53983a63385b20e1d564e5e8391e8635e",
+  "build_script": "scripts/build_host_cross.sh",
+  "imports": [
+    "GDI32.dll",
+    "KERNEL32.dll",
+    "msvcrt.dll",
+    "OPENGL32.dll",
+    "USER32.dll"
+  ],
+  "validation": [
+    "Windows x64 cross-compilation and static ABI size assertions",
+    "PE exports and system-only imports",
+    "VTK 9.6.2 EGL isolated workspace color/depth and restoration tests",
+    "Python transport routing and lifecycle tests",
+    "C++ frame lease, scheduling, placement and legacy wait tests"
+  ],
+  "not_validated": [
+    "Windows DLL load and WGL/SDK operation",
+    "NVIDIA encoding and Visualizer/Quest multi-workspace manipulation",
+    "Full Slicer MRML/Qt integration"
+  ]
+}

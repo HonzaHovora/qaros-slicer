@@ -2,10 +2,12 @@
 
 Pluginy pro **ParaView a 3D Slicer** a OpenGL přenos do QAROS.
 
-**Experiment: více objemů v jednom živém 3D pohledu.** Python rozšíření nad r17
-přenáší několik VTK GPU Composite objemů společně, včetně ROI a transformací.
-Pro více objemů přidává průchod pro hloubku každého oka; jeden objem si zachovává
-rychlou cestu. Instalace přes `UPDATE-LIVE-PLUGIN.cmd` a omezení jsou v
+**Experiment: vlastní QAROS kostka pro každý objem.** Výchozí volba
+**Separate QAROS workspace for each volume** vytvoří samostatné pracovní objemy
+vedle sebe, každý s vlastním streamem, měřítkem a živým ROI. Sdílejí jednu relaci
+a jeden Visualizer/Quest. Vypnutím volby se přenáší celá scéna společně.
+Instalace přes `UPDATE-LIVE-PLUGIN.cmd` aktualizuje Python i přibalenou DLL ABI 5;
+SDK v `D:/install` zůstává stejné. Postup a omezení jsou v
 [postupu pro více objemů](docs/MULTIPLE_VOLUMES.md).
 
 **R17: živé náhledy řezů jako samostatné QAROS panely.**
