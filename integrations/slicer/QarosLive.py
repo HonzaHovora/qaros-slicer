@@ -41,7 +41,7 @@ class QarosLiveWidget(ScriptedLoadableModuleWidget):
         form = qt.QFormLayout()
         self.layout.addLayout(form)
         label = qt.QLabel("Live first 3D view. Changes in Slicer are rendered automatically. "
-                         "Multiple VTK GPU Composite volumes with opaque surfaces; ROI cropping is supported. "
+                         "Experimental. Multiple VTK GPU Composite volumes with opaque surfaces; ROI cropping is supported. "
                          "Several volumes share one QAROS workspace and use an extra depth render per eye.")
         label.wordWrap = True
         form.addRow(label)

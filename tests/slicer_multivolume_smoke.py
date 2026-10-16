@@ -1,11 +1,19 @@
-"""Real Slicer: native multi-volume color and independent per-volume depth oracles."""
+"""Slicer or --vtk-egl: native color and independent per-volume depth oracles.
+
+EGL exercises the real GPU renderer without a GUI; it does not validate MRML,
+Qt attachment preservation, Windows transport or the NVIDIA encoder.
+"""
 from pathlib import Path
+from types import SimpleNamespace
 import sys
 import traceback
 import numpy as np
-import slicer
 import vtk
-from vtk.util.numpy_support import vtk_to_numpy
+from vtk.util.numpy_support import numpy_to_vtk, vtk_to_numpy
+
+EGL = "--vtk-egl" in sys.argv
+if not EGL:
+    import slicer
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "package" / "QAROS-VTK-plugins" / "slicer"))
 sys.path.insert(0, str(Path(__file__).resolve().parent))
@@ -31,28 +39,53 @@ def state(volume):
 
 
 def run():
-    slicer.app.layoutManager().setLayout(slicer.vtkMRMLLayoutNode.SlicerLayoutOneUp3DView)
-    view = slicer.app.layoutManager().threeDWidget(0).threeDView()
-    window = view.renderWindow()
-    renderer = window.GetRenderers().GetFirstRenderer()
-    view.mrmlViewNode().SetBoxVisible(False)
-    view.mrmlViewNode().SetAxisLabelsVisible(False)
+    if EGL:
+        window = vtk.vtkEGLRenderWindow()
+        window.SetOffScreenRendering(True)
+        window.SetSize(320, 240)
+        window.SetMultiSamples(0)
+        renderer = vtk.vtkRenderer()
+        window.AddRenderer(renderer)
+        view = SimpleNamespace(renderWindow=lambda: window, isVisible=lambda: True,
+                               resetFocalPoint=renderer.ResetCamera, renderEnabled=True)
+        logic = None
+    else:
+        slicer.app.layoutManager().setLayout(slicer.vtkMRMLLayoutNode.SlicerLayoutOneUp3DView)
+        view = slicer.app.layoutManager().threeDWidget(0).threeDView()
+        window = view.renderWindow()
+        renderer = window.GetRenderers().GetFirstRenderer()
+        view.mrmlViewNode().SetBoxVisible(False)
+        view.mrmlViewNode().SetAxisLabelsVisible(False)
+        logic = slicer.modules.volumerendering.logic()
     renderer.SetBackground(0., 0., 0.)
     renderer.GradientBackgroundOff()
-    logic = slicer.modules.volumerendering.logic()
     z, y, x = np.indices((32, 32, 32))
     data = np.where((x-15.5)**2+(y-15.5)**2+(z-15.5)**2 < 12**2, 900, 0).astype(np.int16)
     displays = []
     for index, (origin, color) in enumerate((((-75., -30., -31.), (1., .1, .1)),
                                             ((15., 15., -31.), (.1, .2, 1.)))):
-        node = slicer.mrmlScene.AddNewNodeByClass("vtkMRMLScalarVolumeNode", "Multi CT " + str(index))
-        slicer.util.updateVolumeFromArray(node, data)
-        node.SetSpacing(2., 2., 2.)
-        node.SetOrigin(origin)
-        node.CreateDefaultDisplayNodes()
-        display = logic.CreateDefaultVolumeRenderingNodes(node)
-        display.SetVisibility(True)
-        prop = display.GetVolumePropertyNode().GetVolumeProperty()
+        if EGL:
+            image = vtk.vtkImageData()
+            image.SetDimensions(32, 32, 32)
+            image.SetSpacing(2., 2., 2.)
+            image.SetOrigin(origin)
+            image.GetPointData().SetScalars(numpy_to_vtk(data.ravel(), deep=True))
+            mapper = vtk.vtkOpenGLGPUVolumeRayCastMapper()
+            mapper.SetInputData(image)
+            volume = vtk.vtkVolume()
+            volume.SetMapper(mapper)
+            renderer.AddVolume(volume)
+            prop = volume.GetProperty()
+            display = None
+        else:
+            node = slicer.mrmlScene.AddNewNodeByClass("vtkMRMLScalarVolumeNode", "Multi CT " + str(index))
+            slicer.util.updateVolumeFromArray(node, data)
+            node.SetSpacing(2., 2., 2.)
+            node.SetOrigin(origin)
+            node.CreateDefaultDisplayNodes()
+            display = logic.CreateDefaultVolumeRenderingNodes(node)
+            display.SetVisibility(True)
+            prop = display.GetVolumePropertyNode().GetVolumeProperty()
         prop.GetRGBTransferFunction().RemoveAllPoints()
         prop.GetRGBTransferFunction().AddRGBPoint(0, *color)
         prop.GetRGBTransferFunction().AddRGBPoint(900, *color)
@@ -62,7 +95,8 @@ def run():
         prop.GetScalarOpacity().AddPoint(900, .25)
         prop.ShadeOff()
         displays.append(display)
-    slicer.app.processEvents()
+    if not EGL:
+        slicer.app.processEvents()
     view.resetFocalPoint()
     window.Render()
     host = HostView(view, match_view=False)
@@ -92,6 +126,8 @@ def run():
             self.depths.append(values)
 
     def verify(label, requests=eyes):
+        if EGL:
+            window.Render()  # EGL restores by rendering; Qt keeps original attachments.
         saved = [state(v) for v in volumes]
         native = []
         for eye in requests:
@@ -103,7 +139,7 @@ def run():
         desktop = pixels(window), pixels(window, True)
         actual = Oracle()
         host.render(requests, actual)
-        assert host.last_timings["host_render_calls"] == 4, (label, host.last_timings)
+        assert host.last_timings["host_render_calls"] == 4 + int(EGL), (label, host.last_timings)
         assert host.last_timings["volume_depth_passes"] == 2
         assert all(np.array_equal(a, pixels(window, depth)) for a, depth in zip(desktop, (False, True)))
         assert [state(v) for v in volumes] == saved, label
@@ -167,12 +203,16 @@ def run():
     verify("opaque surface occludes both volumes")
     renderer.RemoveActor(surface)
 
-    roi = logic.CreateROINode(displays[0])
-    logic.FitROIToVolume(displays[0])
-    roi.GetDisplayNode().SetVisibility(False)
-    roi.SetSize(22., 62., 62.)
-    displays[0].SetCroppingEnabled(True)
-    slicer.app.processEvents()
+    if EGL:
+        volumes[0].GetMapper().SetCroppingRegionPlanes(-62., -40., -30., 32., -31., 31.)
+        volumes[0].GetMapper().CroppingOn()
+    else:
+        roi = logic.CreateROINode(displays[0])
+        logic.FitROIToVolume(displays[0])
+        roi.GetDisplayNode().SetVisibility(False)
+        roi.SetSize(22., 62., 62.)
+        displays[0].SetCroppingEnabled(True)
+        slicer.app.processEvents()
     verify("live ROI cropping")
 
     volumes[1].SetPosition(10000., 0., 0.)
@@ -189,6 +229,8 @@ def run():
                 raise RuntimeError("injected multi-volume consumer failure")
             super().depth(index, *args)
     saved = [state(v) for v in volumes]
+    if EGL:
+        window.Render()
     desktop = pixels(window), pixels(window, True)
     try:
         host.render(eyes, Broken())
@@ -208,7 +250,7 @@ def run():
         assert "Composite" in str(error)
     volumes[1].VisibilityOff()
     host.render(eyes, Oracle())
-    assert host.last_timings["host_render_calls"] == 2, "One visible volume must retain the fast path"
+    assert host.last_timings["host_render_calls"] == 2 + int(EGL), "One visible volume must retain the fast path"
     volumes[1].VisibilityOn()
     unsupported.SetBlendModeToComposite()
     renderer.SetUseSSAO(True)
@@ -227,7 +269,10 @@ def run():
 try:
     run()
 except Exception:
+    if EGL:
+        raise
     traceback.print_exc()
     slicer.app.exit(1)
 else:
-    slicer.app.exit(0)
+    if not EGL:
+        slicer.app.exit(0)

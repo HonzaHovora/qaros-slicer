@@ -2,6 +2,12 @@
 
 Pluginy pro **ParaView a 3D Slicer** a OpenGL přenos do QAROS.
 
+**Experiment: více objemů v jednom živém 3D pohledu.** Python rozšíření nad r17
+přenáší několik VTK GPU Composite objemů společně, včetně ROI a transformací.
+Pro více objemů přidává průchod pro hloubku každého oka; jeden objem si zachovává
+rychlou cestu. Instalace přes `UPDATE-LIVE-PLUGIN.cmd` a omezení jsou v
+[postupu pro více objemů](docs/MULTIPLE_VOLUMES.md).
+
 **R17: živé náhledy řezů jako samostatné QAROS panely.**
 Volba **Show slice views as panels (preview only)** přenáší hotové GPU obrazy
 viditelných řezů, včetně videa a časových sekvencí. Výchozí limit je 15 FPS
@@ -152,5 +158,6 @@ Další podklady:
 SDK runtime DLL, pozvánky a párovací identity nejsou součástí repozitáře.
 Pro reprodukovatelné sestavení session senderu je uložená přesná dodaná hlavička
 v `ci/sdk-headers/`; do instalovaného SDK ji nekopíruj.
+
 
 
