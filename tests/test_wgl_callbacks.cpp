@@ -51,7 +51,18 @@ int main() { try {
     glDeleteTextures(1,&texture);
   }
   qarvtk::WglCallbacks callbacks(sdk.dc,sdk.context);
-  auto params=qar_stream_params_opengl_default(); callbacks.configure(params);
+  auto native_params=callbacks.parameters();
+#if QARVTK_SPLIT_OPENGL_PARAMS
+  require(native_params.header.type==QAR_STRUCTURE_TYPE_STREAM_OPENGL_WGL_PARAMS_EXT,
+          "Wrong WGL extension discriminator");
+  require(native_params.device_context==sdk.dc,"Wrong SDK device context");
+  auto& params=native_params.callbacks;
+#else
+  require(native_params.context_type==QAR_OPENGL_CONTEXT_TYPE_WGL,"Wrong context type");
+  require(native_params.display_or_device_context==sdk.dc,"Wrong SDK device context");
+  auto& params=native_params;
+#endif
+  require(native_params.context==sdk.context,"Wrong SDK native context");
   // Test worker migration and OpenGL 1.1 export fallback using Windows' basic
   // context. This does not claim glGetStringi or NVIDIA interop support in CI.
   const auto probe=callbacks.probe_on_worker();
@@ -69,7 +80,7 @@ int main() { try {
           "Invalid function returned an address");
   require(params.restore_current(params.user_state,&before),"Host restore failed");
   require(wglGetCurrentContext()==host.context && wglGetCurrentDC()==host.dc,"Wrong host binding restored");
-  require(params.unbind(params.user_state),"Unbind failed");
+  require(wglMakeCurrent(nullptr,nullptr)!=FALSE,"Cannot prepare empty binding");
   const auto empty=params.capture_current(params.user_state);
   require(!empty.has_context,"Empty binding reported as current");
   require(params.make_current(params.user_state),"Rebind failed");

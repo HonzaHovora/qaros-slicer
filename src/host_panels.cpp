@@ -87,8 +87,7 @@ struct PanelStream {
     if(sender)qar_video_sender_handle_destroy(sender);
   }
   void open(const QarPeerId& peer){
-    auto gl=qar_stream_params_opengl_default();gl.context_type=QAR_OPENGL_CONTEXT_TYPE_WGL;
-    gl.context=panel.graphics->context;gl.display_or_device_context=panel.graphics->dc;panel.callbacks->configure(gl);
+    auto gl=panel.callbacks->parameters();
     auto init=qar_video_sender_init_default();init.graphics_api=QAR_GRAPHICS_API_OPENGL;init.header.next=&gl.header;
     init.layout.textures_count=1;init.layout.views_count=1;
     init.layout.textures[0]={QAR_PIXEL_FORMAT_R8G8B8A8,panel.width,panel.height,1};

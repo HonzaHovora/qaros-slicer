@@ -12,8 +12,49 @@ if __package__:
 else:
     from qarvtk_host_diagnostics import ForegroundWindow, SystemMonitor
 
-EXPECTED_SDK = "022c40b670f87a066664c37daeb06da525db37fffdf5810e72cff8a5b81e677d"
+EXPECTED_SDK = "c709c479cc6a1acc0040fb61a071cc7bc16e65bf5acb90d624d9d6b0a6fcd3c1"
+LEGACY_SDK = "022c40b670f87a066664c37daeb06da525db37fffdf5810e72cff8a5b81e677d"
+SUPPORTED_SDKS = {EXPECTED_SDK, LEGACY_SDK}
+DEFAULT_SDK_ROOT = "D:/QAROS-0.9.0-dev.2540+1ed038e4"
 _libraries = {}  # Never unload a DLL while an SDK callback may still use it.
+
+
+def sdk_fingerprint(root):
+    try:
+        return hashlib.sha256((Path(root) / "include" / "qar_streaming.h").read_bytes()).hexdigest()
+    except OSError:
+        return None
+
+
+def default_sdk_path(saved=None, preferred=DEFAULT_SDK_ROOT):
+    """Migrate the old Live SDK setting only when the new package is present."""
+    if saved and sdk_fingerprint(saved) == EXPECTED_SDK:
+        return str(saved)
+    if sdk_fingerprint(preferred) == EXPECTED_SDK:
+        return str(preferred)
+    return str(saved or preferred)
+
+
+def validate_sdk(root):
+    digest = sdk_fingerprint(root)
+    if digest not in SUPPORTED_SDKS:
+        raise RuntimeError("Unsupported or missing SDK header at " + str(root) +
+                           ". Select the complete QAROS SDK root (containing include and bin), "
+                           "for example " + DEFAULT_SDK_ROOT + ". Do not replace just the header.")
+    for relative in ("bin/qar-streaming-c.dll", "bin/qar-runtime-launcher.exe"):
+        if not (Path(root) / relative).is_file():
+            raise RuntimeError("Incomplete QAROS SDK: missing " + str(Path(root) / relative) +
+                               ". Keep the entire runtime bin folder from the same package.")
+    return digest
+
+
+def validate_host_sdk(dll, digest):
+    compiled = dll._qarvtk_info["header_sha256"]
+    if compiled != digest:
+        raise RuntimeError("Host DLL was built for SDK " + compiled[:8] +
+                           ", but the selected SDK is " + digest[:8] +
+                           ". Close Slicer and install the matching DLL and plugin with "
+                           "UPDATE-LIVE-PLUGIN.cmd; do not mix SDK files.")
 
 
 class HostTimingLog:
@@ -156,8 +197,10 @@ def library(path):
     dll = c.CDLL(path)
     dll.qarvtk_host_info.restype = c.c_char_p
     info = json.loads(dll.qarvtk_host_info())
-    if (info.get("host_abi"), info.get("header_sha256"), info.get("modern_api"),
-        info.get("eye_size"), info.get("frame_size"), info.get("placement_size"), info.get("volume_size")) != (5, EXPECTED_SDK, 0, c.sizeof(Eye), c.sizeof(Frame), c.sizeof(Placement), c.sizeof(Volume)):
+    if (info.get("header_sha256") not in SUPPORTED_SDKS or
+        (info.get("host_abi"), info.get("modern_api"), info.get("eye_size"), info.get("frame_size"),
+         info.get("placement_size"), info.get("volume_size")) !=
+        (5, 0, c.sizeof(Eye), c.sizeof(Frame), c.sizeof(Placement), c.sizeof(Volume))):
         raise RuntimeError("Host DLL ABI or SDK fingerprint does not match this plugin. Close Slicer and install the ABI 5 DLL with UPDATE-LIVE-PLUGIN.cmd.")
     signatures = {
         "create": ([c.c_char_p, c.c_char_p, c.c_char_p, c.POINTER(Placement), c.POINTER(c.c_void_p), c.c_char_p, c.c_uint32], c.c_int),
@@ -179,6 +222,7 @@ def library(path):
     for name, (args, result) in signatures.items():
         function = getattr(dll, "qarvtk_host_" + name)
         function.argtypes, function.restype = args, result
+    dll._qarvtk_info = info
     _libraries[path] = dll
     return dll
 
@@ -188,9 +232,7 @@ class HostTransport:
         if os.name != "nt":
             raise RuntimeError("Live QAROS transport currently requires Windows x64")
         sdk = Path(sdk_root).resolve()
-        header = sdk / "include" / "qar_streaming.h"
-        if not header.is_file() or hashlib.sha256(header.read_bytes()).hexdigest() != EXPECTED_SDK:
-            raise RuntimeError("SDK header differs from the host DLL; select the complete matching D:/install SDK")
+        digest = validate_sdk(sdk)
         self.hosts = list(host_view) if isinstance(host_view, (list, tuple)) else [host_view]
         if not 1 <= len(self.hosts) <= 32:
             raise ValueError("Expected 1 to 32 workspaces")
@@ -198,6 +240,7 @@ class HostTransport:
         if any(h.window != self.host.window for h in self.hosts):
             raise ValueError("All workspaces must use the same Slicer render window")
         self.dll = library(dll_path)
+        validate_host_sdk(self.dll, digest)
         self.handle = c.c_void_p()
         self.frame = Frame()
         self.stopping = False
@@ -219,6 +262,8 @@ class HostTransport:
         if result != 0:
             raise RuntimeError(error.value.decode("utf-8", "replace"))
         self.diagnostics = HostTimingLog(self.log_folder)
+        self.diagnostics.event("SDK " + json.dumps(dict(root=str(sdk), header_sha256=digest,
+                                                       host_dll=str(Path(dll_path).resolve()))))
         self.diagnostics.event("ABI 5 independent app volumes in one session; isolated native rendering per workspace; read-only slice video panels; "
                                "workspace follows Slicer bounds and SDK placement; "
                                "same-view layout changes preserve streaming; explicit stop reasons; "

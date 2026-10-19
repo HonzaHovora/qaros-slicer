@@ -175,7 +175,7 @@ struct QarvtkHost {
     std::filesystem::create_directories(std::filesystem::u8path(log_folder));
     log.open(std::filesystem::u8path(log_folder)/"host-bridge.log",std::ios::app);
     if(!log)throw std::runtime_error("Cannot open host bridge log");
-    log<<"Host build: independent-startup-r2 (ABI 5)"<<std::endl;
+    log<<"Host build: session-sdk-update-r1 (ABI 5); SDK header " QARVTK_HOST_SDK_HASH<<std::endl;
     copying=std::make_unique<qarvtk::HostSharedWgl>(dc,host_context);
     {
       qarvtk::WglBinding binding(*copying);qarvtk::hostgl::load();adapter=device();
@@ -353,8 +353,7 @@ struct Session {
         host.connection_operation=nullptr;if(token)qar_cancel_token_handle_destroy(token);
       }
     } operation(host,*startup);
-    auto gl=qar_stream_params_opengl_default();gl.context_type=QAR_OPENGL_CONTEXT_TYPE_WGL;
-    gl.display_or_device_context=config.graphics->dc;gl.context=config.graphics->context;config.callbacks->configure(gl);
+    auto gl=config.callbacks->parameters();
     auto init=qar_render_sender_init_default();init.graphics_api=QAR_GRAPHICS_API_OPENGL;init.header.next=&gl.header;
     init.peer_id=peer;init.app_volume_id=&stream.volume;init.enable_auto_reconnects=true;
     init.texture_layout=QAR_FRAME_LAYOUT_SEPARATED_TEXTURES;

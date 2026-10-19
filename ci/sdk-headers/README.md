@@ -1,4 +1,11 @@
-# Exact header used for the session sender
+# Exact headers used for session builds
+
+`session-c709c479/include/qar_streaming.h` is the unmodified 256428-byte header
+supplied on 2026-10-19 from `QAROS-0.9.0-dev.2540+1ed038e4`.
+SHA256: `c709c479cc6a1acc0040fb61a071cc7bc16e65bf5acb90d624d9d6b0a6fcd3c1`.
+It retains session invites but splits OpenGL context parameters into WGL/GLX/EGL
+structures and changes the gesture API. The Live update targets these exact bytes.
+See [the update guide](../../docs/QAROS_DEV2540_UPDATE.md).
 
 `session-022c40b6/include/qar_streaming.h` is the unmodified header supplied
 from the existing Windows QAROS installation on 2026-10-14. It contains the

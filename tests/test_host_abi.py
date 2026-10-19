@@ -11,7 +11,7 @@ dll = c.CDLL(sys.argv[1])
 dll.qarvtk_host_info.restype = c.c_char_p
 info = json.loads(dll.qarvtk_host_info())
 assert info == dict(host_abi=5, modern_api=0,
-    header_sha256="022c40b670f87a066664c37daeb06da525db37fffdf5810e72cff8a5b81e677d",
+    header_sha256=sys.argv[2],
     eye_size=104, frame_size=240, placement_size=112, volume_size=120)
 assert c.sizeof(Placement) == 112
 assert c.sizeof(Volume) == 120 and Volume.name.offset == 112

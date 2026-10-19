@@ -11,12 +11,12 @@ from slicer.ScriptedLoadableModule import ScriptedLoadableModule, ScriptedLoadab
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 if (Path(__file__).resolve().parent / "QarosVTKLib").is_dir():
     from QarosVTKLib.qarvtk_host_view import create_host_views, workspace_envelope
-    from QarosVTKLib.qarvtk_host_runtime import HostTransport
+    from QarosVTKLib.qarvtk_host_runtime import HostTransport, default_sdk_path
     from QarosVTKLib.qarvtk_host_panels import SlicePanels
     from QarosVTKLib.qarvtk_runtime import user_directory
 else:
     from qarvtk_host_view import create_host_views, workspace_envelope
-    from qarvtk_host_runtime import HostTransport
+    from qarvtk_host_runtime import HostTransport, default_sdk_path
     from qarvtk_host_panels import SlicePanels
     sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
     from qarvtk_runtime import user_directory
@@ -88,7 +88,8 @@ class QarosLiveWidget(ScriptedLoadableModuleWidget):
         form.addRow("Host bridge DLL", self.dll)
         self.sdk = ctk.ctkPathLineEdit()
         self.sdk.filters = ctk.ctkPathLineEdit.Dirs
-        self.sdk.currentPath = str(self.settings.value("QAROS_VTK/Sdk", "D:/install"))
+        self.sdk.currentPath = default_sdk_path(self.settings.value(
+            "QAROS_LIVE/Sdk", self.settings.value("QAROS_VTK/Sdk", "")))
         form.addRow("QAROS SDK folder", self.sdk)
         self.target = qt.QComboBox()
         self.target.addItems(["visualizer", "quest"])
@@ -152,7 +153,7 @@ class QarosLiveWidget(ScriptedLoadableModuleWidget):
             self.workspaceStatus.text = "\n".join(host.name + ": " + " × ".join(f"{x * 100:.1f}" for x in host.workspace_size)
                                                  + " cm" for host in hosts)
             self.settings.setValue("QAROS_LIVE/Dll", self.dll.currentPath)
-            self.settings.setValue("QAROS_VTK/Sdk", self.sdk.currentPath)
+            self.settings.setValue("QAROS_LIVE/Sdk", self.sdk.currentPath)
             self.logPath.text = str(folder)
             self.startButton.enabled = False
             self.stopButton.enabled = True
