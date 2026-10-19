@@ -46,6 +46,7 @@ jobs:
           [void][System.Management.Automation.Language.Parser]::ParseFile((Join-Path $PWD 'scripts/windows/Collect-Logs.ps1'), [ref]$tokens, [ref]$parseErrors)
           if ($parseErrors) { throw ($parseErrors | Out-String) }
           ./scripts/windows/Collect-Logs.ps1 -OutputRoot "$env:RUNNER_TEMP/qarvtk-diagnostics-check" -NoOpen
+          ./tests/test_collect_logs.ps1
       - run: cmake -S . -B build-core -DQARVTK_BUILD_RENDERER=OFF
       - run: cmake --build build-core --config Release
       - run: ctest --test-dir build-core -C Release --output-on-failure

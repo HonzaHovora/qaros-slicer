@@ -12,12 +12,12 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 if (Path(__file__).resolve().parent / "QarosVTKLib").is_dir():
     from QarosVTKLib.qarvtk_host_view import create_host_views, workspace_envelope
     from QarosVTKLib.qarvtk_host_runtime import HostTransport, default_sdk_path, default_host_dll_path
-    from QarosVTKLib.qarvtk_host_panels import SlicePanels
+    from QarosVTKLib.qarvtk_host_panels import SlicePanels, PanelStartupProbe
     from QarosVTKLib.qarvtk_runtime import user_directory
 else:
     from qarvtk_host_view import create_host_views, workspace_envelope
     from qarvtk_host_runtime import HostTransport, default_sdk_path, default_host_dll_path
-    from qarvtk_host_panels import SlicePanels
+    from qarvtk_host_panels import SlicePanels, PanelStartupProbe
     sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
     from qarvtk_runtime import user_directory
 
@@ -36,6 +36,7 @@ class QarosLiveWidget(ScriptedLoadableModuleWidget):
     def setup(self):
         super().setup()
         self.transport = None
+        self.panelProbe = None
         self.cleaned_up = False
         self.settings = qt.QSettings()
         form = qt.QFormLayout()
@@ -60,21 +61,25 @@ class QarosLiveWidget(ScriptedLoadableModuleWidget):
         self.matchView.checked = True
         form.addRow(self.matchView)
         self.slicePreviews = qt.QCheckBox("Show slice views as panels (preview only)")
-        # Opening slice panels reproducibly crashes the dev.2927 QAROS GUI.
-        # Keep this opt-in until the receiver-side failure is resolved.
-        self.slicePreviews.checked = False
+        self.slicePreviews.checked = True
         self.slicePreviews.toolTip = "Live images of visible slice views, including video/sequences. No remote interaction. Applied at Start."
         form.addRow(self.slicePreviews)
-        panelWarning = qt.QLabel("QAROS dev.2927 can crash when slice panels open. Leave panels off for now; "
-                                "separate 3D workspaces work with panels off.")
+        panelWarning = qt.QLabel("Panel startup can crash QAROS dev.2927. Use the step-by-step test below to isolate the failing operation.")
         panelWarning.wordWrap = True
         form.addRow(panelWarning)
+        self.panelProbeMode = qt.QCheckBox("Test panel startup step by step")
+        self.panelProbeMode.toolTip = "Starts the volumes first. Then open one panel without video, start its video, and add the other panels. Wait and observe after each step."
+        form.addRow(self.panelProbeMode)
+        self.panelProbeButton = qt.QPushButton(PanelStartupProbe.labels[0])
+        self.panelProbeButton.enabled = False
+        self.panelProbeButton.connect("clicked()", self.advance_panel_probe)
+        form.addRow(self.panelProbeButton)
         self.sliceFps = qt.QComboBox()
         self.sliceFps.addItems(["5", "10", "15", "30"])
         self.sliceFps.currentIndex = 2
         self.sliceFps.toolTip = "Maximum updates per second per slice. Newest frame wins if the sender cannot keep up."
         form.addRow("Slice preview FPS limit", self.sliceFps)
-        self.panelStatus = qt.QLabel("Slice previews off.")
+        self.panelStatus = qt.QLabel("Slice previews start with streaming.")
         self.panelStatus.wordWrap = True
         form.addRow(self.panelStatus)
         self.workspaceStatus = qt.QLabel("Dimensions follow the visible scene at Start.")
@@ -156,9 +161,15 @@ class QarosLiveWidget(ScriptedLoadableModuleWidget):
             self.transport = HostTransport(self.dll.currentPath, self.sdk.currentPath,
                                             self.target.currentText, folder, hosts)
             created_transport = self.transport
+            self.panelProbe = None
+            self.panelProbeButton.text = PanelStartupProbe.labels[0]
             if self.slicePreviews.checked:
                 position, size = workspace_envelope(hosts)
-                self.transport.panels = SlicePanels(lm, self.transport, position, size, fps=int(self.sliceFps.currentText))
+                if self.panelProbeMode.checked:
+                    self.panelProbe = PanelStartupProbe(lm, self.transport, position, size, fps=int(self.sliceFps.currentText))
+                    self.transport.panel_status_text = "Panel test: wait for both volumes, then open the Red panel with the step button."
+                else:
+                    self.transport.panels = SlicePanels(lm, self.transport, position, size, fps=int(self.sliceFps.currentText))
             self.workspaceStatus.text = "\n".join(host.name + ": " + " × ".join(f"{x * 100:.1f}" for x in host.workspace_size)
                                                  + " cm" for host in hosts)
             self.settings.setValue("QAROS_LIVE/Dll", self.dll.currentPath)
@@ -179,6 +190,16 @@ class QarosLiveWidget(ScriptedLoadableModuleWidget):
     def stop_stream(self, *args):
         if self.transport:
             self.transport.request_stop("Stop button")
+
+    def advance_panel_probe(self):
+        if not self.panelProbe:
+            return
+        try:
+            self.panelProbe.advance()
+            self.panelProbeButton.text = self.panelProbe.label
+        except Exception as error:
+            self.transport.diagnostics.event("PANEL_PROBE_ERROR " + str(error))
+            slicer.util.errorDisplay(str(error))
 
     def scene_closing(self, *args):
         if self.transport:
@@ -219,7 +240,9 @@ class QarosLiveWidget(ScriptedLoadableModuleWidget):
             if not self.cleaned_up:
                 self.startButton.enabled = not self.transport.running
                 self.stopButton.enabled = self.transport.running and not self.transport.stopping
-                for control in (self.separateVolumes, self.fit, self.matchView, self.renderScale, self.slicePreviews, self.sliceFps):
+                self.panelProbeButton.enabled = bool(self.panelProbe and self.panelProbe.stage < 3
+                    and self.transport.running and not self.transport.stopping)
+                for control in (self.separateVolumes, self.fit, self.matchView, self.renderScale, self.slicePreviews, self.sliceFps, self.panelProbeMode):
                     control.enabled = not self.transport.running
         if self.cleaned_up and (not self.transport or not self.transport.running):
             self.timer.stop()

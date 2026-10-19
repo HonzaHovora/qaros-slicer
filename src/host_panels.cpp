@@ -11,12 +11,19 @@
 #include <chrono>
 #include <cmath>
 #include <mutex>
+#include <sstream>
+#include <iomanip>
 #include <thread>
 #include <vector>
 
 namespace qarvtk {
 namespace {
 using Clock=std::chrono::steady_clock;
+template<class Id> std::string id_text(const Id& id){
+  std::ostringstream out;out<<std::hex<<std::setfill('0');
+  for(auto b:id.data)out<<std::setw(2)<<unsigned(b);
+  return out.str();
+}
 void checked(QarResult result,const char* operation){
   if(qar_result_is_success(result))return;
   char text[1024]{};qar_result_message(result,text,sizeof(text));
@@ -82,15 +89,19 @@ struct PanelStream {
   QarSession* session{};
   QarVideoSender* sender{};
   QarGuiPanelId id=qar_gui_panel_id_default();
+  QarStreamId stream_id=qar_stream_id_default();
+  std::function<void(const std::string&)> log;
   bool created{},shown=true;
+  bool begin_logged{},first_frame_logged{};
   uint64_t last_generation{},sent{};
   Clock::time_point last_send{};
-  PanelStream(HostPanel& p,QarSession* s):panel(p),session(s){}
+  PanelStream(HostPanel& p,QarSession* s,std::function<void(const std::string&)> l):panel(p),session(s),log(std::move(l)){}
   ~PanelStream(){
     if(created)qar_gui_panels_close_panel(session,&id);
     if(sender)qar_video_sender_handle_destroy(sender);
   }
   void open(const QarPeerId& peer){
+    log("PANEL_SENDER_CREATE name="+panel.name+" size="+std::to_string(panel.width)+"x"+std::to_string(panel.height)+" api=OpenGL views=1 eye=none format=RGBA8");
     auto gl=panel.callbacks->parameters();
     auto init=qar_video_sender_init_default();init.graphics_api=QAR_GRAPHICS_API_OPENGL;init.header.next=&gl.header;
     init.layout.textures_count=1;init.layout.views_count=1;
@@ -100,6 +111,8 @@ struct PanelStream {
     if(!sender)throw std::runtime_error("SDK returned a null panel sender");
     auto content=qar_gui_panel_stream_id_ext_default();
     checked(qar_video_sender_stream_id(sender,&content.stream_id),"get panel stream ID");
+    stream_id=content.stream_id;
+    log("PANEL_CONTENT_REQUEST name="+panel.name+" type=stream stream="+id_text(stream_id)+" target="+id_text(peer));
     auto gui=qar_gui_panel_init_default();gui.header.next=&content.header;gui.display_name=panel.name.c_str();
     gui.pose.position={float(panel.x),float(panel.y),float(panel.z)};
     gui.size={float(panel.width_meters),float(panel.width_meters*panel.height/panel.width),1.F};
@@ -110,30 +123,74 @@ struct PanelStream {
     if(!own)throw std::runtime_error("SDK returned a null panel owner");
     QarPeerId source{};checked(qar_peer_spec_get_id(own.get(),&source),"read panel owner ID");
     const auto common=host_resource_name(source,"panel",panel.index);gui.common_name=common.c_str();
+    log("PANEL_CREATE_BEGIN name="+panel.name+" common="+common);
     checked(qar_gui_panels_get_or_create(session,&gui,&id),"create slice preview panel");
 #else
+    log("PANEL_CREATE_BEGIN name="+panel.name);
     checked(qar_gui_panels_add_panel(session,&gui,&id),"create slice preview panel");
 #endif
     created=true;
+    log("PANEL_CREATED name="+panel.name+" id="+id_text(id));
+    inspect_registration(peer);
     panel.status("Waiting for panel receiver");
   }
-  void tick(){
+  void inspect_registration(const QarPeerId& peer){
+    // Inspect what the SDK actually registered, not just the init we passed.
+    // This is a diagnostic snapshot; a delayed registry entry is not a failure.
+    std::vector<QarGuiPanel*> handles(256,nullptr);
+    struct Cleanup {
+      std::vector<QarGuiPanel*>& handles;
+      ~Cleanup(){for(auto* h:handles)if(h)qar_gui_panel_handle_destroy(h);}
+    } cleanup{handles};
+    try{
+      size_t count{};
+      checked(qar_query_gui_panels(session,handles.data(),handles.size(),&count),"inspect registered panels");
+      if(count>handles.size())throw std::runtime_error("Panel query exceeded its output buffer");
+      for(size_t i=0;i<count;++i){
+        QarGuiPanelId actual{};
+        checked(qar_gui_panel_get_id(handles[i],&actual),"inspect panel ID");
+        if(!qar_gui_panel_id_equals(&actual,&id))continue;
+        QarGuiPanelContentType type{};QarGuiPanelState state{};QarGuiPanelSize size{};
+        checked(qar_gui_panel_get_content_type(handles[i],&type),"inspect panel content type");
+        checked(qar_gui_panel_get_state(handles[i],&state),"inspect panel state");
+        checked(qar_gui_panel_get_size(handles[i],&size),"inspect panel size");
+        std::string content="type="+std::to_string(int(type));
+        if(type==QAR_GUI_PANEL_CONTENT_TYPE_STREAM_ID){
+          QarStreamId actual_stream{};
+          checked(qar_gui_panel_get_content_stream_id(handles[i],&actual_stream),"inspect panel stream ID");
+          content+=" stream="+id_text(actual_stream)+" stream_matches="+(id_text(actual_stream)==id_text(stream_id)?"yes":"NO");
+        }else content+=" UNEXPECTED_WEBSITE_CONTENT";
+        QarPeerId peers[32]{};size_t visible_count{};
+        checked(qar_gui_panel_get_visible_to_peers(handles[i],peers,32,&visible_count),"inspect panel audience");
+        bool target=false;for(size_t j=0;j<std::min(visible_count,size_t(32));++j)target|=id_text(peers[j])==id_text(peer);
+        log("PANEL_REGISTERED name="+panel.name+" "+content+" state="+std::to_string(int(state))+
+            " size_m="+std::to_string(size.width_meters)+"x"+std::to_string(size.height_meters)+
+            " visible_to="+std::to_string(visible_count)+" target_present="+(target?"yes":"no"));
+        return;
+      }
+      log("PANEL_REGISTRATION_PENDING name="+panel.name+" id="+id_text(id));
+    }catch(const std::exception& e){log("PANEL_INSPECT_ERROR name="+panel.name+" error="+e.what());}
+  }
+  void tick(bool video_enabled){
     const bool visible=panel.visible.load();
     if(visible!=shown){
       checked(qar_gui_panels_set_state(session,&id,visible?QAR_GUI_PANEL_STATE_VISIBLE:QAR_GUI_PANEL_STATE_HIDDEN),"set panel visibility");
       shown=visible;if(visible)last_generation=0;
     }
     if(!visible)return;
+    if(!video_enabled){panel.status("Diagnostic: panel open, video not started");return;}
     // The latest staged image replaces older video frames. A slow receiver
     // never builds a queue. Refresh a static image every 2 s for reconnects.
     const auto generation=panel.generation.load();
     if(!generation||(generation==last_generation&&Clock::now()-last_send<std::chrono::seconds(2)))return;
     std::unique_lock<std::mutex> lock(panel.gpu,std::try_to_lock);
     if(!lock)return;
+    if(!begin_logged){log("PANEL_BEGIN_POLL name="+panel.name);begin_logged=true;}
     bool ready=false;auto result=qar_video_sender_try_begin_frame(sender,&ready);
     if(qar_result_has_code(result,QAR_STATUS_MEDIA_STREAMING_NO_ACTIVE_TRANSFERS)||
        qar_result_has_code(result,QAR_STATUS_MEDIA_STREAMING_STREAM_IS_RECONNECTING))return;
     checked(result,"begin panel frame");if(!ready)return;
+    if(!first_frame_logged)log("PANEL_FRAME_ACQUIRED name="+panel.name);
     auto access=qar_video_frame_opengl_default();
     checked(qar_video_sender_frame_opengl(sender,&access),"access panel frame");
     {
@@ -141,7 +198,9 @@ struct PanelStream {
       panel.copier->copy_color({panel.staging,0,panel.width,panel.height},mono_frame(access),true);
       panel.copier->finish();
     }
+    if(!first_frame_logged)log("PANEL_FRAME_COPIED name="+panel.name);
     checked(qar_video_sender_show_frame(sender),"show panel frame");
+    if(!first_frame_logged){log("PANEL_FIRST_FRAME name="+panel.name);first_frame_logged=true;}
     last_generation=panel.generation.load();last_send=Clock::now();++sent;
     if(sent==1||sent%30==0)panel.status("Live "+std::to_string(panel.width)+" x "+std::to_string(panel.height)+"; "+std::to_string(sent)+" frames");
   }
@@ -157,6 +216,7 @@ struct HostPanels::Impl {
   std::vector<std::unique_ptr<HostPanel>> panels;
   std::thread worker;
   std::atomic<bool> stopping{false};
+  std::atomic<bool> video_enabled{true};
   void gui()const{if(GetCurrentThreadId()!=owner)throw std::runtime_error("Panel API must run on the Slicer GUI thread");}
   HostPanel& get(HostPanel* p){
     gui();std::lock_guard<std::mutex> lock(list_mutex);
@@ -173,13 +233,13 @@ struct HostPanels::Impl {
         for(size_t i=0;i<snapshot.size()&&!stopping;++i){
           auto& p=*snapshot[i];
           if(p.closed||p.failed){streams[i].reset();continue;}
-          if(!p.generation||!p.visible) {if(streams[i])try{streams[i]->tick();}catch(const std::exception& e){p.failed=true;p.status(e.what());streams[i].reset();log("PANEL_ERROR "+p.name+": "+e.what());}continue;}
+          if(!p.generation||!p.visible) {if(streams[i])try{streams[i]->tick(video_enabled.load());}catch(const std::exception& e){p.failed=true;p.status(e.what());streams[i].reset();log("PANEL_ERROR "+p.name+": "+e.what());}continue;}
           try{
             if(!streams[i]){
-              auto next=std::make_unique<PanelStream>(p,session);next->open(peer);streams[i]=std::move(next);
+              auto next=std::make_unique<PanelStream>(p,session,log);next->open(peer);streams[i]=std::move(next);
               log("PANEL_OPEN "+p.name+" "+std::to_string(p.width)+"x"+std::to_string(p.height));
             }
-            streams[i]->tick();
+            streams[i]->tick(video_enabled.load());
           }catch(const std::exception& e){p.failed=true;p.status(std::string("Error: ")+e.what());streams[i].reset();log("PANEL_ERROR "+p.name+": "+e.what());}
         }
         std::this_thread::sleep_for(std::chrono::milliseconds(5));
@@ -219,6 +279,10 @@ int HostPanels::capture(HostPanel* handle,unsigned texture,unsigned w,unsigned h
 }
 void HostPanels::visible(HostPanel* p,bool visible){impl_->get(p).visible=visible;}
 void HostPanels::close(HostPanel* p){impl_->get(p).closed=true;}
+void HostPanels::video_enabled(bool value){
+  impl_->gui();impl_->video_enabled=value;
+  impl_->log(std::string("PANEL_VIDEO_GATE enabled=")+(value?"yes":"no"));
+}
 std::string HostPanels::status(HostPanel* handle){auto& p=impl_->get(handle);std::lock_guard<std::mutex> lock(p.status_mutex);return p.state;}
 void HostPanels::start(QarSession* session,const QarPeerId& peer){
   if(impl_->worker.joinable())throw std::runtime_error("Panel worker already started");

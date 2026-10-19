@@ -23,8 +23,8 @@ dev.2540 package. Changing the path alone cannot make the old DLL compatible.
 5. Choose `visualizer` or `headset` and **Start live streaming**. On first use,
    allow Slicer in the QAROS Hub approval window. The plugin reports the
    approval/connection progress while the GUI stays responsive.
-   Leave **Show slice views as panels (preview only)** off on dev.2927; it is
-   now unchecked by default because opening the panels can crash QAROS.
+   Panels are enabled by default. For the reproduced panel crash, select
+   **Test panel startup step by step** before Start and follow the test below.
 
 The SDK and bridge must match exactly. The new header SHA256 is
 `a32cecd4137dd3b28e0d5e0c1642a066cbea976f81b90f1f31fbac4d0fba8d4a`.
@@ -55,13 +55,57 @@ frame without the corresponding module/unwind data; no named caller or full
 call stack has been established. The dump is later than the initial plugin log
 ending at 17:17:39, so those are not treated as a single timestamped crash.
 
-Package `installed-hub-update-r3-panels-off` keeps the existing native bridge
-and makes panels opt-in with a visible warning. This is a workaround for the
-reproduced trigger, not a repair of WebCore or panel initialization. The native
-DLL remains `installed-hub-update-r2`, SHA256
-`17097e86bf63f7f93bb66d5f4edba5ab22792cae92ad89e8f529712e22052085`.
-Re-enable panels only for a deliberate retest after a QAROS fix. Headset behavior
-and broader long-running stability are not established by this startup test.
+The briefly published `installed-hub-update-r3-panels-off` only disabled panels
+by default. The user requested investigation rather than that workaround.
+Package **`installed-hub-update-r4-panel-probe`** restores enabled panels and
+adds a manual experiment plus native logging. It is **diagnostic, not a confirmed
+crash fix**. The existing dump establishes the failing process/module, but
+neither it nor the source review establishes the internal root cause.
+
+### Run the panel experiment
+
+1. Close Slicer, pull the PR branch and run `UPDATE-LIVE-PLUGIN.cmd`. Restart
+   Slicer so the new native DLL is loaded. Use the normal Red/Yellow/Green layout.
+2. Keep **Show slice views as panels (preview only)** enabled, also select
+   **Test panel startup step by step**, then Start. Wait until both 3D volumes
+   are visible and responsive. This phase creates no panels.
+3. Click **1. Open Red panel without video**. The plugin creates the normal
+   stream-backed panel with its normal OpenGL video sender and stages the slice
+   locally, but does not call video begin-frame/show-frame. Observe the result.
+4. If QAROS remains running, click **2. Start Red panel video** and wait for the
+   slice image. It uses the same panel and sender; no panel recreation occurs.
+5. If that works, click **3. Add the other slice panels**. Observe the result.
+6. At the first crash, do not advance further. Run `COLLECT-LOGS.cmd` promptly
+   and provide its ZIP plus the step that failed. The collector now includes
+   recent QAROS process text logs from `%TEMP%\quaternar\logs`, prioritizing
+   `qar-stereokit-gui` and crash reports. It lists dump locations without copying
+   dumps, credentials or session state. If all three steps work, report that too.
+
+Interpretation is deliberately limited:
+
+| First failure | What it narrows down |
+| --- | --- |
+| Before step 1 | Failure independent of creation of new slice panels in this run. |
+| Step 1 | Panel/sender creation or receiver initialization; no video frame has been sent. |
+| Step 2 | First-frame acquisition/copy/submission or receiver processing; compare the native stage logs. |
+| Step 3 | Adding further panels/streams; not enough by itself to prove a race or resource limit. |
+| All steps work, normal startup still crashes | Timing, order or concurrent initialization remains implicated, not proven. |
+
+The native log records `PANEL_CONTENT_REQUEST`, `PANEL_CREATE_BEGIN`,
+`PANEL_CREATED`, a `PANEL_REGISTERED` snapshot (actual content type, stream ID,
+visibility and size), then `PANEL_BEGIN_POLL`, `PANEL_FRAME_ACQUIRED`,
+`PANEL_FRAME_COPIED` and `PANEL_FIRST_FRAME`. A delayed/missing registry snapshot
+is logged separately and is not treated as proof of wrong content. A successful
+first-frame submission is not proof that the receiver displayed it. Diagnostic
+queries themselves may alter timing; compare the ordinary startup with the same
+instrumented build. Normal mode has no fixed sleep or serialized panel startup.
+
+Source review finds the required `QarGuiPanelStreamIdExt` and OpenGL extension
+chained correctly, one RGBA8 mono view, and a sender owned by the same session.
+Those are static checks, not evidence that the receiver registered/rendered the
+same content. Matching module binaries/PDBs or QAROS internal source would still
+be needed to identify the named WebCore caller from this dump. Headset behavior
+and broader long-running stability are not established by the startup test.
 
 ## Behavior and limits
 
@@ -80,7 +124,7 @@ a new headset. Target selection and device management belong to the QAROS Hub.
 Each Slicer volume keeps its own workspace and sender. Volume and panel common
 names contain the source peer ID and an index, so duplicate or Unicode labels,
 separate Slicer processes and preview panels cannot share an identity by mistake.
-Slice panels remain optional read-only previews, off by default in this update.
+Slice panels remain optional read-only previews, enabled by default.
 Stop destroys senders/panels before the session and leaves the shared QAROS Hub
 running.
 
@@ -93,8 +137,9 @@ loaded into Slicer cannot be switched by changing the field: restart Slicer.
 The shipped x64 DLL is cross-compiled with MinGW-w64 GCC 13-posix and static
 compiler runtime. It is built for the exact installed header. Local tests cover
 target selection, resource identity isolation, registry/path migration, bridge
-fingerprint matching, frame control flow and the PowerShell updater (including
-paths with spaces). Both previous pinned SDK variants still compile separately.
+fingerprint matching, frame control flow, manual panel-test sequencing and the
+PowerShell updater (including paths with spaces). Both previous pinned SDK
+variants still compile separately.
 
 Windows CI covers all three headers, native DLL loading, context restoration
 and the updater under Windows PowerShell 5.1. This does not replace the real

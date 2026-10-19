@@ -257,6 +257,9 @@ def library(path):
     for name, (args, result) in signatures.items():
         function = getattr(dll, "qarvtk_host_" + name)
         function.argtypes, function.restype = args, result
+    if info.get("panel_probe") == 1:
+        dll.qarvtk_host_panels_video_enabled.argtypes = [c.c_void_p, c.c_uint32]
+        dll.qarvtk_host_panels_video_enabled.restype = c.c_int
     dll._qarvtk_info = info
     _libraries[path] = dll
     return dll
@@ -349,6 +352,12 @@ class HostTransport:
         if result != 0:
             raise RuntimeError(error.value.decode("utf-8", "replace"))
         return handle
+
+    def panels_video_enabled(self, enabled):
+        if self.dll._qarvtk_info.get("panel_probe") != 1:
+            raise RuntimeError("Panel diagnosis needs the r4 DLL. Close Slicer and run UPDATE-LIVE-PLUGIN.cmd.")
+        if self.dll.qarvtk_host_panels_video_enabled(self.handle, int(enabled)) != 0:
+            raise RuntimeError("Cannot change diagnostic panel video gate")
 
     def panel_capture(self, panel, texture, width, height):
         error = c.create_string_buffer(2048)

@@ -7,10 +7,12 @@ spusť `UPDATE-LIVE-PLUGIN.cmd`. Instalaci najde v registru Windows, obvykle
 `C:\Program Files\Quaternar\QAROS`, ověří SDK a zálohuje předchozí plugin.
 V novém QAROSu spusť jeden přijímač Visualiseru nebo připoj headset; potom ve
 Sliceru spusť **QAROS Live Renderer** a první připojení povol v okně QAROS Hubu.
-Samostatné objemy jsou ověřené na cílovém PC. **Panely řezů jsou nyní ve výchozím
-stavu vypnuté:** v dev.2927 jejich zapnutí opakovaně vyvolalo pád QAROS GUI;
-se stejnými dvěma objemy a vypnutými panely start proběhl bez pádu. Volbu
-**Show slice views as panels (preview only)** zatím ponech vypnutou.
+Samostatné objemy jsou ověřené na cílovém PC. Zapnutí panelů v dev.2927 opakovaně
+vyvolalo pád QAROS GUI; se stejnými dvěma objemy bez panelů start proběhl bez pádu.
+**Panely zůstávají zapnuté; příčina pádu se vyšetřuje.** Pro cílený test zaškrtni
+**Test panel startup step by step**. Po zobrazení obou objemů tlačítkem postupně
+otevři Red panel bez videa, spusť jeho video a přidej ostatní panely. Po každém
+kroku pozoruj výsledek; při pádu dál nepokračuj a spusť `COLLECT-LOGS.cmd`.
 Starší dev.2540 má jiné API; samotné přepsání cesty v původním pluginu nestačí.
 [Postup a ověření](docs/QAROS_DEV2927_UPDATE.md).
 

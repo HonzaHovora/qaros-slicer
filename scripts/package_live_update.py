@@ -19,6 +19,8 @@ def package(dll, output, compiler):
         raise ValueError('Expected a Windows x64 DLL')
     if ('"header_sha256":"' + SDK_SHA + '"').encode() not in native:
         raise ValueError('DLL does not contain the exact dev.2927 SDK fingerprint')
+    if b'"panel_probe":1' not in native:
+        raise ValueError('DLL does not provide the manual panel diagnosis capability')
     payload = {'Release/qarvtk-host.dll': native,
                'plugins/slicer/QarosLive.py': (ROOT / 'integrations/slicer/QarosLive.py').read_bytes(),
                'plugins/slicer/QarosVTKLib/__init__.py': b'"""Private support package, not a Slicer module."""\n'}
@@ -27,9 +29,9 @@ def package(dll, output, compiler):
         payload['plugins/slicer/QarosVTKLib/' + path] = (ROOT / 'integrations/slicer' / path).read_bytes()
     payload['plugins/slicer/QarosVTKLib/qarvtk_runtime.py'] = (ROOT / 'integrations/qarvtk_runtime.py').read_bytes()
     info = dict(sdk_version='0.9.0-dev.2927+f291e404', sdk_header_sha256=SDK_SHA,
-                host_abi=5, build='installed-hub-update-r3-panels-off',
-                native_build='installed-hub-update-r2', compiler=compiler,
-                slice_previews_default=False,
+                host_abi=5, build='installed-hub-update-r4-panel-probe',
+                native_build='installed-hub-update-r4-panel-probe', compiler=compiler,
+                slice_previews_default=True, panel_probe=1,
                 runtime_included=False, live_gpu_tested=False,
                 files={name: hashlib.sha256(data).hexdigest() for name, data in payload.items()})
     payload['HOST_UPDATE_INFO.json'] = (json.dumps(info, indent=2) + '\n').encode()

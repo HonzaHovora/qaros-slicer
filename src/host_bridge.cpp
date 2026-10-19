@@ -178,7 +178,7 @@ struct QarvtkHost {
     std::filesystem::create_directories(std::filesystem::u8path(log_folder));
     log.open(std::filesystem::u8path(log_folder)/"host-bridge.log",std::ios::app);
     if(!log)throw std::runtime_error("Cannot open host bridge log");
-    log<<"Host build: installed-hub-update-r2 (ABI 5); SDK header " QARVTK_HOST_SDK_HASH<<std::endl;
+    log<<"Host build: installed-hub-update-r4-panel-probe (ABI 5); SDK header " QARVTK_HOST_SDK_HASH<<std::endl;
     log<<"SDK root: "<<sdk_root<<std::endl;
     copying=std::make_unique<qarvtk::HostSharedWgl>(dc,host_context);
     {
@@ -597,7 +597,7 @@ void QarvtkHost::run() noexcept {
 
 extern "C" {
 const char* qarvtk_host_info(){
-  return "{\"host_abi\":5,\"modern_api\":0,\"header_sha256\":\"" QARVTK_HOST_SDK_HASH "\",\"eye_size\":104,\"frame_size\":240,\"placement_size\":112,\"volume_size\":120}";
+  return "{\"host_abi\":5,\"modern_api\":0,\"panel_probe\":1,\"header_sha256\":\"" QARVTK_HOST_SDK_HASH "\",\"eye_size\":104,\"frame_size\":240,\"placement_size\":112,\"volume_size\":120}";
 }
 int qarvtk_host_create(const char* sdk,const char* target,const char* folder,const QarvtkHostPlacement* placement,
                       QarvtkHost** result,char* error,uint32_t size){
@@ -683,6 +683,10 @@ void qarvtk_host_panel_close(QarvtkHost* h,QarvtkHostPanel* p){
 void qarvtk_host_panel_status(QarvtkHost* h,QarvtkHostPanel* p,char* text,uint32_t size){
   try{message(text,size,h&&h->panels?h->panels->status(reinterpret_cast<qarvtk::HostPanel*>(p)):"Stopped");}
   catch(const std::exception& e){message(text,size,e.what());}
+}
+int qarvtk_host_panels_video_enabled(QarvtkHost* h,uint32_t enabled){
+  try{if(!h||!h->panels||h->stopping||enabled>1)return -1;h->panels->video_enabled(enabled!=0);return 0;}
+  catch(...){return -1;}
 }
 }
 static_assert(sizeof(QarvtkHostEye)==104&&sizeof(QarvtkHostFrame)==240&&sizeof(QarvtkHostPlacement)==112&&sizeof(QarvtkHostVolume)==120,"Unexpected host C ABI packing");

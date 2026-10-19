@@ -26,8 +26,9 @@ class Window:
     def GetWidth(self): return self.size[0]
     def GetHeight(self): return self.size[1]
     def AddObserver(self, event, callback):
-        self.observers[1] = callback
-        return 1
+        index = max(self.observers, default=0) + 1
+        self.observers[index] = callback
+        return index
     def RemoveObserver(self, index): del self.observers[index]
     def frame(self):
         self.revision += 1
@@ -41,6 +42,8 @@ class Sink:
         self.copies, self.closed, self.visibility, self.events = [], [], [], []
         self.diagnostics = type("Diagnostics", (), {"event": self.events.append})()
         self.ready, self.fail = True, False
+        self.running, self.stopping, self.panels = True, False, None
+        self.video_enabled, self.gates = True, []
     def panel_create(self, *args): self.next += 1; return self.next
     def panel_capture(self, handle, texture, width, height):
         if self.fail: raise RuntimeError("Panel encoder failed")
@@ -49,7 +52,11 @@ class Sink:
         return True
     def panel_visible(self, handle, visible): self.visibility.append((handle, visible))
     def panel_close(self, handle): self.closed.append(handle)
-    def panel_status(self, handle): return "live"
+    def panel_status(self, handle):
+        return "Live 640 x 360; 1 frames" if self.video_enabled else "Diagnostic: panel open, video not started"
+    def panels_video_enabled(self, enabled):
+        self.video_enabled = enabled
+        self.gates.append(enabled)
 
 
 class PanelTest(unittest.TestCase):
@@ -100,6 +107,46 @@ class PanelTest(unittest.TestCase):
     def test_dimensions_are_bounded_and_even(self):
         self.assertEqual(panels.panel_size(1920, 1080), (768, 432))
         self.assertEqual(panels.panel_size(451, 726), (450, 726))
+
+    def test_probe_separates_creation_video_and_additional_panels(self):
+        window, sink, view, now, manager = self.fixture()
+        widget = manager.layout.sliceWidget("Red")
+        layout = type("Layout", (), {
+            "sliceViewNames": lambda self: ["Green", "Yellow", "Red"],
+            "sliceWidget": lambda self, name: widget})()
+        probe = panels.PanelStartupProbe(layout, sink, (0, 0, -1.5), (.65, .65, .65))
+        self.assertEqual(sink.gates, [False])
+        self.assertIsNone(sink.panels)
+        probe.advance()
+        with self.assertRaisesRegex(RuntimeError, "not ready"):
+            probe.advance()
+        self.assertEqual(probe.stage, 1)
+        sink.panels.tick()
+        self.assertEqual(set(sink.panels.sources), {"Red"})
+        self.assertEqual(sink.next, 1)
+        self.assertFalse(sink.video_enabled)
+        self.assertTrue(sink.copies, "Creation step must still stage a real slice locally")
+        probe.advance()
+        self.assertEqual(sink.gates, [False, True])
+        self.assertEqual(sink.next, 1, "Starting video must keep the existing panel/sender")
+        probe.advance()
+        sink.panels.tick()
+        self.assertEqual(set(sink.panels.sources), {"Red", "Yellow", "Green"})
+        self.assertEqual(sink.next, 3)
+        sink.panels.close()
+        self.assertEqual(sorted(sink.closed), [1, 2, 3])
+
+    def test_probe_cannot_advance_after_stop_or_without_visible_red(self):
+        window, sink, view, now, manager = self.fixture()
+        probe = panels.PanelStartupProbe(manager.layout, sink, (0, 0, -1.5), (.65, .65, .65))
+        view.visible = False
+        with self.assertRaisesRegex(RuntimeError, "Red slice"):
+            probe.advance()
+        self.assertEqual(probe.stage, 0)
+        sink.stopping = True
+        with self.assertRaisesRegex(RuntimeError, "Start live streaming"):
+            probe.advance()
+        self.assertIsNone(sink.panels)
 
 
 if __name__ == "__main__": unittest.main()

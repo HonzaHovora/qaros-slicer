@@ -119,4 +119,4 @@ Write-Host "Previous plugin saved to: $backup"
 Write-Host "Open Slicer, QAROS Live Renderer. SDK folder: $SdkRoot"
 Write-Host 'Open the installed QAROS and start one Visualizer receiver (or connect a headset).'
 Write-Host 'Start live streaming in Slicer; allow Slicer in the QAROS Hub approval window if prompted.'
-Write-Host 'Separate workspaces are enabled. Slice panels are OFF by default because QAROS dev.2927 can crash when they open.'
+Write-Host 'Slice panels are enabled. To investigate the dev.2927 crash, select Test panel startup step by step before Start.'
