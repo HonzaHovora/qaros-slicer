@@ -27,7 +27,9 @@ def package(dll, output, compiler):
         payload['plugins/slicer/QarosVTKLib/' + path] = (ROOT / 'integrations/slicer' / path).read_bytes()
     payload['plugins/slicer/QarosVTKLib/qarvtk_runtime.py'] = (ROOT / 'integrations/qarvtk_runtime.py').read_bytes()
     info = dict(sdk_version='0.9.0-dev.2927+f291e404', sdk_header_sha256=SDK_SHA,
-                host_abi=5, build='installed-hub-update-r2', compiler=compiler,
+                host_abi=5, build='installed-hub-update-r3-panels-off',
+                native_build='installed-hub-update-r2', compiler=compiler,
+                slice_previews_default=False,
                 runtime_included=False, live_gpu_tested=False,
                 files={name: hashlib.sha256(data).hexdigest() for name, data in payload.items()})
     payload['HOST_UPDATE_INFO.json'] = (json.dumps(info, indent=2) + '\n').encode()

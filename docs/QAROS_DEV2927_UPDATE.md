@@ -23,6 +23,8 @@ dev.2540 package. Changing the path alone cannot make the old DLL compatible.
 5. Choose `visualizer` or `headset` and **Start live streaming**. On first use,
    allow Slicer in the QAROS Hub approval window. The plugin reports the
    approval/connection progress while the GUI stays responsive.
+   Leave **Show slice views as panels (preview only)** off on dev.2927; it is
+   now unchecked by default because opening the panels can crash QAROS.
 
 The SDK and bridge must match exactly. The new header SHA256 is
 `a32cecd4137dd3b28e0d5e0c1642a066cbea976f81b90f1f31fbac4d0fba8d4a`.
@@ -35,6 +37,31 @@ No QAROS runtime binaries, certificates or pairing state are included or changed
 `START-PREVIEW.cmd` now preserves a Live update when its marker is present; it
 starts the existing preview instead of extracting r17 over the plugin. The
 standalone preview/sender in that old bundle still has its original SDK support.
+
+## Confirmed panel startup problem (2026-10-19)
+
+On the user's Windows/NVIDIA machine, Stop/Start with two independent volumes
+and slice panels enabled repeatedly produced the first volume's image, a QAROS
+crash, then recovery with both volumes after approximately 30 seconds. With the
+same two volumes and slice panels disabled, startup completed without a crash
+and both volumes appeared. This isolates the reproducible trigger to enabling
+panels in this configuration; it does not identify the internal faulty function.
+
+The supplied crash dump at 17:23:04 local time identifies `qar-stereokit-gui.exe`,
+thread `SK_StereoKitGUI`, exception `0xC0000005`, read address `0x4`, at
+`WebCore.dll +0x2DA26E0`. Reading the dump confirms `R14=4` at the faulting
+`movzx ecx, byte ptr [r14]`. The available debugger could not unwind past that
+frame without the corresponding module/unwind data; no named caller or full
+call stack has been established. The dump is later than the initial plugin log
+ending at 17:17:39, so those are not treated as a single timestamped crash.
+
+Package `installed-hub-update-r3-panels-off` keeps the existing native bridge
+and makes panels opt-in with a visible warning. This is a workaround for the
+reproduced trigger, not a repair of WebCore or panel initialization. The native
+DLL remains `installed-hub-update-r2`, SHA256
+`17097e86bf63f7f93bb66d5f4edba5ab22792cae92ad89e8f529712e22052085`.
+Re-enable panels only for a deliberate retest after a QAROS fix. Headset behavior
+and broader long-running stability are not established by this startup test.
 
 ## Behavior and limits
 
@@ -53,8 +80,9 @@ a new headset. Target selection and device management belong to the QAROS Hub.
 Each Slicer volume keeps its own workspace and sender. Volume and panel common
 names contain the source peer ID and an index, so duplicate or Unicode labels,
 separate Slicer processes and preview panels cannot share an identity by mistake.
-Slice panels remain read-only previews. Stop destroys senders/panels before the
-session and leaves the shared QAROS Hub running.
+Slice panels remain optional read-only previews, off by default in this update.
+Stop destroys senders/panels before the session and leaves the shared QAROS Hub
+running.
 
 For rollback, close Slicer and restore the reported backup over
 `package/windows-start`; select the SDK matching the restored DLL. A DLL already
@@ -70,6 +98,7 @@ paths with spaces). Both previous pinned SDK variants still compile separately.
 
 Windows CI covers all three headers, native DLL loading, context restoration
 and the updater under Windows PowerShell 5.1. This does not replace the real
-Windows/GPU check: approval in the installed Hub, one volume, two separate
-workspaces, slice previews, then stop/start. The CI infrastructure previously
+Windows/GPU check. The user has confirmed two separate workspaces and startup
+with panels off; the panel failure and limited scope of that check are above.
+The CI infrastructure previously
 failed before executing steps; check the current run before treating it as passed.

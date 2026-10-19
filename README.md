@@ -7,8 +7,11 @@ spusť `UPDATE-LIVE-PLUGIN.cmd`. Instalaci najde v registru Windows, obvykle
 `C:\Program Files\Quaternar\QAROS`, ověří SDK a zálohuje předchozí plugin.
 V novém QAROSu spusť jeden přijímač Visualiseru nebo připoj headset; potom ve
 Sliceru spusť **QAROS Live Renderer** a první připojení povol v okně QAROS Hubu.
-Podpora samostatných objemů i náhledů řezů zůstává. Starší dev.2540 má jiné API;
-samotné přepsání cesty v původním pluginu nestačí.
+Samostatné objemy jsou ověřené na cílovém PC. **Panely řezů jsou nyní ve výchozím
+stavu vypnuté:** v dev.2927 jejich zapnutí opakovaně vyvolalo pád QAROS GUI;
+se stejnými dvěma objemy a vypnutými panely start proběhl bez pádu. Volbu
+**Show slice views as panels (preview only)** zatím ponech vypnutou.
+Starší dev.2540 má jiné API; samotné přepsání cesty v původním pluginu nestačí.
 [Postup a ověření](docs/QAROS_DEV2927_UPDATE.md).
 
 **Experiment: vlastní QAROS kostka pro každý objem.** Výchozí volba
@@ -24,7 +27,8 @@ Volba **Show slice views as panels (preview only)** přenáší hotové GPU obra
 viditelných řezů, včetně videa a časových sekvencí. Výchozí limit je 15 FPS
 na panel, volitelně 5/10/15/30. Při pomalém příjemci vítězí nejnovější snímek.
 Panely se objeví pod 3D objemem; ovládání zatím zůstává ve Sliceru.
-Přenos panelů má vlastní SDK vlákno a chyby náhledů neukončí stereo stream.
+Přenos panelů má vlastní SDK vlákno a zachycené chyby náhledů neukončí stereo
+stream. Před pádem přijímacího procesu QAROS to nechrání; omezení dev.2927 je výše.
 Na cílové NVIDIA kartě je potřeba ověřit obraz a náklady dalších enkodérů.
 
 R16 pracovní prostor podle rozsahu scény zůstává zachovaný.

@@ -60,15 +60,21 @@ class QarosLiveWidget(ScriptedLoadableModuleWidget):
         self.matchView.checked = True
         form.addRow(self.matchView)
         self.slicePreviews = qt.QCheckBox("Show slice views as panels (preview only)")
-        self.slicePreviews.checked = True
+        # Opening slice panels reproducibly crashes the dev.2927 QAROS GUI.
+        # Keep this opt-in until the receiver-side failure is resolved.
+        self.slicePreviews.checked = False
         self.slicePreviews.toolTip = "Live images of visible slice views, including video/sequences. No remote interaction. Applied at Start."
         form.addRow(self.slicePreviews)
+        panelWarning = qt.QLabel("QAROS dev.2927 can crash when slice panels open. Leave panels off for now; "
+                                "separate 3D workspaces work with panels off.")
+        panelWarning.wordWrap = True
+        form.addRow(panelWarning)
         self.sliceFps = qt.QComboBox()
         self.sliceFps.addItems(["5", "10", "15", "30"])
         self.sliceFps.currentIndex = 2
         self.sliceFps.toolTip = "Maximum updates per second per slice. Newest frame wins if the sender cannot keep up."
         form.addRow("Slice preview FPS limit", self.sliceFps)
-        self.panelStatus = qt.QLabel("Slice previews start with streaming.")
+        self.panelStatus = qt.QLabel("Slice previews off.")
         self.panelStatus.wordWrap = True
         form.addRow(self.panelStatus)
         self.workspaceStatus = qt.QLabel("Dimensions follow the visible scene at Start.")
