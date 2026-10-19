@@ -1,5 +1,11 @@
 # Slicer Live update for QAROS 0.9.0-dev.2540+1ed038e4
 
+Historical dev.2540 notes. The actual installed QAROS supplied afterwards is
+dev.2927 at `C:\Program Files\Quaternar\QAROS`; use
+[QAROS_DEV2927_UPDATE.md](QAROS_DEV2927_UPDATE.md) and the current updater for it.
+The archived `qarvtk-live-dev2540.zip` remains available for the older SDK.
+The steps below describe the updater at commit `2526ae4`, not the current one.
+
 This update starts from main `65914b6` with independent workspaces. It replaces
 the Live bridge and Python module together. QAROS itself stays in its complete
 installation folder, normally `D:\QAROS-0.9.0-dev.2540+1ed038e4`.

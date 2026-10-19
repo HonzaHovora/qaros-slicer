@@ -11,6 +11,9 @@
 #include "../apps/legacy_peer_observer.hpp"
 #include "../apps/legacy_frame_wait.hpp"
 #include "../apps/host_config.hpp"
+#if QARVTK_HOST_ONBOARDING_API
+#include "../apps/host_hub.hpp"
+#endif
 #include <array>
 #include <algorithm>
 #include <atomic>
@@ -160,22 +163,23 @@ struct QarvtkHost {
     std::unique_lock<std::mutex> lock(mutex);
     condition.wait_for(lock,duration,[&]{return stopping.load();});return !stopping;
   }
-  void deadline(){
+  void deadline(uint32_t timeout_ms=60000){
     std::lock_guard<std::mutex> lock(cancel_mutex);
     if(stopping)throw std::runtime_error("Live stream stopped");
     if(operation)qar_cancel_token_handle_destroy(operation);
-    operation=nullptr;checked(qar_cancel_token_create_with_timeout(&operation,60000),"create SDK timeout");
+    operation=nullptr;checked(qar_cancel_token_create_with_timeout(&operation,timeout_ms),"create SDK timeout");
   }
   void initialize(){
     gui();host_context=wglGetCurrentContext();const auto dc=wglGetCurrentDC();
     if(!host_context||!dc)throw std::runtime_error("Make the Slicer render window current before creating the host bridge");
-    if(target!="visualizer"&&target!="quest")throw std::runtime_error("Host target must be visualizer or quest");
+    if(target!="visualizer"&&target!="quest"&&target!="headset")throw std::runtime_error("Host target must be visualizer or headset");
     const auto sdk=std::filesystem::u8path(sdk_root);
     if(!std::filesystem::is_regular_file(sdk/"bin"/"qar-streaming-c.dll"))throw std::runtime_error("Missing complete QAROS session runtime");
     std::filesystem::create_directories(std::filesystem::u8path(log_folder));
     log.open(std::filesystem::u8path(log_folder)/"host-bridge.log",std::ios::app);
     if(!log)throw std::runtime_error("Cannot open host bridge log");
-    log<<"Host build: session-sdk-update-r1 (ABI 5); SDK header " QARVTK_HOST_SDK_HASH<<std::endl;
+    log<<"Host build: installed-hub-update-r2 (ABI 5); SDK header " QARVTK_HOST_SDK_HASH<<std::endl;
+    log<<"SDK root: "<<sdk_root<<std::endl;
     copying=std::make_unique<qarvtk::HostSharedWgl>(dc,host_context);
     {
       qarvtk::WglBinding binding(*copying);qarvtk::hostgl::load();adapter=device();
@@ -242,6 +246,9 @@ struct Session {
   std::vector<Stream> streams;
   std::unique_ptr<qarvtk::HostStreamStartup> startup;
   QarPeerId target_peer=qar_peer_id_default();
+#if QARVTK_HOST_ONBOARDING_API
+  QarPeerId source_peer=qar_peer_id_default();
+#endif
   bool panels_started{};
   qarvtk::LegacyPeerObserver peers;
   explicit Session(QarvtkHost& h):host(h){}
@@ -259,7 +266,11 @@ struct Session {
       if(stream.sender)qar_render_stream_handle_destroy(stream.sender);
       if(stream.volume_created)qar_app_volumes_close_volume(session,&stream.volume);
     }
+#if QARVTK_HOST_ONBOARDING_API
+    if(session)qar_session_handle_destroy(session);
+#else
     if(session)qar_session_destroy(session);
+#endif
     if(runtime)qar_runtime_destroy(runtime);
     if(subscription)qar_cancel_token_handle_destroy(subscription);
     {std::lock_guard<std::mutex> lock(host.cancel_mutex);if(host.operation)qar_cancel_token_handle_destroy(host.operation);host.operation=nullptr;}
@@ -268,13 +279,48 @@ struct Session {
   }
   void open(){
     const auto library=(std::filesystem::u8path(host.sdk_root)/"bin"/"qar-streaming-c.dll").u8string();
+    if(const auto existing=GetModuleHandleW(L"qar-streaming-c.dll")){
+      wchar_t path[32768]{};
+      const auto length=GetModuleFileNameW(existing,path,32768);
+      std::error_code error;
+      if(!length||length>=32768||!std::filesystem::equivalent(std::filesystem::path(path),std::filesystem::u8path(library),error)||error)
+        throw std::runtime_error("A different QAROS runtime is already loaded in Slicer. Close Slicer completely, then reopen QAROS Live Renderer with the installed SDK.");
+    }
     if(!qar_library_load(library.c_str()))throw std::runtime_error("Cannot load matching QAROS session runtime");
     loaded=true;auto init=qar_library_init_default();init.enable_console_logging=false;init.log_folder_path=host.log_folder.c_str();
     checked(qar_library_init(&init),"initialize SDK");initialized=true;
     const auto folder=(std::filesystem::u8path(host.sdk_root)/"bin").u8string();
-    auto ri=qar_runtime_init_default();ri.runtime_binaries_folder_path=folder.c_str();
+    auto ri=qar_runtime_init_default();
+#if !QARVTK_HOST_ONBOARDING_API
+    ri.runtime_binaries_folder_path=folder.c_str();
+#endif
     checked(qar_runtime_create(&ri,&runtime),"create SDK runtime");
     if(!runtime)throw std::runtime_error("SDK returned a null runtime");
+#if QARVTK_HOST_ONBOARDING_API
+    QarRuntimeInfo version{};checked(qar_runtime_info(&version),"read installed runtime version");
+    host.note(std::string("QAROS runtime: ")+(version.version?version.version:"unknown"));
+    auto local=qar_onboard_local_app_ext_default();local.approval_timeout_ms=120000;
+    local.header.next=&host.adapter.header;
+    auto onboard=qar_onboard_init_default();onboard.header.next=&local.header;
+    onboard.presentation.display_name="Slicer live renderer";
+    QarOnboardingId identity{}; // Local app enrollment is stateless; this remains zero.
+    host.deadline(125000);
+    host.set_status("Joining installed QAROS Hub. Approve Slicer in QAROS if prompted.");
+    const auto progress=[](QarActionSeverity,float,const char* message,void* context) noexcept {
+      if(message&&*message)try{static_cast<QarvtkHost*>(context)->set_status(message);}catch(...){}
+    };
+    checked(qar_runtime_onboard(runtime,&onboard,progress,&host,host.operation,&identity,&session),"join installed QAROS Hub");
+    if(!session)throw std::runtime_error("SDK returned a null session");
+    auto adapter=qar_graphics_device_id_default();bool present=false;
+    checked(qar_session_get_graphics_device_id(session,&adapter,&present),"read session GPU");
+    if(!present||adapter.id_type!=QAR_GPU_DEVICE_ID_TYPE_LUID||
+       std::memcmp(&adapter.luid,&host.adapter.luid,sizeof(adapter.luid))!=0)
+      throw std::runtime_error("QAROS Hub and Slicer must use the same GPU. Select the Slicer GPU for this session and restart streaming.");
+    QarPeerSpec* raw{};checked(qar_session_get_my_spec(session,&raw),"read Slicer peer");
+    std::unique_ptr<QarPeerSpec,decltype(&qar_peer_spec_handle_destroy)> own(raw,qar_peer_spec_handle_destroy);
+    if(!own)throw std::runtime_error("SDK returned a null Slicer peer");
+    checked(qar_peer_spec_get_id(own.get(),&source_peer),"read Slicer peer ID");
+#else
     auto create=qar_session_create_init_default();create.header.next=&host.adapter.header;
     QarSessionInvite* raw{};checked(qar_runtime_create_session(runtime,&create,&raw),"create session");
     std::unique_ptr<QarSessionInvite,decltype(&qar_session_invite_handle_destroy)> invite(raw,qar_session_invite_handle_destroy);
@@ -285,8 +331,44 @@ struct Session {
     join.invite_data=bytes.data();join.invite_data_size=size;join.peer_spec_init.display_name="Slicer live renderer";
     checked(qar_session_join(&join,&session),"join session");
     if(!session)throw std::runtime_error("SDK returned a null session");
+#endif
   }
   QarPeerId viewer(){
+#if QARVTK_HOST_ONBOARDING_API
+    const auto category=host.target=="visualizer"?QAR_DEVICE_CATEGORY_VISUALIZER:QAR_DEVICE_CATEGORY_HEADSET;
+    host.set_status(host.target=="visualizer"?
+      "Waiting for a running Visualizer receiver. Open QAROS and start one receiver.":
+      "Waiting for a running headset target. Connect the headset in QAROS.");
+    const auto end=Clock::now()+std::chrono::seconds(120);
+    while(!host.stopping&&Clock::now()<end){
+      size_t count{};checked(qar_query_peer_specs_count(session,&count),"count QAROS peers");
+      if(count>4096)throw std::runtime_error("Too many QAROS peers");
+      struct Snapshot {
+        std::vector<QarPeerSpec*> handles;
+        ~Snapshot(){for(auto* p:handles)if(p)qar_peer_spec_handle_destroy(p);}
+      } snapshot{std::vector<QarPeerSpec*>(count+16,nullptr)};
+      size_t written{};
+      checked(qar_query_peer_specs(session,snapshot.handles.data(),snapshot.handles.size(),&written),"list QAROS peers");
+      if(written>snapshot.handles.size())continue; // A growing list is retried with a fresh count.
+      std::vector<qarvtk::HostTarget> targets;
+      for(size_t i=0;i<written;++i){
+        auto* spec=snapshot.handles[i];if(!spec)continue;
+        qarvtk::HostTarget peer;char name[256]{};
+        checked(qar_peer_spec_get_id(spec,&peer.id),"read target ID");
+        checked(qar_peer_spec_get_role(spec,&peer.role),"read peer role");
+        checked(qar_peer_spec_get_category(spec,&peer.category),"read peer category");
+        checked(qar_peer_spec_get_app_state(spec,&peer.state),"read peer state");
+        checked(qar_peer_spec_get_display_name(spec,name,sizeof(name)),"read target name");peer.name=name;
+        targets.push_back(std::move(peer));
+      }
+      if(const auto selected=qarvtk::select_host_target(targets,category)){
+        host.set_status("Connected QAROS target: "+selected->name);
+        return selected->id;
+      }
+      host.pause(std::chrono::milliseconds(200));
+    }
+    throw std::runtime_error(host.stopping?"Live stream stopped":"No running QAROS receiver. Start a Visualizer receiver or connect a headset in QAROS, then retry.");
+#else
     checked(qar_cancel_token_create(&subscription),"create peer subscription");
     checked(qar_peer_subscribe_updates(session,on_peer,&peers,subscription),"subscribe peers");
     char connection[1024]{};
@@ -307,6 +389,7 @@ struct Session {
       host.pause(std::chrono::milliseconds(20));
     }
     throw std::runtime_error(host.stopping?"Live stream stopped":"No viewer peer update before timeout");
+#endif
   }
   void start(const QarPeerId& peer){
     target_peer=peer;
@@ -325,7 +408,13 @@ struct Session {
     app.display_name=config.name.c_str();
     qarvtk::apply_host_placement(app,config.placement);
     app.initial_peers=initial;app.initial_peer_count=1;
-    checked(qar_app_volumes_add_volume(session,&app,&stream.volume),"create live app volume");stream.volume_created=true;
+#if QARVTK_HOST_ONBOARDING_API
+    const auto common=qarvtk::host_resource_name(source_peer,"volume",index);app.common_name=common.c_str();
+    checked(qar_app_volumes_get_or_create(session,&app,&stream.volume),"create live app volume");
+#else
+    checked(qar_app_volumes_add_volume(session,&app,&stream.volume),"create live app volume");
+#endif
+    stream.volume_created=true;
     for(std::size_t i=0;i<index;++i)if(qar_app_volume_id_equals(&stream.volume,&streams[i].volume))
       throw std::runtime_error("SDK returned a duplicate app volume ID");
     {

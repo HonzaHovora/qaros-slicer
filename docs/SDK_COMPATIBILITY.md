@@ -7,6 +7,7 @@ is not a promise of compatibility with arbitrary future V0 headers.
 
 | API generation | Source inspected | Connection path |
 | --- | --- | --- |
+| Installed Hub | Supplied QAROS `0.9.0-dev.2927+f291e404`, header `a32cecd4` | Local app enrollment, discover a running target, get-or-create volumes and panels; split WGL callbacks |
 | Session, split OpenGL | Supplied QAROS `0.9.0-dev.2540+1ed038e4`, header `c709c479` | Create/serialize/join session, invite target, add volume; new WGL callback layout |
 | Supplied session SDK | Exact header `022c40b670f87a066664c37daeb06da525db37fffdf5810e72cff8a5b81e677d` | Same session branch; Windows sender compiled separately for these exact bytes |
 | Modern | [Quaternar/qaros at 678e5463](https://github.com/Quaternar/qaros/blob/678e5463bb14a9d4d1f681fcdb9dfab9fe61e77e/qar-streaming-c/include/qar_streaming.h) | Hub onboarding/rejoin, get-or-create volume, subscribe to render requests |
@@ -15,11 +16,12 @@ Both use `QAR_ENABLE_OPENGL`, dynamic loading, an adopted shared WGL/GLX context
 `qar_render_sender_try_begin_frame`, `qar_render_sender_frame_opengl`, per-view
 pose/FOV, `qar_render_sender_show_frame`, and frame info destruction.
 
-The Slicer Live host supports the two exact supplied session headers above;
+The Slicer Live host supports the three exact supplied headers above;
 each DLL embeds the hash it was compiled against. Its Windows update procedure
-is in [QAROS_DEV2540_UPDATE.md](QAROS_DEV2540_UPDATE.md). Session API selection
-and OpenGL struct layout are independent: the new supplied SDK is still a
-session SDK despite using the split WGL extension.
+is in [QAROS_DEV2927_UPDATE.md](QAROS_DEV2927_UPDATE.md). For this host, the full
+header hash selects the API; arbitrary headers are rejected. Session API
+selection and OpenGL layout are independent: dev.2540 retains session invites,
+whereas dev.2927 uses Hub onboarding, and both use the split WGL extension.
 
 The OpenGL context extension is detected separately from the session API.
 The supplied `022c40b6` header uses `QarStreamParamsOpenGl`, with an explicit

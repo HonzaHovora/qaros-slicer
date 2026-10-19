@@ -3,14 +3,14 @@ on:
   workflow_dispatch:
   push:
     paths:
-      - 'apps/wgl_callbacks.hpp'
+      - 'apps/**'
       - 'src/**'
       - 'include/**'
       - 'integrations/slicer/**'
       - 'ci/sdk-headers/**'
       - 'tests/**'
       - 'scripts/windows/Update-Live-Plugin.ps1'
-      - 'downloads/qarvtk-live-dev2540.zip*'
+      - 'downloads/qarvtk-live-dev*.zip*'
       - 'CMakeLists.txt'
       - '.github/workflows/host-sdk.yml'
 permissions:
@@ -22,7 +22,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        sdk: [session-022c40b6, session-c709c479]
+        sdk: [session-022c40b6, session-c709c479, hub-a32cecd4]
     steps:
       - uses: actions/checkout@v4
       - name: Build the VTK-free host DLL against the exact SDK
@@ -35,7 +35,7 @@ jobs:
           ctest --test-dir build-host -C Release --output-on-failure
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
       - name: Test the shipped DLL and Windows PowerShell 5.1 updater
-        if: matrix.sdk == 'session-c709c479'
+        if: matrix.sdk == 'hub-a32cecd4'
         shell: powershell
         run: |
           ./tests/test_live_update.ps1

@@ -2,11 +2,14 @@
 
 Pluginy pro **ParaView a 3D Slicer** a OpenGL přenos do QAROS.
 
-**Aktualizace pro QAROS 0.9.0-dev.2540+1ed038e4.** Zavři Slicer a spusť
-`UPDATE-LIVE-PLUGIN.cmd`. Aktualizuje Live plugin i DLL pro nové OpenGL rozhraní,
-zálohuje předchozí soubory a ověří SDK v `D:/QAROS-0.9.0-dev.2540+1ed038e4`.
-Podpora samostatných objemů i náhledů řezů zůstává.
-[Postup a ověření](docs/QAROS_DEV2540_UPDATE.md).
+**Aktualizace pro instalovaný QAROS 0.9.0-dev.2927+f291e404.** Zavři Slicer a
+spusť `UPDATE-LIVE-PLUGIN.cmd`. Instalaci najde v registru Windows, obvykle
+`C:\Program Files\Quaternar\QAROS`, ověří SDK a zálohuje předchozí plugin.
+V novém QAROSu spusť jeden přijímač Visualiseru nebo připoj headset; potom ve
+Sliceru spusť **QAROS Live Renderer** a první připojení povol v okně QAROS Hubu.
+Podpora samostatných objemů i náhledů řezů zůstává. Starší dev.2540 má jiné API;
+samotné přepsání cesty v původním pluginu nestačí.
+[Postup a ověření](docs/QAROS_DEV2927_UPDATE.md).
 
 **Experiment: vlastní QAROS kostka pro každý objem.** Výchozí volba
 **Separate QAROS workspace for each volume** vytvoří samostatné pracovní objemy

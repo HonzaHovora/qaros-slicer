@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Package the dev.2540 Live plugin and its already-built Windows x64 bridge."""
+"""Package the installed dev.2927 Live plugin and its Windows x64 bridge."""
 import argparse
 import hashlib
 import json
@@ -8,7 +8,7 @@ import struct
 import zipfile
 
 ROOT = Path(__file__).resolve().parents[1]
-SDK_SHA = 'c709c479cc6a1acc0040fb61a071cc7bc16e65bf5acb90d624d9d6b0a6fcd3c1'
+SDK_SHA = 'a32cecd4137dd3b28e0d5e0c1642a066cbea976f81b90f1f31fbac4d0fba8d4a'
 
 
 def package(dll, output, compiler):
@@ -18,7 +18,7 @@ def package(dll, output, compiler):
             struct.unpack_from('<H', native, offset + 4)[0] != 0x8664):
         raise ValueError('Expected a Windows x64 DLL')
     if ('"header_sha256":"' + SDK_SHA + '"').encode() not in native:
-        raise ValueError('DLL does not contain the exact dev.2540 SDK fingerprint')
+        raise ValueError('DLL does not contain the exact dev.2927 SDK fingerprint')
     payload = {'Release/qarvtk-host.dll': native,
                'plugins/slicer/QarosLive.py': (ROOT / 'integrations/slicer/QarosLive.py').read_bytes(),
                'plugins/slicer/QarosVTKLib/__init__.py': b'"""Private support package, not a Slicer module."""\n'}
@@ -26,14 +26,14 @@ def package(dll, output, compiler):
         path = 'qarvtk_host_' + name + '.py'
         payload['plugins/slicer/QarosVTKLib/' + path] = (ROOT / 'integrations/slicer' / path).read_bytes()
     payload['plugins/slicer/QarosVTKLib/qarvtk_runtime.py'] = (ROOT / 'integrations/qarvtk_runtime.py').read_bytes()
-    info = dict(sdk_version='0.9.0-dev.2540+1ed038e4', sdk_header_sha256=SDK_SHA,
-                host_abi=5, build='session-sdk-update-r1', compiler=compiler,
+    info = dict(sdk_version='0.9.0-dev.2927+f291e404', sdk_header_sha256=SDK_SHA,
+                host_abi=5, build='installed-hub-update-r2', compiler=compiler,
                 runtime_included=False, live_gpu_tested=False,
                 files={name: hashlib.sha256(data).hexdigest() for name, data in payload.items()})
     payload['HOST_UPDATE_INFO.json'] = (json.dumps(info, indent=2) + '\n').encode()
     output = Path(output)
     output.mkdir(parents=True, exist_ok=True)
-    archive_path = output / 'qarvtk-live-dev2540.zip'
+    archive_path = output / 'qarvtk-live-dev2927.zip'
     with zipfile.ZipFile(archive_path, 'w', zipfile.ZIP_DEFLATED) as archive:
         for name, data in sorted(payload.items()):
             entry = zipfile.ZipInfo(name, (2026, 10, 19, 0, 0, 0))

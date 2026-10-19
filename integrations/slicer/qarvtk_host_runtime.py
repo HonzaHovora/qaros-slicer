@@ -12,10 +12,12 @@ if __package__:
 else:
     from qarvtk_host_diagnostics import ForegroundWindow, SystemMonitor
 
-EXPECTED_SDK = "c709c479cc6a1acc0040fb61a071cc7bc16e65bf5acb90d624d9d6b0a6fcd3c1"
+EXPECTED_SDK = "a32cecd4137dd3b28e0d5e0c1642a066cbea976f81b90f1f31fbac4d0fba8d4a"
+SESSION_2540_SDK = "c709c479cc6a1acc0040fb61a071cc7bc16e65bf5acb90d624d9d6b0a6fcd3c1"
 LEGACY_SDK = "022c40b670f87a066664c37daeb06da525db37fffdf5810e72cff8a5b81e677d"
-SUPPORTED_SDKS = {EXPECTED_SDK, LEGACY_SDK}
-DEFAULT_SDK_ROOT = "D:/QAROS-0.9.0-dev.2540+1ed038e4"
+SUPPORTED_SDKS = {EXPECTED_SDK, SESSION_2540_SDK, LEGACY_SDK}
+DEFAULT_SDK_ROOT = str(Path(os.environ.get("ProgramW6432") or os.environ.get("ProgramFiles") or
+                            "C:/Program Files") / "Quaternar" / "QAROS")
 _libraries = {}  # Never unload a DLL while an SDK callback may still use it.
 
 
@@ -26,13 +28,43 @@ def sdk_fingerprint(root):
         return None
 
 
-def default_sdk_path(saved=None, preferred=DEFAULT_SDK_ROOT):
-    """Migrate the old Live SDK setting only when the new package is present."""
+def installed_sdk_path():
+    """The installer records the machine-wide installation in the 64-bit view."""
+    try:
+        import winreg
+        with winreg.OpenKey(winreg.HKEY_LOCAL_MACHINE, r"SOFTWARE\Quaternar\QAROS", 0,
+                            winreg.KEY_READ | winreg.KEY_WOW64_64KEY) as key:
+            folder, _ = winreg.QueryValueEx(key, "InstallFolder")
+            if isinstance(folder, str) and folder.strip():
+                return folder
+    except (ImportError, OSError):
+        pass
+    return DEFAULT_SDK_ROOT
+
+
+def default_sdk_path(saved=None, preferred=None):
+    """Migrate a stale portable SDK path to the installed QAROS."""
+    preferred = installed_sdk_path() if preferred is None else preferred
     if saved and sdk_fingerprint(saved) == EXPECTED_SDK:
         return str(saved)
-    if sdk_fingerprint(preferred) == EXPECTED_SDK:
+    # An installed but unsupported newer SDK must report incompatibility,
+    # rather than silently launching a saved legacy runtime and Visualizer.
+    if sdk_fingerprint(preferred) is not None:
         return str(preferred)
     return str(saved or preferred)
+
+
+def default_host_dll_path(saved, packaged):
+    """Prefer an intact installed update over a stale saved bridge path."""
+    packaged = Path(packaged)
+    try:
+        info = json.loads((packaged.parent.parent / "HOST_UPDATE_INFO.json").read_text(encoding="utf-8"))
+        if (info["sdk_header_sha256"] == EXPECTED_SDK and
+                hashlib.sha256(packaged.read_bytes()).hexdigest() == info["files"]["Release/qarvtk-host.dll"]):
+            return str(packaged)
+    except (OSError, ValueError, KeyError, TypeError):
+        pass
+    return str(saved or packaged)
 
 
 def validate_sdk(root):
@@ -41,7 +73,10 @@ def validate_sdk(root):
         raise RuntimeError("Unsupported or missing SDK header at " + str(root) +
                            ". Select the complete QAROS SDK root (containing include and bin), "
                            "for example " + DEFAULT_SDK_ROOT + ". Do not replace just the header.")
-    for relative in ("bin/qar-streaming-c.dll", "bin/qar-runtime-launcher.exe"):
+    required = ["bin/qar-streaming-c.dll", "bin/qar-runtime-launcher.exe"]
+    if digest == EXPECTED_SDK:
+        required.append("bin/device-catalog.jsonc")
+    for relative in required:
         if not (Path(root) / relative).is_file():
             raise RuntimeError("Incomplete QAROS SDK: missing " + str(Path(root) / relative) +
                                ". Keep the entire runtime bin folder from the same package.")

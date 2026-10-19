@@ -3,6 +3,9 @@
 #include "qarvtk/host_wgl.hpp"
 #include "qarvtk/gl_copy.hpp"
 #include "../apps/wgl_callbacks.hpp"
+#if QARVTK_HOST_ONBOARDING_API
+#include "../apps/host_hub.hpp"
+#endif
 #include <algorithm>
 #include <atomic>
 #include <chrono>
@@ -36,6 +39,7 @@ Frame mono_frame(const QarVideoFrameOpenGl& frame){
 
 struct HostPanel {
   std::string name;
+  std::size_t index{};
   unsigned width{},height{},staging{};
   double x{},y{},z{},width_meters{};
   HGLRC source_context{};
@@ -100,7 +104,17 @@ struct PanelStream {
     gui.pose.position={float(panel.x),float(panel.y),float(panel.z)};
     gui.size={float(panel.width_meters),float(panel.width_meters*panel.height/panel.width),1.F};
     gui.visible_to_peers=&peer;gui.visible_to_peer_count=1;
-    checked(qar_gui_panels_add_panel(session,&gui,&id),"create slice preview panel");created=true;
+#if QARVTK_HOST_ONBOARDING_API
+    QarPeerSpec* raw{};checked(qar_session_get_my_spec(session,&raw),"read panel owner");
+    std::unique_ptr<QarPeerSpec,decltype(&qar_peer_spec_handle_destroy)> own(raw,qar_peer_spec_handle_destroy);
+    if(!own)throw std::runtime_error("SDK returned a null panel owner");
+    QarPeerId source{};checked(qar_peer_spec_get_id(own.get(),&source),"read panel owner ID");
+    const auto common=host_resource_name(source,"panel",panel.index);gui.common_name=common.c_str();
+    checked(qar_gui_panels_get_or_create(session,&gui,&id),"create slice preview panel");
+#else
+    checked(qar_gui_panels_add_panel(session,&gui,&id),"create slice preview panel");
+#endif
+    created=true;
     panel.status("Waiting for panel receiver");
   }
   void tick(){
@@ -190,7 +204,7 @@ HostPanel* HostPanels::create(const char* name,unsigned w,unsigned h,double x,do
   if(width_meters<=0)throw std::invalid_argument("Invalid panel width");
   {std::lock_guard<std::mutex> lock(impl_->list_mutex);if(impl_->panels.size()>=16)throw std::runtime_error("Slice views were recreated too often; restart streaming to recreate panels");}
   auto p=std::make_unique<HostPanel>();p->name=name;p->width=w;p->height=h;p->x=x;p->y=y;p->z=z;p->width_meters=width_meters;p->initialize();
-  auto* result=p.get();{std::lock_guard<std::mutex> lock(impl_->list_mutex);impl_->panels.push_back(std::move(p));}return result;
+  auto* result=p.get();{std::lock_guard<std::mutex> lock(impl_->list_mutex);p->index=impl_->panels.size();impl_->panels.push_back(std::move(p));}return result;
 }
 int HostPanels::capture(HostPanel* handle,unsigned texture,unsigned w,unsigned h){
   auto& p=impl_->get(handle);

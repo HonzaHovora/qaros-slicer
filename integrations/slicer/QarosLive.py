@@ -11,12 +11,12 @@ from slicer.ScriptedLoadableModule import ScriptedLoadableModule, ScriptedLoadab
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 if (Path(__file__).resolve().parent / "QarosVTKLib").is_dir():
     from QarosVTKLib.qarvtk_host_view import create_host_views, workspace_envelope
-    from QarosVTKLib.qarvtk_host_runtime import HostTransport, default_sdk_path
+    from QarosVTKLib.qarvtk_host_runtime import HostTransport, default_sdk_path, default_host_dll_path
     from QarosVTKLib.qarvtk_host_panels import SlicePanels
     from QarosVTKLib.qarvtk_runtime import user_directory
 else:
     from qarvtk_host_view import create_host_views, workspace_envelope
-    from qarvtk_host_runtime import HostTransport, default_sdk_path
+    from qarvtk_host_runtime import HostTransport, default_sdk_path, default_host_dll_path
     from qarvtk_host_panels import SlicePanels
     sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
     from qarvtk_runtime import user_directory
@@ -84,7 +84,7 @@ class QarosLiveWidget(ScriptedLoadableModuleWidget):
         self.dll = ctk.ctkPathLineEdit()
         self.dll.filters = ctk.ctkPathLineEdit.Files
         default_dll = Path(__file__).resolve().parents[2] / "Release" / "qarvtk-host.dll"
-        self.dll.currentPath = str(self.settings.value("QAROS_LIVE/Dll", str(default_dll)))
+        self.dll.currentPath = default_host_dll_path(self.settings.value("QAROS_LIVE/Dll", ""), default_dll)
         form.addRow("Host bridge DLL", self.dll)
         self.sdk = ctk.ctkPathLineEdit()
         self.sdk.filters = ctk.ctkPathLineEdit.Dirs
@@ -92,8 +92,11 @@ class QarosLiveWidget(ScriptedLoadableModuleWidget):
             "QAROS_LIVE/Sdk", self.settings.value("QAROS_VTK/Sdk", "")))
         form.addRow("QAROS SDK folder", self.sdk)
         self.target = qt.QComboBox()
-        self.target.addItems(["visualizer", "quest"])
+        self.target.addItems(["visualizer", "headset"])
         form.addRow("Viewer", self.target)
+        self.hubHint = qt.QLabel("Installed QAROS: start one receiver in Visualizer or connect a headset. Allow Slicer in QAROS when prompted.")
+        self.hubHint.wordWrap = True
+        form.addRow(self.hubHint)
         self.startButton = qt.QPushButton("Start live streaming")
         self.stopButton = qt.QPushButton("Stop live streaming")
         form.addRow(self.startButton, self.stopButton)

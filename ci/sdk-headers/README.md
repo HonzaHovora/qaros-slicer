@@ -1,10 +1,18 @@
-# Exact headers used for session builds
+# Exact headers used for Live bridge builds
+
+`hub-a32cecd4/include/qar_streaming.h` is the unmodified header supplied from
+the installed `C:\Program Files\Quaternar\QAROS` on 2026-10-19. Its accompanying
+changelog identifies `0.9.0-dev.2927+f291e404`.
+SHA256: `a32cecd4137dd3b28e0d5e0c1642a066cbea976f81b90f1f31fbac4d0fba8d4a`.
+It uses local app enrollment into the installed Hub, running target discovery,
+and get-or-create volumes/panels with ASCII common names. The current Live
+update targets these bytes. See [the installed update guide](../../docs/QAROS_DEV2927_UPDATE.md).
 
 `session-c709c479/include/qar_streaming.h` is the unmodified 256428-byte header
 supplied on 2026-10-19 from `QAROS-0.9.0-dev.2540+1ed038e4`.
 SHA256: `c709c479cc6a1acc0040fb61a071cc7bc16e65bf5acb90d624d9d6b0a6fcd3c1`.
 It retains session invites but splits OpenGL context parameters into WGL/GLX/EGL
-structures and changes the gesture API. The Live update targets these exact bytes.
+structures and changes the gesture API. The archived dev.2540 ZIP targets these bytes.
 See [the update guide](../../docs/QAROS_DEV2540_UPDATE.md).
 
 `session-022c40b6/include/qar_streaming.h` is the unmodified header supplied

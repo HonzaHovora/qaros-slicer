@@ -1,24 +1,42 @@
 param(
-    [string]$SdkRoot = 'D:\QAROS-0.9.0-dev.2540+1ed038e4',
+    [string]$SdkRoot = '',
     [string]$RepoRoot = (Join-Path $PSScriptRoot '..\..'),
     [string]$ArchivePath = ''
 )
 $ErrorActionPreference = 'Stop'
 $RepoRoot = (Resolve-Path -LiteralPath $RepoRoot).Path
-$expectedSdk = 'c709c479cc6a1acc0040fb61a071cc7bc16e65bf5acb90d624d9d6b0a6fcd3c1'
+$expectedSdk = 'a32cecd4137dd3b28e0d5e0c1642a066cbea976f81b90f1f31fbac4d0fba8d4a'
+if (-not $SdkRoot) {
+    $machine = $null
+    $key = $null
+    try {
+        $machine = [Microsoft.Win32.RegistryKey]::OpenBaseKey([Microsoft.Win32.RegistryHive]::LocalMachine, [Microsoft.Win32.RegistryView]::Registry64)
+        $key = $machine.OpenSubKey('SOFTWARE\Quaternar\QAROS')
+        if ($key) { $SdkRoot = [string]$key.GetValue('InstallFolder', '') }
+    } catch {
+        # No installation registration: the standard folder remains usable.
+    } finally {
+        if ($key) { $key.Dispose() }
+        if ($machine) { $machine.Dispose() }
+    }
+    if (-not $SdkRoot) {
+        $programs = if ($env:ProgramW6432) { $env:ProgramW6432 } elseif ($env:ProgramFiles) { $env:ProgramFiles } else { 'C:\Program Files' }
+        $SdkRoot = Join-Path $programs 'Quaternar\QAROS'
+    }
+}
 $destination = Join-Path $RepoRoot 'package\windows-start'
-$archive = if ($ArchivePath) { $ArchivePath } else { Join-Path $RepoRoot 'downloads\qarvtk-live-dev2540.zip' }
+$archive = if ($ArchivePath) { $ArchivePath } else { Join-Path $RepoRoot 'downloads\qarvtk-live-dev2927.zip' }
 
 if (Get-Process -Name 'Slicer', 'SlicerApp-real' -ErrorAction SilentlyContinue) {
     throw 'Close Slicer before updating its plugin.'
 }
-foreach ($name in @('include\qar_streaming.h', 'bin\qar-streaming-c.dll', 'bin\qar-runtime-launcher.exe')) {
+foreach ($name in @('include\qar_streaming.h', 'bin\qar-streaming-c.dll', 'bin\qar-runtime-launcher.exe', 'bin\device-catalog.jsonc')) {
     if (-not (Test-Path -LiteralPath (Join-Path $SdkRoot $name) -PathType Leaf)) {
         throw "Incomplete QAROS package: $SdkRoot\$name is missing. Select the SDK root containing include and bin."
     }
 }
 if ((Get-FileHash -LiteralPath (Join-Path $SdkRoot 'include\qar_streaming.h') -Algorithm SHA256).Hash -ine $expectedSdk) {
-    throw 'This update requires the supplied dev.2540 SDK header c709c479. Do not replace individual SDK files.'
+    throw 'This update requires the installed dev.2927 SDK header a32cecd4. Do not replace individual SDK files.'
 }
 if (-not (Test-Path -LiteralPath (Join-Path $destination 'plugins\slicer\QarosLive.py') -PathType Leaf)) {
     throw 'Existing package/windows-start plugin is missing. Run START-PREVIEW.cmd once, close the preview, then rerun this updater.'
@@ -96,8 +114,9 @@ try {
     throw $failure
 }
 Remove-Item -LiteralPath $staging -Recurse
-Write-Host 'QAROS Live Renderer updated for 0.9.0-dev.2540+1ed038e4 (ABI 5).'
+Write-Host 'QAROS Live Renderer updated for installed QAROS 0.9.0-dev.2927+f291e404 (ABI 5).'
 Write-Host "Previous plugin saved to: $backup"
 Write-Host "Open Slicer, QAROS Live Renderer. SDK folder: $SdkRoot"
-Write-Host 'Separate workspaces and read-only slice panels are included. Start live streaming.'
-Write-Host 'START-PREVIEW.cmd restores the old r17 package; use this updater again afterwards.'
+Write-Host 'Open the installed QAROS and start one Visualizer receiver (or connect a headset).'
+Write-Host 'Start live streaming in Slicer; allow Slicer in the QAROS Hub approval window if prompted.'
+Write-Host 'Separate workspaces and read-only slice panels are included.'

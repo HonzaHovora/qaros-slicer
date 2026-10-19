@@ -2,19 +2,19 @@
 $ErrorActionPreference = 'Stop'
 $repo = Split-Path -Parent $PSScriptRoot
 $fixture = Join-Path ([IO.Path]::GetTempPath()) ('qarvtk-update-test-' + [Guid]::NewGuid().ToString('N'))
-$sdk = Join-Path $fixture 'QAROS-0.9.0-dev.2540+1ed038e4'
+$sdk = Join-Path $fixture 'Program Files\Quaternar\QAROS'
 $destination = Join-Path $fixture 'package\windows-start'
-$expected = 'c709c479cc6a1acc0040fb61a071cc7bc16e65bf5acb90d624d9d6b0a6fcd3c1'
+$expected = 'a32cecd4137dd3b28e0d5e0c1642a066cbea976f81b90f1f31fbac4d0fba8d4a'
 try {
     foreach ($dir in @('downloads', 'package\windows-start\plugins\slicer',
-                       'QAROS-0.9.0-dev.2540+1ed038e4\include', 'QAROS-0.9.0-dev.2540+1ed038e4\bin')) {
+                       'Program Files\Quaternar\QAROS\include', 'Program Files\Quaternar\QAROS\bin')) {
         New-Item -ItemType Directory -Force -Path (Join-Path $fixture $dir) | Out-Null
     }
-    Copy-Item -LiteralPath (Join-Path $repo 'ci\sdk-headers\session-c709c479\include\qar_streaming.h') -Destination (Join-Path $sdk 'include')
-    foreach ($file in @('qar-streaming-c.dll', 'qar-runtime-launcher.exe')) {
+    Copy-Item -LiteralPath (Join-Path $repo 'ci\sdk-headers\hub-a32cecd4\include\qar_streaming.h') -Destination (Join-Path $sdk 'include')
+    foreach ($file in @('qar-streaming-c.dll', 'qar-runtime-launcher.exe', 'device-catalog.jsonc')) {
         New-Item -ItemType File -Path (Join-Path $sdk "bin\$file") | Out-Null
     }
-    foreach ($file in @('qarvtk-live-dev2540.zip', 'qarvtk-live-dev2540.zip.sha256')) {
+    foreach ($file in @('qarvtk-live-dev2927.zip', 'qarvtk-live-dev2927.zip.sha256')) {
         Copy-Item -LiteralPath (Join-Path $repo "downloads\$file") -Destination (Join-Path $fixture 'downloads')
     }
     $oldPlugin = Join-Path $destination 'plugins\slicer\QarosLive.py'
@@ -40,7 +40,7 @@ try {
     Set-Content -LiteralPath (Join-Path $sdk 'include\qar_streaming.h') -Value 'wrong SDK header'
     $rejected = $false
     try { & (Join-Path $repo 'scripts\windows\Update-Live-Plugin.ps1') -RepoRoot $fixture -SdkRoot $sdk }
-    catch { $rejected = $_.Exception.Message -like '*requires the supplied dev.2540*' }
+    catch { $rejected = $_.Exception.Message -like '*requires the installed dev.2927*' }
     if (-not $rejected -or (Get-FileHash -LiteralPath $oldPlugin -Algorithm SHA256).Hash -ne $installedHash) {
         throw 'Incompatible SDK was not rejected before modifying the plugin.'
     }
