@@ -47,6 +47,12 @@ same two volumes and slice panels disabled, startup completed without a crash
 and both volumes appeared. This isolates the reproducible trigger to enabling
 panels in this configuration; it does not identify the internal faulty function.
 
+**18:17 follow-up:** r4 still triggers the same WebCore access violation, now
+confirmed by the launcher's process-exit/restart records. It occurs with only
+the first new panel created, before any panel frame call. The Hub and SDK
+snapshots confirm stream content and matching IDs. See the
+[correlated timeline and smallest next experiment](PANEL_STARTUP_CRASH_20261019.md).
+
 The supplied crash dump at 17:23:04 local time identifies `qar-stereokit-gui.exe`,
 thread `SK_StereoKitGUI`, exception `0xC0000005`, read address `0x4`, at
 `WebCore.dll +0x2DA26E0`. Reading the dump confirms `R14=4` at the faulting
@@ -98,12 +104,16 @@ visibility and size), then `PANEL_BEGIN_POLL`, `PANEL_FRAME_ACQUIRED`,
 is logged separately and is not treated as proof of wrong content. A successful
 first-frame submission is not proof that the receiver displayed it. Diagnostic
 queries themselves may alter timing; compare the ordinary startup with the same
-instrumented build. Normal mode has no fixed sleep or serialized panel startup.
+instrumented build. In the 18:17 run each synchronous registration check took
+about two seconds on the panel worker, delaying the first frame and the next
+panel creation. There is no explicit startup sleep, but this instrumentation
+does change timing and must not be mistaken for a crash fix.
 
 Source review finds the required `QarGuiPanelStreamIdExt` and OpenGL extension
 chained correctly, one RGBA8 mono view, and a sender owned by the same session.
-Those are static checks, not evidence that the receiver registered/rendered the
-same content. Matching module binaries/PDBs or QAROS internal source would still
+The 18:17 follow-up confirms the Hub mutation and SDK snapshots carry matching
+stream content; the original GUI's transient internal state is still unknown.
+Matching module binaries/PDBs or QAROS internal source would still
 be needed to identify the named WebCore caller from this dump. Headset behavior
 and broader long-running stability are not established by the startup test.
 
