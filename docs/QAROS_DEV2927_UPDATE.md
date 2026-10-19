@@ -38,7 +38,7 @@ No QAROS runtime binaries, certificates or pairing state are included or changed
 starts the existing preview instead of extracting r17 over the plugin. The
 standalone preview/sender in that old bundle still has its original SDK support.
 
-## Confirmed panel startup problem (2026-10-19)
+## Confirmed panel creation problem (2026-10-19)
 
 On the user's Windows/NVIDIA machine, Stop/Start with two independent volumes
 and slice panels enabled repeatedly produced the first volume's image, a QAROS
@@ -51,7 +51,15 @@ panels in this configuration; it does not identify the internal faulty function.
 confirmed by the launcher's process-exit/restart records. It occurs with only
 the first new panel created, before any panel frame call. The Hub and SDK
 snapshots confirm stream content and matching IDs. See the
-[correlated timeline and smallest next experiment](PANEL_STARTUP_CRASH_20261019.md).
+[correlated timeline and manual reproduction](PANEL_STARTUP_CRASH_20261019.md).
+
+**18:34 manual test:** the user waited approximately 30 seconds while both
+volumes produced 664 frames, then opened only Red with video disabled. The same
+WebCore exception occurred at 18:34:47. No panel begin/show-frame calls were made;
+steps 2/3 were not run. This reproduces creation-time failure after startup and
+rules out a simple startup delay as a repair for this case. The next required
+input is the QAROS GUI implementation or a matching symbolized crashing-thread
+stack. The installed r4 build is sufficient to reproduce; no update is needed.
 
 The supplied crash dump at 17:23:04 local time identifies `qar-stereokit-gui.exe`,
 thread `SK_StereoKitGUI`, exception `0xC0000005`, read address `0x4`, at
@@ -69,6 +77,10 @@ crash fix**. The existing dump establishes the failing process/module, but
 neither it nor the source review establishes the internal root cause.
 
 ### Run the panel experiment
+
+The user's run has now failed at step 1 as described above. These steps remain
+as the reproduction procedure for the QAROS developer; the user does not need
+to repeat the completed experiment or advance to steps 2/3.
 
 1. Close Slicer, pull the PR branch and run `UPDATE-LIVE-PLUGIN.cmd`. Restart
    Slicer so the new native DLL is loaded. Use the normal Red/Yellow/Green layout.
