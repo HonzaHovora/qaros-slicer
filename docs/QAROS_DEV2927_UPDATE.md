@@ -61,6 +61,13 @@ rules out a simple startup delay as a repair for this case. The next required
 input is the QAROS GUI implementation or a matching symbolized crashing-thread
 stack. The installed r4 build is sufficient to reproduce; no update is needed.
 
+The developer-requested comparison with the official Vulkan source is recorded
+in the [crash investigation](PANEL_STARTUP_CRASH_20261019.md#comparison-with-the-official-vulkan-source-after-developer-feedback).
+The tested build already uses local-app onboarding and common names for both
+volumes and panels; Hub logs confirm both. The Vulkan example does not create
+GUI panels. Runtime selection, GPU ownership and cross-launch identity policy
+are documented differences, not established repairs for the exception.
+
 The supplied crash dump at 17:23:04 local time identifies `qar-stereokit-gui.exe`,
 thread `SK_StereoKitGUI`, exception `0xC0000005`, read address `0x4`, at
 `WebCore.dll +0x2DA26E0`. Reading the dump confirms `R14=4` at the faulting

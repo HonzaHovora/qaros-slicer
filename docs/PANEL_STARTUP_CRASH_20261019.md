@@ -85,6 +85,64 @@ symbolize this release. The available GitHub connection exposes the plugin
 repository, not the internal GUI implementation; no GUI fix can be validated
 in this workspace yet. Raw logs/dumps are not committed.
 
+### Comparison with the official Vulkan source after developer feedback
+
+The developer pointed to the Vulkan source example and the required
+`common_name`/new source-app onboarding. Reviewed the public `Quaternar/qaros`
+`main` snapshot `be62932d0dcf5919584a3a09c40f5486d0402d90` on 2026-10-19:
+
+- [Vulkan source main.cpp](https://github.com/Quaternar/qaros/blob/be62932d0dcf5919584a3a09c40f5486d0402d90/qar-streaming-c/examples/vulkan_cube/main.cpp)
+  (`JoinAsLocalApp`, `Run`, target discovery and sender setup).
+- [Local-app onboarding example](https://github.com/Quaternar/qaros/blob/be62932d0dcf5919584a3a09c40f5486d0402d90/qar-streaming-c/examples/local_app_onboarding.c).
+- [GUI panel operations](https://github.com/Quaternar/qaros/blob/be62932d0dcf5919584a3a09c40f5486d0402d90/qar-streaming-c/examples/gui_panel_operations.c)
+  and the [onboarding guide](https://github.com/Quaternar/qaros/blob/be62932d0dcf5919584a3a09c40f5486d0402d90/docs/website/docs/developer-guide/onboarding-and-sessions.mdx).
+
+| Concern | Official example | Tested r4 plugin and evidence |
+| --- | --- | --- |
+| Source connection | `QarOnboardLocalAppExt` chained into `QarOnboardInit`, then `qar_runtime_onboard`. | Same API path in `Session::open()` in `src/host_bridge.cpp`; the dev.2927 header selects `QARVTK_HOST_ONBOARDING_API=1`. Hub records the current peer as `role=Source`, `device=DesktopWindows`, `appState=Running` at 18:34:15.965. |
+| App-volume identity | `common_name = "vulkan-cube"` before `qar_app_volumes_get_or_create`. | Both volumes set nonempty ASCII common names before the same call. Hub accepts creation at 18:34:15.875 and .911 with `slicer-f8c1c944e6344709a169558383da39d8-volume-0` and `…-volume-1`. |
+| Panel identity | GUI example sets `common_name` before `qar_gui_panels_get_or_create`. | `PanelStream::open()` sets `gui.common_name`; the crash-run Hub mutation at 18:34:47.741 contains `slicer-f8c1c944e6344709a169558383da39d8-panel-0`. This is actual received state, not just a source-code assignment. |
+| Runtime creation | Default runtime init; no separate binaries directory override. | Same for the dev.2927 build. |
+| Receiver selection | Peers with target role and running state, then attach the sender to the app volume. | Same role/state requirements and sender-to-volume association; Slicer additionally selects the configured device category and one receiver. |
+
+The requirements about supplying a common name and using new source onboarding
+are correct. Neither is missing from the tested r4 build, and the old invite
+path is compiled only for the separately supported older SDKs.
+
+There are real differences from the standalone example, which should not be
+described as exact equivalence:
+
+- The cube calls `qar_library_load(nullptr)`. This plugin explicitly loads the
+  DLL under the selected, fingerprint-checked SDK installation and refuses a
+  different runtime already loaded into Slicer. The crash run uses Program
+  Files QAROS. The SDK supports an explicit path; the public binding guide
+  recommends default lookup for distributed applications. Changing lookup
+  policy is not an established repair for this panel crash.
+- The cube adopts the session GPU and creates a new Vulkan device. Slicer
+  already owns an OpenGL device, so the plugin chains `QarGraphicsDeviceId`
+  and verifies the returned session LUID. The onboarding guide explicitly
+  allows that extension with local-app enrollment.
+- The cube uses a constant common name across launches. Plugin names include
+  the current source peer ID, object kind and index. They are stable within
+  that source lifetime and differ on a fresh enrollment. This deliberately
+  avoids cross-instance collisions, but differs from the guide's recommended
+  persistent DNS-style identities. It does not reattach a new Slicer source
+  to the previous source's panels/volumes. Cross-launch persistence would need
+  an explicit ownership/cleanup policy; merely reusing an old panel could
+  bypass new-panel creation and conceal the current reproduction.
+
+The public header differs from the installed pinned header only in the
+`QAR_C_API` export macro's support for non-Windows compilers. The Windows
+declarations, default initializers and API signatures are unchanged; there is
+no newly discovered Windows panel ABI mismatch in this comparison.
+
+The Vulkan source creates **no GUI panels**. It validates source onboarding and
+volume setup as a reference, but does not exercise the failing dynamic stream
+panel path. The public C# stream-panel integration test checks content snapshots
+and stream-ID replacement; it does not demonstrate a running GUI rendering that
+panel. This comparison supplies no new proven crash fix. The build/ZIP remain
+r4 while the concrete reproduction and QAROS-side investigation continue.
+
 ### Separate recovery symptom
 
 At 18:34:53 both volume senders report reconnection, but after the pause only
