@@ -12,7 +12,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "integrations" / "s
 from qarvtk_host_runtime import (EXPECTED_SDK, SESSION_2540_SDK, LEGACY_SDK, Frame, HostTimingLog,
                                 HostTransport, library, default_sdk_path,
                                 installed_sdk_path, default_host_dll_path,
-                                validate_sdk, validate_host_sdk)
+                                validate_sdk, validate_host_sdk, validate_target_mode)
 
 
 class FakeDll:
@@ -46,6 +46,19 @@ class FakeDll:
 
 
 class HostRuntimeTest(unittest.TestCase):
+    def test_combined_mode_requires_capable_dll_before_creation(self):
+        for info in ({}, {"multi_target": 0}, {"multi_target": 1}):
+            dll = type("Dll", (), {"_qarvtk_info": info})()
+            for mode in ("headset", "visualizer", "quest"):
+                validate_target_mode(dll, mode)
+            if info.get("multi_target") == 1:
+                validate_target_mode(dll, "both")
+            else:
+                with self.assertRaisesRegex(RuntimeError, "r6 host bridge"):
+                    validate_target_mode(dll, "both")
+            with self.assertRaises(ValueError):
+                validate_target_mode(dll, "unknown")
+
     def test_sdk_mismatch_is_rejected_before_native_creation(self):
         for compiled in (EXPECTED_SDK, SESSION_2540_SDK, LEGACY_SDK):
             dll = type("Dll", (), {"_qarvtk_info": {"header_sha256": compiled}})()
@@ -186,6 +199,24 @@ class HostRuntimeTest(unittest.TestCase):
             self.assertEqual(t.dll.stops, 1)
             t.tick()
             self.assertFalse(t.running)
+
+    def test_two_targets_render_same_workspaces_with_their_own_eye_pose(self):
+        with tempfile.TemporaryDirectory() as folder:
+            rendered = []
+            def render(volume):
+                return lambda eyes, *a, **k: rendered.append((volume, eyes[0]["position"][0], eyes[1]["position"][0]))
+            t = self.transport(folder, render(0))
+            second = type("Host", (), dict(name="Second", last_timings={}, last_render_sizes=[(320, 240)]*2,
+                last_desktop_size=(800, 600), render=staticmethod(render(1)), close=staticmethod(lambda: None)))()
+            t.hosts.append(second)
+            for target, volume in ((0, 0), (1, 0), (1, 1), (0, 1)):
+                t.frame.volume_index = volume
+                for eye_index, eye in enumerate(t.frame.eyes):
+                    eye.position[0] = target * 10 + eye_index
+                t.tick()
+            self.assertEqual(rendered, [(0, 0, 1), (0, 10, 11), (1, 10, 11), (1, 0, 1)])
+            self.assertEqual(t.dll.finished, [1, 2, 3, 4])
+            t.request_stop()
 
     def test_nested_timer_cannot_overwrite_live_frame(self):
         with tempfile.TemporaryDirectory() as folder:

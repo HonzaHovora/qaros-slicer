@@ -9,7 +9,7 @@ import zipfile
 
 ROOT = Path(__file__).resolve().parents[1]
 SDK_SHA = 'a32cecd4137dd3b28e0d5e0c1642a066cbea976f81b90f1f31fbac4d0fba8d4a'
-BUILD = 'installed-hub-update-r5'
+BUILD = 'installed-hub-update-r6'
 
 
 def package(dll, output, compiler):
@@ -22,6 +22,8 @@ def package(dll, output, compiler):
         raise ValueError('DLL does not contain the exact dev.2927 SDK fingerprint')
     if b'"panel_probe":1' not in native:
         raise ValueError('DLL does not provide the manual panel diagnosis capability')
+    if b'"multi_target":1' not in native:
+        raise ValueError('DLL does not provide Visualizer + headset streaming')
     if ('Host build: ' + BUILD + ' (ABI 5)').encode() not in native:
         raise ValueError('DLL does not match this Live update build')
     payload = {'Release/qarvtk-host.dll': native,
@@ -35,6 +37,8 @@ def package(dll, output, compiler):
                 host_abi=5, build=BUILD,
                 native_build=BUILD, compiler=compiler,
                 slice_previews_default=True, panel_probe=1,
+                multi_target=1, default_target_mode='both',
+                max_visualizer_targets=1, max_headset_targets=1,
                 panel_registration_snapshot='manual_probe_only',
                 runtime_included=False, live_gpu_tested=False,
                 files={name: hashlib.sha256(data).hexdigest() for name, data in payload.items()})

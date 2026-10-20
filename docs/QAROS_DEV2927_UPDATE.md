@@ -2,25 +2,42 @@
 
 The supported installation is **0.9.0-dev.2927+f291e404**, normally
 `C:\Program Files\Quaternar\QAROS`. The Live update is
-**installed-hub-update-r5**, with host ABI 5.
+**installed-hub-update-r6**, with host ABI 5 and `multi_target=1`.
 
 ## Install and start
 
-1. Close Slicer. Switch the repository checkout to `main` and Fetch/Pull.
+1. Close Slicer. Fetch/Pull the repository checkout containing this update.
 2. Run `UPDATE-LIVE-PLUGIN.cmd`. It reads the 64-bit machine registry key
    `HKLM\SOFTWARE\Quaternar\QAROS\InstallFolder`, falling back to
    `%ProgramFiles%\Quaternar\QAROS`. For a custom installation use
    `UPDATE-LIVE-PLUGIN.cmd -SdkRoot "E:\Quaternar\QAROS"`.
 3. Open the installed QAROS. In **Stream Graph → This PC watches**, create
    and start a receiver, then open its **Texture Grid** tab. Alternatively,
-   connect a headset. The Visualizer control window alone is not a running
-   receiver. This bridge serves one running target at a time.
+   connect HoloLens through QAROS. The Visualizer control window alone is not
+   a running receiver. This bridge can serve one Visualizer receiver and one
+   headset at the same time; either can join after streaming starts.
 4. Open Slicer → **QAROS Live Renderer**. `QAROS SDK folder` is the installation
    root containing `include` and `bin`. `Host bridge DLL` is
    `package\windows-start\Release\qarvtk-host.dll` in the updated checkout.
 5. Leave **Test panel startup step by step** unchecked for normal use.
-   Slice panels are enabled by default. Choose `visualizer` or `headset`,
+   Slice panels are enabled by default. Leave **Stream to → Visualizer + headset**,
    click **Start live streaming**, and approve Slicer in QAROS if prompted.
+   **Visualizer only** and **Headset only** are also available. The choice is
+   remembered and cannot change during streaming.
+
+## Headsets in r6
+
+Pairing a headset with QAROS does not by itself create a rendering sender.
+R6 watches running target peers and creates a sender for each selected target
+and each workspace, passing that target's peer ID and the shared app-volume ID.
+Each sender supplies its own stereo pose/FOV and uses a private SDK graphics
+context. The GUI still renders the corresponding original Slicer workspace.
+
+Target negotiation runs independently of frame delivery and of the other
+target. Slice panels are created once and their audience expands when a late
+headset's senders have finished connecting. No normal registration-query delay
+is introduced. The status reports volumes and frame counts separately for
+Visualizer and headset. See [headset test and limitations](HEADSET_STREAMING.md).
 
 ## Normal panel startup in r5
 
@@ -70,5 +87,5 @@ own SDK support; it is separate from the Live bridge updated here.
 
 The ZIP contains the Windows x64 bridge and Python plugin, not QAROS runtime
 binaries. It preserves ABI 5 and the manual probe capability. Cross-build and
-installer verification do not replace a live Windows/NVIDIA test of r5;
-headset and long-running stability remain unverified.
+installer verification do not replace a live Windows/NVIDIA/HoloLens test of
+r6; headset output, panel display and long-running stability remain unverified.

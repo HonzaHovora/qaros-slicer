@@ -95,12 +95,14 @@ struct PanelStream {
   bool begin_logged{},first_frame_logged{};
   uint64_t last_generation{},sent{};
   Clock::time_point last_send{};
+  std::vector<QarPeerId> audience;
   PanelStream(HostPanel& p,QarSession* s,std::function<void(const std::string&)> l):panel(p),session(s),log(std::move(l)){}
   ~PanelStream(){
     if(created)qar_gui_panels_close_panel(session,&id);
     if(sender)qar_video_sender_handle_destroy(sender);
   }
-  void open(const QarPeerId& peer,bool inspect){
+  void open(const std::vector<QarPeerId>& peers,bool inspect){
+    if(peers.empty())throw std::invalid_argument("A slice panel needs a rendering target");
     log("PANEL_SENDER_CREATE name="+panel.name+" size="+std::to_string(panel.width)+"x"+std::to_string(panel.height)+" api=OpenGL views=1 eye=none format=RGBA8");
     auto gl=panel.callbacks->parameters();
     auto init=qar_video_sender_init_default();init.graphics_api=QAR_GRAPHICS_API_OPENGL;init.header.next=&gl.header;
@@ -112,11 +114,11 @@ struct PanelStream {
     auto content=qar_gui_panel_stream_id_ext_default();
     checked(qar_video_sender_stream_id(sender,&content.stream_id),"get panel stream ID");
     stream_id=content.stream_id;
-    log("PANEL_CONTENT_REQUEST name="+panel.name+" type=stream stream="+id_text(stream_id)+" target="+id_text(peer));
+    log("PANEL_CONTENT_REQUEST name="+panel.name+" type=stream stream="+id_text(stream_id)+" targets="+std::to_string(peers.size()));
     auto gui=qar_gui_panel_init_default();gui.header.next=&content.header;gui.display_name=panel.name.c_str();
     gui.pose.position={float(panel.x),float(panel.y),float(panel.z)};
     gui.size={float(panel.width_meters),float(panel.width_meters*panel.height/panel.width),1.F};
-    gui.visible_to_peers=&peer;gui.visible_to_peer_count=1;
+    gui.visible_to_peers=peers.data();gui.visible_to_peer_count=peers.size();
 #if QARVTK_HOST_ONBOARDING_API
     QarPeerSpec* raw{};checked(qar_session_get_my_spec(session,&raw),"read panel owner");
     std::unique_ptr<QarPeerSpec,decltype(&qar_peer_spec_handle_destroy)> own(raw,qar_peer_spec_handle_destroy);
@@ -130,11 +132,23 @@ struct PanelStream {
     checked(qar_gui_panels_add_panel(session,&gui,&id),"create slice preview panel");
 #endif
     created=true;
+    audience=peers;
+    for(const auto& peer:audience)log("PANEL_TARGET name="+panel.name+" peer="+id_text(peer));
     log("PANEL_CREATED name="+panel.name+" id="+id_text(id));
     // Registry inspection is synchronous and can wait for the query timeout.
     // Keep it in the explicit manual probe, never in ordinary panel startup.
-    if(inspect)inspect_registration(peer);
+    if(inspect)for(const auto& peer:peers)inspect_registration(peer);
     panel.status("Waiting for panel receiver");
+  }
+  void add_peers(const std::vector<QarPeerId>& peers){
+    std::vector<const QarPeerId*> additions;
+    for(const auto& peer:peers)
+      if(std::none_of(audience.begin(),audience.end(),[&](const auto& p){return qar_peer_id_equals(&p,&peer);}))
+        additions.push_back(&peer);
+    if(additions.empty())return;
+    checked(qar_gui_panels_update_visible_to(session,&id,additions.data(),additions.size(),nullptr,0),"add panel targets");
+    for(const auto* peer:additions){audience.push_back(*peer);log("PANEL_TARGET_ADDED name="+panel.name+" peer="+id_text(*peer));}
+    last_generation=0; // Send a static slice again for the new receiver.
   }
   void inspect_registration(const QarPeerId& peer){
     // Inspect what the SDK actually registered, not just the init we passed.
@@ -216,6 +230,7 @@ struct HostPanels::Impl {
   // Contexts/windows are created and destroyed on the GUI thread. Closed
   // sources stay owned until Stop; the bounded list prevents layout churn leaks.
   std::vector<std::unique_ptr<HostPanel>> panels;
+  std::vector<QarPeerId> peers;
   std::thread worker;
   std::atomic<bool> stopping{false};
   std::atomic<bool> video_enabled{true};
@@ -225,21 +240,23 @@ struct HostPanels::Impl {
     if(!p||std::none_of(panels.begin(),panels.end(),[&](const auto& v){return v.get()==p;}))throw std::invalid_argument("Invalid preview panel handle");
     return *p;
   }
-  void run(QarSession* session,QarPeerId peer)noexcept{
+  void run(QarSession* session)noexcept{
     std::vector<std::unique_ptr<PanelStream>> streams;
     try{
       while(!stopping){
         std::vector<HostPanel*> snapshot;
-        {std::lock_guard<std::mutex> lock(list_mutex);for(auto& p:panels)snapshot.push_back(p.get());}
+        std::vector<QarPeerId> audience;
+        {std::lock_guard<std::mutex> lock(list_mutex);for(auto& p:panels)snapshot.push_back(p.get());audience=peers;}
         streams.resize(snapshot.size());
         for(size_t i=0;i<snapshot.size()&&!stopping;++i){
           auto& p=*snapshot[i];
           if(p.closed||p.failed){streams[i].reset();continue;}
-          if(!p.generation||!p.visible) {if(streams[i])try{streams[i]->tick(video_enabled.load());}catch(const std::exception& e){p.failed=true;p.status(e.what());streams[i].reset();log("PANEL_ERROR "+p.name+": "+e.what());}continue;}
           try{
+            if(streams[i])streams[i]->add_peers(audience);
+            if(!p.generation||!p.visible){if(streams[i])streams[i]->tick(video_enabled.load());continue;}
             if(!streams[i]){
               auto next=std::make_unique<PanelStream>(p,session,log);
-              next->open(peer,!video_enabled.load());streams[i]=std::move(next);
+              next->open(audience,!video_enabled.load());streams[i]=std::move(next);
               log("PANEL_OPEN "+p.name+" "+std::to_string(p.width)+"x"+std::to_string(p.height));
             }
             streams[i]->tick(video_enabled.load());
@@ -287,9 +304,19 @@ void HostPanels::video_enabled(bool value){
   impl_->log(std::string("PANEL_VIDEO_GATE enabled=")+(value?"yes":"no"));
 }
 std::string HostPanels::status(HostPanel* handle){auto& p=impl_->get(handle);std::lock_guard<std::mutex> lock(p.status_mutex);return p.state;}
-void HostPanels::start(QarSession* session,const QarPeerId& peer){
+void HostPanels::start(QarSession* session,const std::vector<QarPeerId>& peers){
   if(impl_->worker.joinable())throw std::runtime_error("Panel worker already started");
-  impl_->worker=std::thread([this,session,peer]{impl_->run(session,peer);});
+  add_peers(peers);
+  impl_->worker=std::thread([this,session]{impl_->run(session);});
+}
+void HostPanels::add_peers(const std::vector<QarPeerId>& peers){
+  // An empty QAROS audience means everyone, not nobody. Never create a panel
+  // with an empty list or remove its last target during a disconnect.
+  if(peers.empty())throw std::invalid_argument("A slice panel needs a rendering target");
+  std::lock_guard<std::mutex> lock(impl_->list_mutex);
+  for(const auto& peer:peers)
+    if(std::none_of(impl_->peers.begin(),impl_->peers.end(),[&](const auto& p){return qar_peer_id_equals(&p,&peer);}))
+      impl_->peers.push_back(peer);
 }
 void HostPanels::request_stop(){impl_->stopping=true;}
 void HostPanels::join(){if(impl_->worker.joinable())impl_->worker.join();}

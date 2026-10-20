@@ -265,6 +265,14 @@ def library(path):
     return dll
 
 
+def validate_target_mode(dll, target):
+    if target not in ("both", "visualizer", "headset", "quest"):
+        raise ValueError("Choose Visualizer + headset, Visualizer only or Headset only")
+    if target == "both" and dll._qarvtk_info.get("multi_target") != 1:
+        raise RuntimeError("Visualizer + headset requires the r6 host bridge and installed QAROS dev.2927. "
+                           "Install the Live plugin update and restart Slicer, or select a single viewer.")
+
+
 class HostTransport:
     def __init__(self, dll_path, sdk_root, target, log_folder, host_view):
         if os.name != "nt":
@@ -279,6 +287,7 @@ class HostTransport:
             raise ValueError("All workspaces must use the same Slicer render window")
         self.dll = library(dll_path)
         validate_host_sdk(self.dll, digest)
+        validate_target_mode(self.dll, target)
         self.handle = c.c_void_p()
         self.frame = Frame()
         self.stopping = False
@@ -301,7 +310,7 @@ class HostTransport:
             raise RuntimeError(error.value.decode("utf-8", "replace"))
         self.diagnostics = HostTimingLog(self.log_folder)
         self.diagnostics.event("SDK " + json.dumps(dict(root=str(sdk), header_sha256=digest,
-                                                       host_dll=str(Path(dll_path).resolve()))))
+                                                       host_dll=str(Path(dll_path).resolve()), target_mode=target)))
         self.diagnostics.event("ABI 5 independent app volumes in one session; isolated native rendering per workspace; read-only slice video panels; "
                                "workspace follows Slicer bounds and SDK placement; "
                                "same-view layout changes preserve streaming; explicit stop reasons; "

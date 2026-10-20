@@ -2,26 +2,31 @@
 
 Pluginy pro **ParaView a 3D Slicer** a OpenGL přenos do QAROS.
 
-**Aktualizace r5 pro instalovaný QAROS 0.9.0-dev.2927+f291e404.** Zavři Slicer,
-přepni checkout na `main`, dej Fetch/Pull a spusť `UPDATE-LIVE-PLUGIN.cmd`.
+**Aktualizace r6: Visualizer + HoloLens pro QAROS 0.9.0-dev.2927+f291e404.** Zavři Slicer,
+dej Fetch/Pull checkoutu s touto aktualizací a spusť `UPDATE-LIVE-PLUGIN.cmd`.
 Instalaci najde v registru Windows, obvykle
 `C:\Program Files\Quaternar\QAROS`, ověří SDK a zálohuje předchozí plugin.
-V novém QAROSu spusť jeden přijímač Visualiseru nebo připoj headset; potom ve
-Sliceru spusť **QAROS Live Renderer** a první připojení povol v okně QAROS Hubu.
-Samostatné objemy i panely fungují na cílovém PC s nově vytvořeným receiverem.
+Ve Sliceru otevři **QAROS Live Renderer**, ponech **Stream to → Visualizer + headset**
+a první připojení povol v okně QAROS Hubu. V QAROSu spusť jeden přijímač
+Visualizeru a připoj HoloLens; brýle lze připojit i za běhu streamu.
+Každý objem má samostatný sender pro každý cíl. Brýle dostávají obraz podle
+vlastní polohy hlavy, společné řezové panely jsou viditelné na obou cílech.
+Volby **Headset only** a **Visualizer only** umožňují přenášet jen do jednoho zařízení.
+R6 zatím nebyla ověřena na fyzickém headsetu; [postup testu brýlí](docs/HEADSET_STREAMING.md).
 **Panely jsou zapnuté a běžný start už nečeká na diagnostický dotaz po každém okně.**
 Volbu **Test panel startup step by step** nech pro běžné použití vypnutou.
 V dev.2927 může po Stop/Start přestat fungovat obraz a obnovený receiver může
 vyvolat problém s panely. Ověřený postup obnovy je receiver odebrat a vytvořit nový.
-Příčina ve správě relace/receiveru QAROS se dál vyšetřuje; r5 odstraňuje
-diagnostické zpomalení, ne tuto chybu přijímače.
+Příčina ve správě relace/receiveru QAROS se dál vyšetřuje; r6 zachovává rychlý
+start panelů z r5 a neoznačuje tuto chybu přijímače za opravenou.
 Starší dev.2540 má jiné API; samotné přepsání cesty v původním pluginu nestačí.
 [Postup a ověření](docs/QAROS_DEV2927_UPDATE.md).
 
 **Experiment: vlastní QAROS kostka pro každý objem.** Výchozí volba
 **Separate QAROS workspace for each volume** vytvoří samostatné pracovní objemy
 vedle sebe, každý s vlastním streamem, měřítkem a živým ROI. Sdílejí jednu relaci
-a jeden Visualizer/Quest. Vypnutím volby se přenáší celá scéna společně.
+a v r6 je může současně sledovat jeden Visualizer a jeden headset.
+Vypnutím volby se přenáší celá scéna společně.
 Nový aktualizátor výše obsahuje tuto podporu i DLL ABI 5 pro nové SDK.
 Původní verze používala SDK v `D:/install`. Popis a omezení jsou v
 [postupu pro více objemů](docs/MULTIPLE_VOLUMES.md).

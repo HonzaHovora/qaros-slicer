@@ -100,9 +100,14 @@ class QarosLiveWidget(ScriptedLoadableModuleWidget):
             "QAROS_LIVE/Sdk", self.settings.value("QAROS_VTK/Sdk", "")))
         form.addRow("QAROS SDK folder", self.sdk)
         self.target = qt.QComboBox()
-        self.target.addItems(["visualizer", "headset"])
-        form.addRow("Viewer", self.target)
-        self.hubHint = qt.QLabel("Installed QAROS: start one receiver in Visualizer or connect a headset. Allow Slicer in QAROS when prompted. In dev.2927, if the receiver stops displaying after Stop/Start, remove it and create a new one.")
+        self.targetModes = ("both", "visualizer", "headset")
+        self.target.addItems(["Visualizer + headset", "Visualizer only", "Headset only"])
+        saved_target = str(self.settings.value("QAROS_LIVE/Target", "both"))
+        self.target.currentIndex = self.targetModes.index(saved_target) if saved_target in self.targetModes else 0
+        self.target.toolTip = "Supports one Visualizer receiver and one headset. Each has its own stereo view. " \
+            "Connect the headset through QAROS; it can join after streaming starts. Applied at Start."
+        form.addRow("Stream to", self.target)
+        self.hubHint = qt.QLabel("Connect HoloLens in QAROS and allow Slicer when prompted. Visualizer + headset sends the volumes and slice panels to both; either target may join later. For a replaced receiver, stop and restart streaming. In dev.2927, a stuck Visualizer receiver may need to be removed and created again.")
         self.hubHint.wordWrap = True
         form.addRow(self.hubHint)
         self.startButton = qt.QPushButton("Start live streaming")
@@ -155,8 +160,9 @@ class QarosLiveWidget(ScriptedLoadableModuleWidget):
                 fit=self.fit.checked, match_view=self.matchView.checked,
                 render_scale=(1., .75, .5)[self.renderScale.currentIndex])
             folder = user_directory() / "live-logs" / datetime.now().strftime("%Y%m%d-%H%M%S-%f")
+            target_mode = self.targetModes[self.target.currentIndex]
             self.transport = HostTransport(self.dll.currentPath, self.sdk.currentPath,
-                                            self.target.currentText, folder, hosts)
+                                            target_mode, folder, hosts)
             created_transport = self.transport
             self.panelProbe = None
             self.panelProbeButton.text = PanelStartupProbe.labels[0]
@@ -171,6 +177,7 @@ class QarosLiveWidget(ScriptedLoadableModuleWidget):
                                                  + " cm" for host in hosts)
             self.settings.setValue("QAROS_LIVE/Dll", self.dll.currentPath)
             self.settings.setValue("QAROS_LIVE/Sdk", self.sdk.currentPath)
+            self.settings.setValue("QAROS_LIVE/Target", target_mode)
             self.logPath.text = str(folder)
             self.startButton.enabled = False
             self.stopButton.enabled = True
@@ -239,7 +246,7 @@ class QarosLiveWidget(ScriptedLoadableModuleWidget):
                 self.stopButton.enabled = self.transport.running and not self.transport.stopping
                 self.panelProbeButton.enabled = bool(self.panelProbe and self.panelProbe.stage < 3
                     and self.transport.running and not self.transport.stopping)
-                for control in (self.separateVolumes, self.fit, self.matchView, self.renderScale, self.slicePreviews, self.sliceFps, self.panelProbeMode):
+                for control in (self.target, self.separateVolumes, self.fit, self.matchView, self.renderScale, self.slicePreviews, self.sliceFps, self.panelProbeMode):
                     control.enabled = not self.transport.running
         if self.cleaned_up and (not self.transport or not self.transport.running):
             self.timer.stop()

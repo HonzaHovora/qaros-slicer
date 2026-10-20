@@ -78,6 +78,9 @@ $info = Get-Content -LiteralPath (Join-Path $staging 'HOST_UPDATE_INFO.json') -R
 if ($info.sdk_header_sha256 -ne $expectedSdk -or $info.host_abi -ne 5) {
     throw 'Archive SDK or ABI metadata differs from this updater.'
 }
+if ($info.multi_target -ne 1 -or $info.build -ne 'installed-hub-update-r6') {
+    throw 'This updater requires the r6 Visualizer + headset package.'
+}
 foreach ($relative in $files) {
     if ($relative -eq 'HOST_UPDATE_INFO.json') { continue }
     $hash = (Get-FileHash -LiteralPath (Join-Path $staging $relative) -Algorithm SHA256).Hash
@@ -114,10 +117,11 @@ try {
     throw $failure
 }
 Remove-Item -LiteralPath $staging -Recurse
-Write-Host 'QAROS Live Renderer updated for installed QAROS 0.9.0-dev.2927+f291e404 (ABI 5).'
+Write-Host 'QAROS Live Renderer r6 updated for installed QAROS 0.9.0-dev.2927+f291e404 (ABI 5).'
 Write-Host "Previous plugin saved to: $backup"
 Write-Host "Open Slicer, QAROS Live Renderer. SDK folder: $SdkRoot"
-Write-Host 'Open the installed QAROS and start one Visualizer receiver (or connect a headset).'
+Write-Host 'In QAROS, start one Visualizer receiver and/or connect HoloLens. Either can join later.'
+Write-Host 'Stream to: Visualizer + headset is the default. Headset only and Visualizer only are also available.'
 Write-Host 'Start live streaming in Slicer; allow Slicer in the QAROS Hub approval window if prompted.'
 Write-Host 'Slice panels are enabled and start without the diagnostic registration wait. Leave the step-by-step test off for normal use.'
 Write-Host 'Known dev.2927 receiver issue: if Stop/Start leaves no image, remove the receiver in Visualizer and create a new one.'
