@@ -64,11 +64,8 @@ class QarosLiveWidget(ScriptedLoadableModuleWidget):
         self.slicePreviews.checked = True
         self.slicePreviews.toolTip = "Live images of visible slice views, including video/sequences. No remote interaction. Applied at Start."
         form.addRow(self.slicePreviews)
-        panelWarning = qt.QLabel("Panel startup can crash QAROS dev.2927. Use the step-by-step test below to isolate the failing operation.")
-        panelWarning.wordWrap = True
-        form.addRow(panelWarning)
         self.panelProbeMode = qt.QCheckBox("Test panel startup step by step")
-        self.panelProbeMode.toolTip = "Starts the volumes first. Then open one panel without video, start its video, and add the other panels. Wait and observe after each step."
+        self.panelProbeMode.toolTip = "Diagnostic mode only. Starts the volumes first, then opens one panel without video and inspects its registration. The inspection can take a few seconds. Leave off for normal startup."
         form.addRow(self.panelProbeMode)
         self.panelProbeButton = qt.QPushButton(PanelStartupProbe.labels[0])
         self.panelProbeButton.enabled = False
@@ -105,7 +102,7 @@ class QarosLiveWidget(ScriptedLoadableModuleWidget):
         self.target = qt.QComboBox()
         self.target.addItems(["visualizer", "headset"])
         form.addRow("Viewer", self.target)
-        self.hubHint = qt.QLabel("Installed QAROS: start one receiver in Visualizer or connect a headset. Allow Slicer in QAROS when prompted.")
+        self.hubHint = qt.QLabel("Installed QAROS: start one receiver in Visualizer or connect a headset. Allow Slicer in QAROS when prompted. In dev.2927, if the receiver stops displaying after Stop/Start, remove it and create a new one.")
         self.hubHint.wordWrap = True
         form.addRow(self.hubHint)
         self.startButton = qt.QPushButton("Start live streaming")

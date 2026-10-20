@@ -119,4 +119,5 @@ Write-Host "Previous plugin saved to: $backup"
 Write-Host "Open Slicer, QAROS Live Renderer. SDK folder: $SdkRoot"
 Write-Host 'Open the installed QAROS and start one Visualizer receiver (or connect a headset).'
 Write-Host 'Start live streaming in Slicer; allow Slicer in the QAROS Hub approval window if prompted.'
-Write-Host 'Slice panels are enabled. To investigate the dev.2927 crash, select Test panel startup step by step before Start.'
+Write-Host 'Slice panels are enabled and start without the diagnostic registration wait. Leave the step-by-step test off for normal use.'
+Write-Host 'Known dev.2927 receiver issue: if Stop/Start leaves no image, remove the receiver in Visualizer and create a new one.'

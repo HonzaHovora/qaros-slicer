@@ -9,6 +9,7 @@ import zipfile
 
 ROOT = Path(__file__).resolve().parents[1]
 SDK_SHA = 'a32cecd4137dd3b28e0d5e0c1642a066cbea976f81b90f1f31fbac4d0fba8d4a'
+BUILD = 'installed-hub-update-r5'
 
 
 def package(dll, output, compiler):
@@ -21,6 +22,8 @@ def package(dll, output, compiler):
         raise ValueError('DLL does not contain the exact dev.2927 SDK fingerprint')
     if b'"panel_probe":1' not in native:
         raise ValueError('DLL does not provide the manual panel diagnosis capability')
+    if ('Host build: ' + BUILD + ' (ABI 5)').encode() not in native:
+        raise ValueError('DLL does not match this Live update build')
     payload = {'Release/qarvtk-host.dll': native,
                'plugins/slicer/QarosLive.py': (ROOT / 'integrations/slicer/QarosLive.py').read_bytes(),
                'plugins/slicer/QarosVTKLib/__init__.py': b'"""Private support package, not a Slicer module."""\n'}
@@ -29,9 +32,10 @@ def package(dll, output, compiler):
         payload['plugins/slicer/QarosVTKLib/' + path] = (ROOT / 'integrations/slicer' / path).read_bytes()
     payload['plugins/slicer/QarosVTKLib/qarvtk_runtime.py'] = (ROOT / 'integrations/qarvtk_runtime.py').read_bytes()
     info = dict(sdk_version='0.9.0-dev.2927+f291e404', sdk_header_sha256=SDK_SHA,
-                host_abi=5, build='installed-hub-update-r4-panel-probe',
-                native_build='installed-hub-update-r4-panel-probe', compiler=compiler,
+                host_abi=5, build=BUILD,
+                native_build=BUILD, compiler=compiler,
                 slice_previews_default=True, panel_probe=1,
+                panel_registration_snapshot='manual_probe_only',
                 runtime_included=False, live_gpu_tested=False,
                 files={name: hashlib.sha256(data).hexdigest() for name, data in payload.items()})
     payload['HOST_UPDATE_INFO.json'] = (json.dumps(info, indent=2) + '\n').encode()
@@ -40,7 +44,7 @@ def package(dll, output, compiler):
     archive_path = output / 'qarvtk-live-dev2927.zip'
     with zipfile.ZipFile(archive_path, 'w', zipfile.ZIP_DEFLATED) as archive:
         for name, data in sorted(payload.items()):
-            entry = zipfile.ZipInfo(name, (2026, 10, 19, 0, 0, 0))
+            entry = zipfile.ZipInfo(name, (2026, 10, 20, 0, 0, 0))
             entry.compress_type = zipfile.ZIP_DEFLATED
             entry.external_attr = 0o100644 << 16
             archive.writestr(entry, data)

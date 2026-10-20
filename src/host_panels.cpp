@@ -100,7 +100,7 @@ struct PanelStream {
     if(created)qar_gui_panels_close_panel(session,&id);
     if(sender)qar_video_sender_handle_destroy(sender);
   }
-  void open(const QarPeerId& peer){
+  void open(const QarPeerId& peer,bool inspect){
     log("PANEL_SENDER_CREATE name="+panel.name+" size="+std::to_string(panel.width)+"x"+std::to_string(panel.height)+" api=OpenGL views=1 eye=none format=RGBA8");
     auto gl=panel.callbacks->parameters();
     auto init=qar_video_sender_init_default();init.graphics_api=QAR_GRAPHICS_API_OPENGL;init.header.next=&gl.header;
@@ -131,7 +131,9 @@ struct PanelStream {
 #endif
     created=true;
     log("PANEL_CREATED name="+panel.name+" id="+id_text(id));
-    inspect_registration(peer);
+    // Registry inspection is synchronous and can wait for the query timeout.
+    // Keep it in the explicit manual probe, never in ordinary panel startup.
+    if(inspect)inspect_registration(peer);
     panel.status("Waiting for panel receiver");
   }
   void inspect_registration(const QarPeerId& peer){
@@ -236,7 +238,8 @@ struct HostPanels::Impl {
           if(!p.generation||!p.visible) {if(streams[i])try{streams[i]->tick(video_enabled.load());}catch(const std::exception& e){p.failed=true;p.status(e.what());streams[i].reset();log("PANEL_ERROR "+p.name+": "+e.what());}continue;}
           try{
             if(!streams[i]){
-              auto next=std::make_unique<PanelStream>(p,session,log);next->open(peer);streams[i]=std::move(next);
+              auto next=std::make_unique<PanelStream>(p,session,log);
+              next->open(peer,!video_enabled.load());streams[i]=std::move(next);
               log("PANEL_OPEN "+p.name+" "+std::to_string(p.width)+"x"+std::to_string(p.height));
             }
             streams[i]->tick(video_enabled.load());

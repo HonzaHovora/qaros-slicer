@@ -2,17 +2,19 @@
 
 Pluginy pro **ParaView a 3D Slicer** a OpenGL přenos do QAROS.
 
-**Aktualizace pro instalovaný QAROS 0.9.0-dev.2927+f291e404.** Zavři Slicer a
-spusť `UPDATE-LIVE-PLUGIN.cmd`. Instalaci najde v registru Windows, obvykle
+**Aktualizace r5 pro instalovaný QAROS 0.9.0-dev.2927+f291e404.** Zavři Slicer,
+přepni checkout na `main`, dej Fetch/Pull a spusť `UPDATE-LIVE-PLUGIN.cmd`.
+Instalaci najde v registru Windows, obvykle
 `C:\Program Files\Quaternar\QAROS`, ověří SDK a zálohuje předchozí plugin.
 V novém QAROSu spusť jeden přijímač Visualiseru nebo připoj headset; potom ve
 Sliceru spusť **QAROS Live Renderer** a první připojení povol v okně QAROS Hubu.
-Samostatné objemy jsou ověřené na cílovém PC. Zapnutí panelů v dev.2927 opakovaně
-vyvolalo pád QAROS GUI; se stejnými dvěma objemy bez panelů start proběhl bez pádu.
-**Panely zůstávají zapnuté; příčina pádu se vyšetřuje.** Pro cílený test zaškrtni
-**Test panel startup step by step**. Po zobrazení obou objemů tlačítkem postupně
-otevři Red panel bez videa, spusť jeho video a přidej ostatní panely. Po každém
-kroku pozoruj výsledek; při pádu dál nepokračuj a spusť `COLLECT-LOGS.cmd`.
+Samostatné objemy i panely fungují na cílovém PC s nově vytvořeným receiverem.
+**Panely jsou zapnuté a běžný start už nečeká na diagnostický dotaz po každém okně.**
+Volbu **Test panel startup step by step** nech pro běžné použití vypnutou.
+V dev.2927 může po Stop/Start přestat fungovat obraz a obnovený receiver může
+vyvolat problém s panely. Ověřený postup obnovy je receiver odebrat a vytvořit nový.
+Příčina ve správě relace/receiveru QAROS se dál vyšetřuje; r5 odstraňuje
+diagnostické zpomalení, ne tuto chybu přijímače.
 Starší dev.2540 má jiné API; samotné přepsání cesty v původním pluginu nestačí.
 [Postup a ověření](docs/QAROS_DEV2927_UPDATE.md).
 
