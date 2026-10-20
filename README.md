@@ -2,7 +2,7 @@
 
 Pluginy pro **ParaView a 3D Slicer** a OpenGL přenos do QAROS.
 
-**Aktualizace r6: Visualizer + HoloLens pro QAROS 0.9.0-dev.2927+f291e404.** Zavři Slicer,
+**Aktualizace r7: oprava Stop a Visualizer + HoloLens pro QAROS 0.9.0-dev.2927+f291e404.** Zavři Slicer,
 dej Fetch/Pull checkoutu s touto aktualizací a spusť `UPDATE-LIVE-PLUGIN.cmd`.
 Instalaci najde v registru Windows, obvykle
 `C:\Program Files\Quaternar\QAROS`, ověří SDK a zálohuje předchozí plugin.
@@ -12,13 +12,16 @@ Visualizeru a připoj HoloLens; brýle lze připojit i za běhu streamu.
 Každý objem má samostatný sender pro každý cíl. Brýle dostávají obraz podle
 vlastní polohy hlavy, společné řezové panely jsou viditelné na obou cílech.
 Volby **Headset only** a **Visualizer only** umožňují přenášet jen do jednoho zařízení.
-R6 zatím nebyla ověřena na fyzickém headsetu; [postup testu brýlí](docs/HEADSET_STREAMING.md).
+R7 zatím nebyla ověřena na fyzickém headsetu; [postup testu brýlí](docs/HEADSET_STREAMING.md).
 **Panely jsou zapnuté a běžný start už nečeká na diagnostický dotaz po každém okně.**
 Volbu **Test panel startup step by step** nech pro běžné použití vypnutou.
 V dev.2927 může po Stop/Start přestat fungovat obraz a obnovený receiver může
 vyvolat problém s panely. Ověřený postup obnovy je receiver odebrat a vytvořit nový.
-Příčina ve správě relace/receiveru QAROS se dál vyšetřuje; r6 zachovává rychlý
-start panelů z r5 a neoznačuje tuto chybu přijímače za opravenou.
+**R7 opravuje chybu našeho ukončování:** plugin volal `qar_runtime_destroy`,
+které ukončuje runtime. Nyní uvolňuje pouze vlastní handle přes
+`qar_runtime_handle_destroy`; sdílený QAROS má zůstat běžet. Opraven je Live
+bridge i zdroj standalone senderu. Nový Python odmítne starou DLL bez této
+opravy. Zda tím mizí i pády panelů a potíže Stop/Start, musí potvrdit živý test.
 Starší dev.2540 má jiné API; samotné přepsání cesty v původním pluginu nestačí.
 [Postup a ověření](docs/QAROS_DEV2927_UPDATE.md).
 

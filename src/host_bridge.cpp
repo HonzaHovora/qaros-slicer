@@ -185,7 +185,7 @@ struct QarvtkHost {
     std::filesystem::create_directories(std::filesystem::u8path(log_folder));
     log.open(std::filesystem::u8path(log_folder)/"host-bridge.log",std::ios::app);
     if(!log)throw std::runtime_error("Cannot open host bridge log");
-    log<<"Host build: installed-hub-update-r6 (ABI 5); SDK header " QARVTK_HOST_SDK_HASH<<std::endl;
+    log<<"Host build: installed-hub-update-r7 (ABI 5); SDK header " QARVTK_HOST_SDK_HASH<<std::endl;
     log<<"SDK root: "<<sdk_root<<std::endl;
     log<<"Target mode: "<<target<<"; workspaces="<<volumes.size()<<std::endl;
     copying=std::make_unique<qarvtk::HostSharedWgl>(dc,host_context);
@@ -289,7 +289,9 @@ struct Session {
 #else
     if(session)qar_session_destroy(session);
 #endif
-    if(runtime)qar_runtime_destroy(runtime);
+    // We own this client handle, not the shared Hub/runtime or its targets.
+    // runtime_destroy shuts down the runtime; Stop must only release our handle.
+    if(runtime)qar_runtime_handle_destroy(runtime);
     if(subscription)qar_cancel_token_handle_destroy(subscription);
     {std::lock_guard<std::mutex> lock(host.cancel_mutex);if(host.operation)qar_cancel_token_handle_destroy(host.operation);host.operation=nullptr;}
     if(initialized)qar_library_destroy();
@@ -683,7 +685,7 @@ void QarvtkHost::run() noexcept {
 
 extern "C" {
 const char* qarvtk_host_info(){
-  return "{\"host_abi\":5,\"modern_api\":0,\"panel_probe\":1,\"multi_target\":"
+  return "{\"host_abi\":5,\"modern_api\":0,\"panel_probe\":1,\"runtime_handle_only\":1,\"multi_target\":"
 #if QARVTK_HOST_ONBOARDING_API
     "1"
 #else

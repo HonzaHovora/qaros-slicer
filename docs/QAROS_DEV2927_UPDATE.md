@@ -2,7 +2,8 @@
 
 The supported installation is **0.9.0-dev.2927+f291e404**, normally
 `C:\Program Files\Quaternar\QAROS`. The Live update is
-**installed-hub-update-r6**, with host ABI 5 and `multi_target=1`.
+**installed-hub-update-r7**, with host ABI 5, `multi_target=1` and
+`runtime_handle_only=1`.
 
 ## Install and start
 
@@ -25,7 +26,29 @@ The supported installation is **0.9.0-dev.2927+f291e404**, normally
    **Visualizer only** and **Headset only** are also available. The choice is
    remembered and cannot change during streaming.
 
-## Headsets in r6
+## Runtime cleanup correction in r7
+
+The plugin previously called `qar_runtime_destroy(runtime)` when stopping or
+unwinding an SDK error. A client attached to the shared QAROS Hub must release
+its own handle with `qar_runtime_handle_destroy(runtime)`, documented by the
+SDK as leaving the runtime running. R7 corrects the Live bridge and standalone
+sender source. Sender, panel, volume and session cleanup still happens first.
+The Live ZIP includes the rebuilt host DLL; archived standalone preview
+binaries are not rebuilt by this update.
+
+The Python loader rejects a DLL without `runtime_handle_only=1`, including
+r6 with the same ABI. The manifest records `runtime_teardown=handle_only`.
+This corrects a concrete client lifecycle bug; it does not by itself prove
+that every prior panel crash or receiver failure had the same cause.
+
+For the regression test, start with a working receiver, stream the scene,
+press Stop in Slicer and check that QAROS and its target applications remain
+running. Start Slicer streaming again with that same receiver. Repeat three
+times without deleting the receiver, and verify the volumes and panels after
+each restart. If another source is active, its content must remain available
+when Slicer stops. This live test remains pending.
+
+## Headsets introduced in r6
 
 Pairing a headset with QAROS does not by itself create a rendering sender.
 R6 watches running target peers and creates a sender for each selected target
@@ -48,9 +71,9 @@ mode. Sender creation, panel registration, first-frame logs, normal frame
 pacing and independent volume workspaces remain available.
 
 The package manifest records `panel_registration_snapshot=manual_probe_only`.
-The update does not claim to repair the receiver lifecycle issue below.
+R7 also corrects the runtime cleanup described above.
 
-## Known dev.2927 receiver issue and observed recovery
+## Earlier receiver symptoms and observed recovery
 
 The user can stream the volumes and GUI panels successfully with a newly
 created receiver. After stopping Slicer streaming, the existing receiver can
@@ -58,12 +81,10 @@ fail to display again. Removing that receiver in Visualizer and creating a
 new one restores the working configuration and avoids the observed panel
 startup problem. This is the current operational workaround.
 
-For QAROS investigation, compare startup with a restored receiver against
-startup with a newly created receiver, and then repeat Slicer Stop/Start
-while retaining the new receiver. Retained state from a previous session is
-a hypothesis; the exact fault and any SDK interaction remain unconfirmed.
-A successful fresh receiver does not establish that reconnecting is fixed.
-Do not reset all Hub data to perform this comparison.
+The r7 runtime cleanup fix must now be checked against these earlier symptoms.
+Compare startup with a restored receiver against startup with a new receiver,
+then repeat Stop/Start while retaining it. Retained state is still a hypothesis
+for any remaining failures. Do not reset all Hub data for this comparison.
 
 The optional **Test panel startup step by step** remains available for the
 QAROS developer: start the volumes, open only Red without panel video,
@@ -88,4 +109,5 @@ own SDK support; it is separate from the Live bridge updated here.
 The ZIP contains the Windows x64 bridge and Python plugin, not QAROS runtime
 binaries. It preserves ABI 5 and the manual probe capability. Cross-build and
 installer verification do not replace a live Windows/NVIDIA/HoloLens test of
-r6; headset output, panel display and long-running stability remain unverified.
+r7; runtime preservation across Stop, headset output, panel display and
+long-running stability remain unverified on the target hardware.

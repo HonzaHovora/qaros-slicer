@@ -137,6 +137,19 @@ class HostRuntimeTest(unittest.TestCase):
                 with self.assertRaisesRegex(RuntimeError, "ABI or SDK fingerprint"):
                     library("old-host.dll")
 
+    def test_old_runtime_cleanup_is_rejected_even_with_current_abi(self):
+        # r6 has the correct frame ABI and multi-target support but still calls
+        # runtime_destroy at Stop. Do not let updated Python use that old DLL.
+        for capability in (None, 0):
+            info = dict(host_abi=5, header_sha256=EXPECTED_SDK, modern_api=0, multi_target=1,
+                        eye_size=104, frame_size=240, placement_size=112, volume_size=120)
+            if capability is not None:
+                info["runtime_handle_only"] = capability
+            old_dll = type("OldDll", (), {"qarvtk_host_info": staticmethod(lambda: json.dumps(info).encode())})()
+            with patch("qarvtk_host_runtime.c.CDLL", return_value=old_dll):
+                with self.assertRaisesRegex(RuntimeError, "shared-runtime cleanup fix"):
+                    library("old-cleanup-host.dll")
+
     def test_preview_failure_preserves_stereo_and_restores_context(self):
         with tempfile.TemporaryDirectory() as folder:
             events = []

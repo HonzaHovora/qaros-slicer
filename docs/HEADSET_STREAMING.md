@@ -1,4 +1,4 @@
-# Slicer Live r6: Visualizer and HoloLens
+# Slicer Live r7: Visualizer and HoloLens
 
 R6 adds simultaneous streaming to one running Visualizer receiver and one
 headset in the installed QAROS dev.2927 Hub. Connecting HoloLens in QAROS
@@ -7,7 +7,7 @@ for that target and each app volume before it can receive scene content.
 
 ## Install and first test
 
-1. Close Slicer. Fetch/Pull the checkout containing r6 and run
+1. Close Slicer. Fetch/Pull the checkout containing r7 and run
    `UPDATE-LIVE-PLUGIN.cmd`. The updater checks the SDK, verifies the package,
    and backs up the previous plugin.
 2. Open QAROS and connect HoloLens using its existing connection workflow.
@@ -29,6 +29,10 @@ for that target and each app volume before it can receive scene content.
    receiver, and connect HoloLens after it is displaying the scene. The
    existing Visualizer frames should continue while the headset connects;
    the headset should receive the same volumes and existing panels.
+7. Press Stop in Slicer. QAROS and both target applications must stay running.
+   Start streaming again with the same receivers, without removing/recreating
+   them, and verify volumes and panels. Repeat three times. R7 fixes the
+   incorrect runtime shutdown call; this Stop/Start test is still required.
 
 ## Scope and behavior
 
@@ -43,8 +47,9 @@ for that target and each app volume before it can receive scene content.
   ends with an error. Failed sender negotiation is reported per workspace.
 - Recreating a receiver changes its peer identity: stop and start Slicer
   streaming to select the replacement. SDK auto-reconnect remains enabled
-  for the existing sender. The known dev.2927 restored-receiver/Stop-Start
-  issue is not claimed fixed; see [the update guide](QAROS_DEV2927_UPDATE.md).
+  for the existing sender. R7 fixes the plugin's runtime shutdown during Stop;
+  whether this resolves all restored-receiver/panel symptoms remains to be
+  tested. See [the update guide](QAROS_DEV2927_UPDATE.md).
 - The viewers share app volumes, but each has independent stereo rendering
   and a separate graphics context per sender. Two viewers therefore require
   additional rendering/encoding work. **Headset only** avoids the Visualizer
@@ -73,3 +78,8 @@ and cancellation of both target negotiations. Windows x64 cross-builds cover
 all three pinned SDK headers; combined mode requires dev.2927. ABI 5 is
 unchanged, and an older DLL is rejected for combined mode. Hardware output
 and performance still require the manual Windows/NVIDIA/HoloLens test above.
+
+R7 replaces `qar_runtime_destroy` with `qar_runtime_handle_destroy` in both
+native clients. This releases their local runtime handle without requesting
+shutdown of the shared runtime. The loader additionally rejects pre-r7 DLLs
+even when their frame ABI matches. No SDK header change is needed.
