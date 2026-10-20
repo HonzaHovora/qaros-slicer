@@ -1,6 +1,17 @@
 @echo off
 setlocal
 cd /d "%~dp0"
+if exist "package\windows-start\HOST_UPDATE_INFO.json" (
+  if exist "package\windows-start\01-Preview.cmd" (
+    echo Starting the existing preview; preserving the updated Live plugin.
+    call "%~dp0package\windows-start\01-Preview.cmd"
+    exit /b
+  )
+  echo An updated Live plugin is installed but its preview launcher is missing.
+  echo Restore the preview package separately, then rerun UPDATE-LIVE-PLUGIN.cmd.
+  pause
+  exit /b 1
+)
 if not exist "downloads\QAROS_VTK_Windows_session_022c40b6_2026-10-15_r17.zip" (
   echo The Windows starter ZIP is missing. Use Fetch origin and Pull origin in GitHub Desktop.
   pause

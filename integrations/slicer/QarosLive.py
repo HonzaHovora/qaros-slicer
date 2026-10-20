@@ -11,13 +11,13 @@ from slicer.ScriptedLoadableModule import ScriptedLoadableModule, ScriptedLoadab
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 if (Path(__file__).resolve().parent / "QarosVTKLib").is_dir():
     from QarosVTKLib.qarvtk_host_view import create_host_views, workspace_envelope
-    from QarosVTKLib.qarvtk_host_runtime import HostTransport
-    from QarosVTKLib.qarvtk_host_panels import SlicePanels
+    from QarosVTKLib.qarvtk_host_runtime import HostTransport, default_sdk_path, default_host_dll_path
+    from QarosVTKLib.qarvtk_host_panels import SlicePanels, PanelStartupProbe
     from QarosVTKLib.qarvtk_runtime import user_directory
 else:
     from qarvtk_host_view import create_host_views, workspace_envelope
-    from qarvtk_host_runtime import HostTransport
-    from qarvtk_host_panels import SlicePanels
+    from qarvtk_host_runtime import HostTransport, default_sdk_path, default_host_dll_path
+    from qarvtk_host_panels import SlicePanels, PanelStartupProbe
     sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
     from qarvtk_runtime import user_directory
 
@@ -36,6 +36,7 @@ class QarosLiveWidget(ScriptedLoadableModuleWidget):
     def setup(self):
         super().setup()
         self.transport = None
+        self.panelProbe = None
         self.cleaned_up = False
         self.settings = qt.QSettings()
         form = qt.QFormLayout()
@@ -63,6 +64,13 @@ class QarosLiveWidget(ScriptedLoadableModuleWidget):
         self.slicePreviews.checked = True
         self.slicePreviews.toolTip = "Live images of visible slice views, including video/sequences. No remote interaction. Applied at Start."
         form.addRow(self.slicePreviews)
+        self.panelProbeMode = qt.QCheckBox("Test panel startup step by step")
+        self.panelProbeMode.toolTip = "Diagnostic mode only. Starts the volumes first, then opens one panel without video and inspects its registration. The inspection can take a few seconds. Leave off for normal startup."
+        form.addRow(self.panelProbeMode)
+        self.panelProbeButton = qt.QPushButton(PanelStartupProbe.labels[0])
+        self.panelProbeButton.enabled = False
+        self.panelProbeButton.connect("clicked()", self.advance_panel_probe)
+        form.addRow(self.panelProbeButton)
         self.sliceFps = qt.QComboBox()
         self.sliceFps.addItems(["5", "10", "15", "30"])
         self.sliceFps.currentIndex = 2
@@ -84,15 +92,19 @@ class QarosLiveWidget(ScriptedLoadableModuleWidget):
         self.dll = ctk.ctkPathLineEdit()
         self.dll.filters = ctk.ctkPathLineEdit.Files
         default_dll = Path(__file__).resolve().parents[2] / "Release" / "qarvtk-host.dll"
-        self.dll.currentPath = str(self.settings.value("QAROS_LIVE/Dll", str(default_dll)))
+        self.dll.currentPath = default_host_dll_path(self.settings.value("QAROS_LIVE/Dll", ""), default_dll)
         form.addRow("Host bridge DLL", self.dll)
         self.sdk = ctk.ctkPathLineEdit()
         self.sdk.filters = ctk.ctkPathLineEdit.Dirs
-        self.sdk.currentPath = str(self.settings.value("QAROS_VTK/Sdk", "D:/install"))
+        self.sdk.currentPath = default_sdk_path(self.settings.value(
+            "QAROS_LIVE/Sdk", self.settings.value("QAROS_VTK/Sdk", "")))
         form.addRow("QAROS SDK folder", self.sdk)
         self.target = qt.QComboBox()
-        self.target.addItems(["visualizer", "quest"])
+        self.target.addItems(["visualizer", "headset"])
         form.addRow("Viewer", self.target)
+        self.hubHint = qt.QLabel("Installed QAROS: start one receiver in Visualizer or connect a headset. Allow Slicer in QAROS when prompted. In dev.2927, if the receiver stops displaying after Stop/Start, remove it and create a new one.")
+        self.hubHint.wordWrap = True
+        form.addRow(self.hubHint)
         self.startButton = qt.QPushButton("Start live streaming")
         self.stopButton = qt.QPushButton("Stop live streaming")
         form.addRow(self.startButton, self.stopButton)
@@ -146,13 +158,19 @@ class QarosLiveWidget(ScriptedLoadableModuleWidget):
             self.transport = HostTransport(self.dll.currentPath, self.sdk.currentPath,
                                             self.target.currentText, folder, hosts)
             created_transport = self.transport
+            self.panelProbe = None
+            self.panelProbeButton.text = PanelStartupProbe.labels[0]
             if self.slicePreviews.checked:
                 position, size = workspace_envelope(hosts)
-                self.transport.panels = SlicePanels(lm, self.transport, position, size, fps=int(self.sliceFps.currentText))
+                if self.panelProbeMode.checked:
+                    self.panelProbe = PanelStartupProbe(lm, self.transport, position, size, fps=int(self.sliceFps.currentText))
+                    self.transport.panel_status_text = "Panel test: wait for both volumes, then open the Red panel with the step button."
+                else:
+                    self.transport.panels = SlicePanels(lm, self.transport, position, size, fps=int(self.sliceFps.currentText))
             self.workspaceStatus.text = "\n".join(host.name + ": " + " × ".join(f"{x * 100:.1f}" for x in host.workspace_size)
                                                  + " cm" for host in hosts)
             self.settings.setValue("QAROS_LIVE/Dll", self.dll.currentPath)
-            self.settings.setValue("QAROS_VTK/Sdk", self.sdk.currentPath)
+            self.settings.setValue("QAROS_LIVE/Sdk", self.sdk.currentPath)
             self.logPath.text = str(folder)
             self.startButton.enabled = False
             self.stopButton.enabled = True
@@ -169,6 +187,16 @@ class QarosLiveWidget(ScriptedLoadableModuleWidget):
     def stop_stream(self, *args):
         if self.transport:
             self.transport.request_stop("Stop button")
+
+    def advance_panel_probe(self):
+        if not self.panelProbe:
+            return
+        try:
+            self.panelProbe.advance()
+            self.panelProbeButton.text = self.panelProbe.label
+        except Exception as error:
+            self.transport.diagnostics.event("PANEL_PROBE_ERROR " + str(error))
+            slicer.util.errorDisplay(str(error))
 
     def scene_closing(self, *args):
         if self.transport:
@@ -209,7 +237,9 @@ class QarosLiveWidget(ScriptedLoadableModuleWidget):
             if not self.cleaned_up:
                 self.startButton.enabled = not self.transport.running
                 self.stopButton.enabled = self.transport.running and not self.transport.stopping
-                for control in (self.separateVolumes, self.fit, self.matchView, self.renderScale, self.slicePreviews, self.sliceFps):
+                self.panelProbeButton.enabled = bool(self.panelProbe and self.panelProbe.stage < 3
+                    and self.transport.running and not self.transport.stopping)
+                for control in (self.separateVolumes, self.fit, self.matchView, self.renderScale, self.slicePreviews, self.sliceFps, self.panelProbeMode):
                     control.enabled = not self.transport.running
         if self.cleaned_up and (not self.transport or not self.transport.running):
             self.timer.stop()

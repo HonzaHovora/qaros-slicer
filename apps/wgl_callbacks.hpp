@@ -25,13 +25,34 @@ class WglCallbacks {
       opengl_(GetModuleHandleW(L"opengl32.dll")) {
     if (!dc_ || !context_ || !opengl_) throw std::runtime_error("Invalid WGL context or OpenGL module");
   }
-  void configure(QarStreamParamsOpenGl& params) {
+#if QARVTK_SPLIT_OPENGL_PARAMS
+  using Params = QarStreamParamsOpenGlWgl;
+  void configure(Params& params) {
+    params.callbacks = {this, get_proc, make_current, capture_current, restore_current};
+  }
+#else
+  using Params = QarStreamParamsOpenGl;
+  void configure(Params& params) {
     params.user_state=this;
     params.get_proc_address=get_proc;
     params.make_current=make_current;
     params.unbind=unbind;
     params.capture_current=capture_current;
     params.restore_current=restore_current;
+  }
+#endif
+  Params parameters() {
+#if QARVTK_SPLIT_OPENGL_PARAMS
+    auto params=qar_stream_params_opengl_wgl_default();
+    params.device_context=dc_;
+#else
+    auto params=qar_stream_params_opengl_default();
+    params.context_type=QAR_OPENGL_CONTEXT_TYPE_WGL;
+    params.display_or_device_context=dc_;
+#endif
+    params.context=context_;
+    configure(params);
+    return params;
   }
   static void* get_proc(void* user, const char* name) noexcept {
     auto& self=*static_cast<WglCallbacks*>(user);

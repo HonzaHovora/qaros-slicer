@@ -1,11 +1,25 @@
 param(
-    [string]$SdkRoot = 'D:\install',
+    [string]$SdkRoot = '',
     [string]$OutputRoot = '',
+    [string]$QarosLogRoot = '',
     [switch]$NoOpen
 )
 
 $ErrorActionPreference = 'Stop'
 $repoRoot = Split-Path (Split-Path $PSScriptRoot -Parent) -Parent
+if (-not $SdkRoot) {
+    try {
+        $registry = [Microsoft.Win32.RegistryKey]::OpenBaseKey([Microsoft.Win32.RegistryHive]::LocalMachine, [Microsoft.Win32.RegistryView]::Registry64)
+        try {
+            $key = $registry.OpenSubKey('SOFTWARE\Quaternar\QAROS')
+            if ($key) { try { $SdkRoot = [string]$key.GetValue('InstallFolder') } finally { $key.Dispose() } }
+        } finally { $registry.Dispose() }
+    } catch { }
+    if (-not $SdkRoot) {
+        $programFilesRoot = if ($env:ProgramFiles) { $env:ProgramFiles } else { 'C:\Program Files' }
+        $SdkRoot = Join-Path $programFilesRoot 'Quaternar\QAROS'
+    }
+}
 if (-not $OutputRoot) { $OutputRoot = Join-Path $repoRoot 'diagnostics' }
 $stamp = Get-Date -Format 'yyyyMMdd-HHmmss-fff'
 $folder = Join-Path $OutputRoot ("QAROS-VTK-diagnostics-" + $stamp)
@@ -15,7 +29,8 @@ $notes = New-Object 'System.Collections.Generic.List[string]'
 $notes.Add('Collected at: ' + (Get-Date -Format o))
 $notes.Add('PowerShell: ' + $PSVersionTable.PSVersion.ToString())
 $notes.Add('This collector does not launch, stop or modify the sender or viewer.')
-$notes.Add('Only sender/live-host/SDK logs, installed build metadata and related crash events are collected.')
+$notes.Add('Sender/live-host/SDK and recent QAROS text logs, build metadata and related crash events are collected. Dumps are listed, not copied.')
+$notes.Add('QAROS installation: ' + $SdkRoot)
 
 # Each Slicer/ParaView plugin instance has a separate qarvtk-* directory.
 # Copy only sender.log, never scene.vtp, invites or onboarding identities.
@@ -98,6 +113,32 @@ if (Test-Path -LiteralPath $liveRoot -PathType Container) {
     }
 }
 
+# The access violation is in qar-stereokit-gui, a separate process. The plugin's
+# SDK log cannot show that process's panel initialization or WebCore messages.
+# Stay within QAROS's log tree; never copy session state, pairing data or dumps.
+if (-not $QarosLogRoot) { $QarosLogRoot = Join-Path ([IO.Path]::GetTempPath()) 'quaternar\logs' }
+if (Test-Path -LiteralPath $qarosLogRoot -PathType Container) {
+    $recentQaros = @(Get-ChildItem -LiteralPath $qarosLogRoot -File -Recurse -ErrorAction SilentlyContinue |
+        Where-Object { $_.LastWriteTime -ge (Get-Date).AddHours(-2) })
+    $qarosLogs = @($recentQaros | Where-Object { $_.Name -match '(?i)\.log(?:\.\d+)?$|\.txt$' } |
+        Sort-Object @{Expression={ if ($_.FullName -match '(?i)stereokit[-_]gui|crash') { 0 } else { 1 } }},
+                    @{Expression='LastWriteTimeUtc'; Descending=$true} | Select-Object -First 32)
+    $qarosIndex = 0
+    foreach ($log in $qarosLogs) {
+        $qarosIndex++
+        $targetName = 'qaros-{0}-{1}' -f $qarosIndex, $log.Name
+        $notes.Add(('{0}: {1}; modified {2:o}; {3} bytes' -f $targetName, $log.FullName, $log.LastWriteTime, $log.Length))
+        try {
+            Get-Content -LiteralPath $log.FullName -Encoding UTF8 -Tail 10000 |
+                Set-Content -LiteralPath (Join-Path $folder $targetName) -Encoding UTF8
+        } catch { $notes.Add("Cannot read QAROS process log: $_") }
+    }
+    $recentQaros | Where-Object { $_.Extension -eq '.dmp' } |
+        Sort-Object LastWriteTimeUtc -Descending | Select-Object -First 10 |
+        ForEach-Object { $notes.Add(('DUMP (not copied): {0}; modified {1:o}; {2} bytes' -f $_.FullName, $_.LastWriteTime, $_.Length)) }
+    if (-not $qarosLogs.Count) { $notes.Add('No recent QAROS text logs found under ' + $qarosLogRoot) }
+} else { $notes.Add('QAROS log folder not found: ' + $qarosLogRoot) }
+
 $install = Join-Path $repoRoot 'package\windows-start'
 foreach ($name in @('BUILD_INFO.json', 'HOST_UPDATE_INFO.json', 'qarvtk-sdk.json')) {
     $path = Join-Path $install $name
@@ -106,7 +147,8 @@ foreach ($name in @('BUILD_INFO.json', 'HOST_UPDATE_INFO.json', 'qarvtk-sdk.json
             try {
                 $update = Get-Content -LiteralPath $path -Raw -Encoding UTF8 | ConvertFrom-Json
                 $installedHash = (Get-FileHash -LiteralPath (Join-Path $install 'Release\qarvtk-host.dll') -Algorithm SHA256).Hash
-                if ($installedHash -ne $update.dll_sha256) {
+                $expectedHash = if ($update.files) { $update.files.'Release/qarvtk-host.dll' } else { $update.dll_sha256 }
+                if (-not $expectedHash -or $installedHash -ne $expectedHash) {
                     $notes.Add('HOST_UPDATE_INFO.json is stale (DLL hash differs, for example after restoring r17); omitted.')
                     continue
                 }
@@ -115,7 +157,7 @@ foreach ($name in @('BUILD_INFO.json', 'HOST_UPDATE_INFO.json', 'qarvtk-sdk.json
         Copy-Item -LiteralPath $path -Destination (Join-Path $folder $name)
     }
 }
-foreach ($path in @((Join-Path $install 'Release\qarvtk-sender.exe'), (Join-Path $install 'Release\qarvtk-host.dll'), (Join-Path $SdkRoot 'include\qar_streaming.h'), (Join-Path $SdkRoot 'bin\qar-streaming-c.dll'))) {
+foreach ($path in @((Join-Path $install 'Release\qarvtk-sender.exe'), (Join-Path $install 'Release\qarvtk-host.dll'), (Join-Path $SdkRoot 'include\qar_streaming.h'), (Join-Path $SdkRoot 'bin\qar-streaming-c.dll'), (Join-Path $SdkRoot 'bin\qar-stereokit-gui.exe'), (Join-Path $SdkRoot 'bin\WebCore.dll'), (Join-Path $SdkRoot 'bin\Ultralight.dll'))) {
     if (Test-Path -LiteralPath $path -PathType Leaf) {
         try {
             $hash = Get-FileHash -LiteralPath $path -Algorithm SHA256
