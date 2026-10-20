@@ -14,6 +14,13 @@ Source archive: `QAROS-VTK-diagnostics-20261019-183522-479.zip`, SHA256
 It confirms the same installed r4 DLL/header hashes listed below. It contains
 the new crash text report, but not the new minidump.
 
+**October 20 follow-up:** the later QAROS crash-report bundle now supplies
+the 18:34:47 minidump and four earlier GUI dumps. Debugger inspection confirms
+the same faulting instruction and `R14=4` in all five, but still provides no
+validated caller stack. The bundle's current alert concerns a separate mixer
+startup exit loop, not a new recorded WebCore exception. See the
+[October 20 report review](CRASH_REPORT_20261020.md) for the evidence and limits.
+
 ### Manual-run evidence
 
 All wall times in this section are 2026-10-19, Europe/Prague (UTC+02:00).

@@ -68,6 +68,14 @@ volumes and panels; Hub logs confirm both. The Vulkan example does not create
 GUI panels. Runtime selection, GPU ownership and cross-launch identity policy
 are documented differences, not established repairs for the exception.
 
+**October 20 QAROS report:** five attached October 19 dumps now confirm the
+same WebCore fault site, including the 18:34 manual test. The report's current
+alert is a different mixer startup failure: 57 starts in about one minute,
+with status-1 exits before session initialization is logged. The specific
+startup error is missing. See the [report review](CRASH_REPORT_20261020.md)
+for the successful/failed startup comparison and separate historical launcher
+errors. This documentation update requires no plugin reinstall.
+
 The supplied crash dump at 17:23:04 local time identifies `qar-stereokit-gui.exe`,
 thread `SK_StereoKitGUI`, exception `0xC0000005`, read address `0x4`, at
 `WebCore.dll +0x2DA26E0`. Reading the dump confirms `R14=4` at the faulting
