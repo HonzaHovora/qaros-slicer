@@ -2,7 +2,7 @@
 
 Pluginy pro **ParaView a 3D Slicer** a OpenGL přenos do QAROS.
 
-**Aktualizace r8: skutečná velikost 1:1, běžný start panelů a výběr headsetu pro QAROS 0.9.0-dev.2927+f291e404.** Zavři Slicer,
+**Aktualizace r8.1: velikost 1:1, 14″ panely a streaming do headsetu pro QAROS 0.9.0-dev.2927+f291e404.** Zavři Slicer,
 dej Fetch/Pull checkoutu s touto aktualizací a spusť `UPDATE-LIVE-PLUGIN.cmd`.
 Instalaci najde v registru Windows, obvykle
 `C:\Program Files\Quaternar\QAROS`, ověří SDK a zálohuje předchozí plugin.
@@ -14,8 +14,12 @@ vlastní polohy hlavy, společné řezové panely jsou viditelné na obou cílec
 Volby **Headset only** a **Visualizer only** umožňují přenášet jen do jednoho zařízení.
 R8 už při výběru cíle nečeká výhradně na stav `Running`; připojení vyjedná sender.
 Stav a log rozlišují nenalezený headset, chybu senderu a odeslané snímky.
-Funkčnost r8 na fyzickém headsetu ještě není potvrzená; [postup testu brýlí](docs/HEADSET_STREAMING.md).
+Uživatel potvrdil funkčnost r8 včetně brýlí; číselné porovnání výkonu zatím nemáme.
+[Postup testu brýlí](docs/HEADSET_STREAMING.md).
 **Panely se spouštějí automaticky; ruční testovací režim je odstraněný.**
+V r8.1 má každý nový 2D panel úhlopříčku **14″ (35,56 cm)**, s původním poměrem
+stran a nezávisle na měřítku modelu. Uživatel jej může v QAROSu zvětšit či zmenšit;
+plugin jeho rozměr za běhu znovu nenastavuje.
 Centrovaný model má výchozí velikost **1:1**. Posuvník **Model size (at Start)**
 mění velikost od **1/8× do 8×**, uprostřed je 1:1. Použije se při Startu,
 stejný násobek pro všechny objemy. Rozlišení renderu se nastavuje zvlášť.

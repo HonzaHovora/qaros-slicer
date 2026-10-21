@@ -1,12 +1,14 @@
-# Slicer Live r8 with installed QAROS dev.2927
+# Slicer Live r8.1 with installed QAROS dev.2927
 
 Supported installation: **0.9.0-dev.2927+f291e404**, normally
-`C:\Program Files\Quaternar\QAROS`. Package: **installed-hub-update-r8**,
+`C:\Program Files\Quaternar\QAROS`. Package: **installed-hub-update-r8.1**,
 host ABI 5, `multi_target=1`, `target_discovery=2`, `runtime_handle_only=1`.
+R8.1 changes the Python panel defaults and reuses the verified r8 native DLL;
+`Host build` in the native log therefore still reports r8.
 
 ## Install and start
 
-1. Close Slicer. Fetch/Pull the checkout containing r8, currently branch
+1. Close Slicer. Fetch/Pull the checkout containing r8.1, currently branch
    `codex/slicer-headset-streams` in draft PR #3.
 2. Run `UPDATE-LIVE-PLUGIN.cmd`. It reads the 64-bit machine registry key
    `HKLM\SOFTWARE\Quaternar\QAROS\InstallFolder`, falling back to
@@ -23,6 +25,16 @@ host ABI 5, `multi_target=1`, `target_discovery=2`, `runtime_handle_only=1`.
    **Headset only**. Click **Start live streaming** and approve Slicer in
    QAROS if prompted. Slice panels start automatically when enabled; the
    manual step-by-step test mode has been removed.
+
+## 2D panel size
+
+Each new slice panel starts with a **14-inch diagonal (35.56 cm)** while
+preserving its initial video aspect ratio: about **31.0 × 17.4 cm** at 16:9,
+or **25.1 × 25.1 cm** for a square. This replaces the previous 45 cm bounding
+square with a consistent screen diagonal. It is independent of the 3D model
+scale and video pixel resolution. The user can resize the panel in QAROS;
+the plugin only supplies size at creation and does not reset it during frames,
+hide/show or late headset joins. Recreating a panel applies the default again.
 
 ## Physical size and centering
 
@@ -57,8 +69,9 @@ same Hub session. `PEER_OBSERVED`, `TARGET_SELECTED`, `SENDER_CONNECT`,
 `WORKSPACE_FAILED`, and `FIRST_FRAME` distinguish discovery, negotiation and
 frame submission. Python rejects older DLLs for headset and combined modes.
 These changes address a restrictive selection policy and improve diagnosis;
-without a current hardware log, they do not establish the cause of the
-reported blank headset or prove it resolved. Follow the headset test guide.
+the user subsequently confirmed that r8 works, including headset streaming.
+That functional report does not identify the original cause or quantify a
+performance gain. Follow the headset test guide for further comparisons.
 
 ## Runtime lifecycle and panel limitations
 

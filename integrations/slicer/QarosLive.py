@@ -83,7 +83,9 @@ class QarosLiveWidget(ScriptedLoadableModuleWidget):
         form.addRow(self.matchView)
         self.slicePreviews = qt.QCheckBox("Show slice views as panels (preview only)")
         self.slicePreviews.checked = True
-        self.slicePreviews.toolTip = "Live images of visible slice views, including video/sequences. No remote interaction. Applied at Start."
+        self.slicePreviews.toolTip = "Live images of visible slice views, including video/sequences. " \
+            "Each panel starts with a 14-inch diagonal, independent of model size; resize it in QAROS. " \
+            "No remote slice interaction. Applied at Start."
         form.addRow(self.slicePreviews)
         self.sliceFps = qt.QComboBox()
         self.sliceFps.addItems(["5", "10", "15", "30"])

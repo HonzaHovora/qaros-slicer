@@ -9,7 +9,8 @@ import zipfile
 
 ROOT = Path(__file__).resolve().parents[1]
 SDK_SHA = 'a32cecd4137dd3b28e0d5e0c1642a066cbea976f81b90f1f31fbac4d0fba8d4a'
-BUILD = 'installed-hub-update-r8'
+BUILD = 'installed-hub-update-r8.1'
+NATIVE_BUILD = 'installed-hub-update-r8'
 
 
 def package(dll, output, compiler):
@@ -28,7 +29,7 @@ def package(dll, output, compiler):
         raise ValueError('DLL does not provide Visualizer + headset streaming')
     if b'"runtime_handle_only":1' not in native:
         raise ValueError('DLL does not provide runtime handle-only cleanup')
-    if ('Host build: ' + BUILD + ' (ABI 5)').encode() not in native:
+    if ('Host build: ' + NATIVE_BUILD + ' (ABI 5)').encode() not in native:
         raise ValueError('DLL does not match this Live update build')
     payload = {'Release/qarvtk-host.dll': native,
                'plugins/slicer/QarosLive.py': (ROOT / 'integrations/slicer/QarosLive.py').read_bytes(),
@@ -39,9 +40,10 @@ def package(dll, output, compiler):
     payload['plugins/slicer/QarosVTKLib/qarvtk_runtime.py'] = (ROOT / 'integrations/qarvtk_runtime.py').read_bytes()
     info = dict(sdk_version='0.9.0-dev.2927+f291e404', sdk_header_sha256=SDK_SHA,
                 host_abi=5, build=BUILD,
-                native_build=BUILD, compiler=compiler,
+                native_build=NATIVE_BUILD, compiler=compiler,
                 slice_previews_default=True, panel_probe=0, target_discovery=2,
                 default_model_scale=1.0, model_scale_range=[0.125, 8.0],
+                slice_panel_diagonal_inches=14.0,
                 multi_target=1, default_target_mode='both',
                 max_visualizer_targets=1, max_headset_targets=1,
                 runtime_teardown='handle_only',

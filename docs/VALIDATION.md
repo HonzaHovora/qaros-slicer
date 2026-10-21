@@ -1,5 +1,20 @@
 # Validation and next work
 
+## Installed Hub Live r8.1: 14-inch panels, 2026-10-21
+
+The user reported that r8 works, including headset streaming. This is a
+functional field report, not a measured performance or long-duration result.
+R8.1 replaces the 45 cm panel bounding square with a consistent 14-inch
+diagonal. Initial aspect ratio is preserved and model scale does not affect
+panel size. Size is set only at creation; QAROS user resizing is not overwritten.
+
+The existing three panel tests and Python compilation pass. A creation smoke
+check covers landscape, portrait, square and two pixel resolutions, verifying
+the 35.56 cm diagonal and that normal updates do not recreate the panel.
+ZIP payload/hash checks and isolated PowerShell install/backup/SDK rejection
+pass. The shipped native DLL is byte-identical to r8; no native code changed.
+The new default's appearance on the headset still needs a user check.
+
 ## Installed Hub Live r8: physical scale and target discovery, 2026-10-21
 
 The manual panel startup mode and native video gate are removed. Centering

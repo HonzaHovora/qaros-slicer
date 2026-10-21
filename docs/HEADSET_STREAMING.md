@@ -1,14 +1,15 @@
-# Slicer Live r8: Visualizer and HoloLens
+# Slicer Live r8.1: Visualizer and HoloLens
 
 Connecting HoloLens to QAROS does not itself stream Slicer content. Slicer
 creates a rendering sender for that target peer and each app volume.
 One Visualizer receiver and one headset can receive independent stereo views
-of the same workspaces. Slice panels are shared previews.
+of the same workspaces. Slice panels are shared previews. R8.1 gives each new
+panel a 14-inch diagonal, independent of model scale; resize it in QAROS as needed.
 
 ## Install and test
 
 1. Close Slicer. Fetch/Pull branch `codex/slicer-headset-streams` containing
-   r8 and run `UPDATE-LIVE-PLUGIN.cmd`. See the
+   r8.1 and run `UPDATE-LIVE-PLUGIN.cmd`. See the
    [installation guide](QAROS_DEV2927_UPDATE.md).
 2. Connect HoloLens in QAROS to the same Hub session used by Slicer. For the
    first test, choose **Headset only** and do not create a Visualizer receiver.
@@ -86,4 +87,6 @@ ABI 5 remains unchanged. Both headset and combined modes require metadata
 `multi_target=1` and `target_discovery=2`; the loader also requires r7's
 `runtime_handle_only=1` cleanup. Local selection, routing, cancellation,
 physical-placement and installer tests cannot replace a Windows/NVIDIA/
-HoloLens run. Actual output and performance in r8 remain unverified here.
+HoloLens run. On 2026-10-21 the user confirmed r8 works, including the headset.
+No measured performance comparison was supplied. R8.1 reuses the same native
+DLL and only changes the initial panel size; its appearance needs a user check.

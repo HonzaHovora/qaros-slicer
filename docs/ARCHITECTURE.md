@@ -178,7 +178,11 @@ and the source aspect ratio at creation. Later source resizing fits inside it
 with black padding. The first copy converts VTK's bottom-left origin to the
 SDK's top-left convention; upload does not flip it again and respects returned
 view flips. Up to eight named slice views occupy a three-column grid below the
-workspace; each fits a 45 cm square. Red, Yellow and Green come first.
+workspace. Since r8.1 each starts at a 14-inch (0.3556 m) diagonal, preserving
+its video aspect ratio, independent of model scale or capture resolution.
+Size is supplied only at creation so user resizing in QAROS persists during
+streaming. A recreated panel starts at the default again.
+Red, Yellow and Green come first.
 
 Layout-hidden slices hide their panels and resume with current content when
 visible again. Window/context replacement retires the old source. Up to 16

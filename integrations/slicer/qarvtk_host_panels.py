@@ -4,8 +4,11 @@ No Render(), screen capture, image readback or input forwarding. The latest
 rendered image replaces any older pending image; slow receivers cannot queue it.
 """
 from time import perf_counter
+from math import hypot
 import json
 import vtk
+
+PANEL_DIAGONAL_METERS = 14. * .0254
 
 
 def panel_size(width, height):
@@ -24,10 +27,11 @@ class SlicePreview:
         self.observer = None
         self.handle = None
         self.size = panel_size(*self.window.GetSize())
-        # Each panel fits a 45 cm square and preserves its initial aspect.
-        width_m = min(.45, .45 * self.size[0] / self.size[1])
+        # Physical screen size is independent of voxel/model scale and pixel
+        # resolution. Set it only at creation; QAROS owns later user resizing.
+        self.physical_size = tuple(PANEL_DIAGONAL_METERS * x / hypot(*self.size) for x in self.size)
         self.window.MakeCurrent()
-        self.handle = sink.panel_create("Slicer " + name, self.size, position, width_m)
+        self.handle = sink.panel_create("Slicer " + name, self.size, position, self.physical_size[0])
         self.observer = self.window.AddObserver(vtk.vtkCommand.EndEvent, self.rendered)
 
     def rendered(self, *unused):
@@ -136,7 +140,8 @@ class SlicePanels:
                                 y - self.workspace[1] * .5 - .06 - (slot // 3) * .5, z + .05)
                     self.sources[name] = SlicePreview(name, view, self.sink, position)
                     self.sink.diagnostics.event("PANEL_SOURCE " + json.dumps(dict(view=name,
-                        stream_size=self.sources[name].size, position=position, fps_limit=round(1/self.interval))))
+                        stream_size=self.sources[name].size, physical_size_m=self.sources[name].physical_size,
+                        position=position, fps_limit=round(1/self.interval))))
             except Exception as error:
                 self._error(name, error)
 
