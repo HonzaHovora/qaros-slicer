@@ -315,7 +315,8 @@ struct Sdk {
       qar_session_destroy(session); // Leave and tear down callback workers.
 #endif
     }
-    if (runtime) qar_runtime_destroy(runtime);
+    // Release this sender's handle without shutting down the shared runtime.
+    if (runtime) qar_runtime_handle_destroy(runtime);
     if (subscription) qar_cancel_token_handle_destroy(subscription);
     if (operation) qar_cancel_token_handle_destroy(operation);
     if (initialized) qar_library_destroy();

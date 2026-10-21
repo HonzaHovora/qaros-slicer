@@ -12,7 +12,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "integrations" / "s
 from qarvtk_host_runtime import (EXPECTED_SDK, SESSION_2540_SDK, LEGACY_SDK, Frame, HostTimingLog,
                                 HostTransport, library, default_sdk_path,
                                 installed_sdk_path, default_host_dll_path,
-                                validate_sdk, validate_host_sdk)
+                                validate_sdk, validate_host_sdk, validate_target_mode)
 
 
 class FakeDll:
@@ -46,6 +46,21 @@ class FakeDll:
 
 
 class HostRuntimeTest(unittest.TestCase):
+    def test_headset_modes_require_current_target_discovery(self):
+        for info in ({}, {"multi_target": 0}, {"multi_target": 1},
+                     {"multi_target": 1, "target_discovery": 2}):
+            dll = type("Dll", (), {"_qarvtk_info": info})()
+            for mode in ("visualizer", "quest"):
+                validate_target_mode(dll, mode)
+            for mode in ("both", "headset"):
+                if info.get("multi_target") == 1 and info.get("target_discovery") == 2:
+                    validate_target_mode(dll, mode)
+                else:
+                    with self.assertRaisesRegex(RuntimeError, "r8 host bridge"):
+                        validate_target_mode(dll, mode)
+            with self.assertRaises(ValueError):
+                validate_target_mode(dll, "unknown")
+
     def test_sdk_mismatch_is_rejected_before_native_creation(self):
         for compiled in (EXPECTED_SDK, SESSION_2540_SDK, LEGACY_SDK):
             dll = type("Dll", (), {"_qarvtk_info": {"header_sha256": compiled}})()
@@ -124,6 +139,19 @@ class HostRuntimeTest(unittest.TestCase):
                 with self.assertRaisesRegex(RuntimeError, "ABI or SDK fingerprint"):
                     library("old-host.dll")
 
+    def test_old_runtime_cleanup_is_rejected_even_with_current_abi(self):
+        # r6 has the correct frame ABI and multi-target support but still calls
+        # runtime_destroy at Stop. Do not let updated Python use that old DLL.
+        for capability in (None, 0):
+            info = dict(host_abi=5, header_sha256=EXPECTED_SDK, modern_api=0, multi_target=1,
+                        eye_size=104, frame_size=240, placement_size=112, volume_size=120)
+            if capability is not None:
+                info["runtime_handle_only"] = capability
+            old_dll = type("OldDll", (), {"qarvtk_host_info": staticmethod(lambda: json.dumps(info).encode())})()
+            with patch("qarvtk_host_runtime.c.CDLL", return_value=old_dll):
+                with self.assertRaisesRegex(RuntimeError, "shared-runtime cleanup fix"):
+                    library("old-cleanup-host.dll")
+
     def test_preview_failure_preserves_stereo_and_restores_context(self):
         with tempfile.TemporaryDirectory() as folder:
             events = []
@@ -186,6 +214,24 @@ class HostRuntimeTest(unittest.TestCase):
             self.assertEqual(t.dll.stops, 1)
             t.tick()
             self.assertFalse(t.running)
+
+    def test_two_targets_render_same_workspaces_with_their_own_eye_pose(self):
+        with tempfile.TemporaryDirectory() as folder:
+            rendered = []
+            def render(volume):
+                return lambda eyes, *a, **k: rendered.append((volume, eyes[0]["position"][0], eyes[1]["position"][0]))
+            t = self.transport(folder, render(0))
+            second = type("Host", (), dict(name="Second", last_timings={}, last_render_sizes=[(320, 240)]*2,
+                last_desktop_size=(800, 600), render=staticmethod(render(1)), close=staticmethod(lambda: None)))()
+            t.hosts.append(second)
+            for target, volume in ((0, 0), (1, 0), (1, 1), (0, 1)):
+                t.frame.volume_index = volume
+                for eye_index, eye in enumerate(t.frame.eyes):
+                    eye.position[0] = target * 10 + eye_index
+                t.tick()
+            self.assertEqual(rendered, [(0, 0, 1), (0, 10, 11), (1, 10, 11), (1, 0, 1)])
+            self.assertEqual(t.dll.finished, [1, 2, 3, 4])
+            t.request_stop()
 
     def test_nested_timer_cannot_overwrite_live_frame(self):
         with tempfile.TemporaryDirectory() as folder:

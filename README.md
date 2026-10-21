@@ -2,26 +2,42 @@
 
 Pluginy pro **ParaView a 3D Slicer** a OpenGL přenos do QAROS.
 
-**Aktualizace r5 pro instalovaný QAROS 0.9.0-dev.2927+f291e404.** Zavři Slicer,
-přepni checkout na `main`, dej Fetch/Pull a spusť `UPDATE-LIVE-PLUGIN.cmd`.
+**Aktualizace r8.1: velikost 1:1, 14″ panely a streaming do headsetu pro QAROS 0.9.0-dev.2927+f291e404.** Zavři Slicer,
+dej Fetch/Pull checkoutu s touto aktualizací a spusť `UPDATE-LIVE-PLUGIN.cmd`.
 Instalaci najde v registru Windows, obvykle
 `C:\Program Files\Quaternar\QAROS`, ověří SDK a zálohuje předchozí plugin.
-V novém QAROSu spusť jeden přijímač Visualiseru nebo připoj headset; potom ve
-Sliceru spusť **QAROS Live Renderer** a první připojení povol v okně QAROS Hubu.
-Samostatné objemy i panely fungují na cílovém PC s nově vytvořeným receiverem.
-**Panely jsou zapnuté a běžný start už nečeká na diagnostický dotaz po každém okně.**
-Volbu **Test panel startup step by step** nech pro běžné použití vypnutou.
+Ve Sliceru otevři **QAROS Live Renderer**, ponech **Stream to → Visualizer + headset**
+a první připojení povol v okně QAROS Hubu. V QAROSu spusť jeden přijímač
+Visualizeru a připoj HoloLens; brýle lze připojit i za běhu streamu.
+Každý objem má samostatný sender pro každý cíl. Brýle dostávají obraz podle
+vlastní polohy hlavy, společné řezové panely jsou viditelné na obou cílech.
+Volby **Headset only** a **Visualizer only** umožňují přenášet jen do jednoho zařízení.
+R8 už při výběru cíle nečeká výhradně na stav `Running`; připojení vyjedná sender.
+Stav a log rozlišují nenalezený headset, chybu senderu a odeslané snímky.
+Uživatel potvrdil funkčnost r8 včetně brýlí; číselné porovnání výkonu zatím nemáme.
+[Postup testu brýlí](docs/HEADSET_STREAMING.md).
+**Panely se spouštějí automaticky; ruční testovací režim je odstraněný.**
+V r8.1 má každý nový 2D panel úhlopříčku **14″ (35,56 cm)**, s původním poměrem
+stran a nezávisle na měřítku modelu. Uživatel jej může v QAROSu zvětšit či zmenšit;
+plugin jeho rozměr za běhu znovu nenastavuje.
+Centrovaný model má výchozí velikost **1:1**. Posuvník **Model size (at Start)**
+mění velikost od **1/8× do 8×**, uprostřed je 1:1. Použije se při Startu,
+stejný násobek pro všechny objemy. Rozlišení renderu se nastavuje zvlášť.
 V dev.2927 může po Stop/Start přestat fungovat obraz a obnovený receiver může
 vyvolat problém s panely. Ověřený postup obnovy je receiver odebrat a vytvořit nový.
-Příčina ve správě relace/receiveru QAROS se dál vyšetřuje; r5 odstraňuje
-diagnostické zpomalení, ne tuto chybu přijímače.
+**R7 opravuje chybu našeho ukončování:** plugin volal `qar_runtime_destroy`,
+které ukončuje runtime. Nyní uvolňuje pouze vlastní handle přes
+`qar_runtime_handle_destroy`; sdílený QAROS má zůstat běžet. Opraven je Live
+bridge i zdroj standalone senderu. Nový Python odmítne starou DLL bez této
+opravy. Pády GUI při Stop/Start zůstávají otevřeným problémem; r8 jejich opravu netvrdí.
 Starší dev.2540 má jiné API; samotné přepsání cesty v původním pluginu nestačí.
 [Postup a ověření](docs/QAROS_DEV2927_UPDATE.md).
 
 **Experiment: vlastní QAROS kostka pro každý objem.** Výchozí volba
 **Separate QAROS workspace for each volume** vytvoří samostatné pracovní objemy
 vedle sebe, každý s vlastním streamem, měřítkem a živým ROI. Sdílejí jednu relaci
-a jeden Visualizer/Quest. Vypnutím volby se přenáší celá scéna společně.
+a může je současně sledovat jeden Visualizer a jeden headset.
+Vypnutím volby se přenáší celá scéna společně.
 Nový aktualizátor výše obsahuje tuto podporu i DLL ABI 5 pro nové SDK.
 Původní verze používala SDK v `D:/install`. Popis a omezení jsou v
 [postupu pro více objemů](docs/MULTIPLE_VOLUMES.md).
@@ -37,8 +53,9 @@ Na cílové NVIDIA kartě je potřeba ověřit obraz a náklady dalších enkod�
 
 R16 pracovní prostor podle rozsahu scény zůstává zachovaný.
 Při Start se nastaví kvádr podle viditelných objektů, jejich natočení a měřítka.
-Zapnuté **Center and fit** vystředí scénu a nastaví nejdelší hranu na 65 cm;
-vypnuté zachová skutečnou velikost a polohu. Rozměry zobrazí řádek **Workspace**.
+Volba **Center model in workspace at Start** scénu vystředí bez změny velikosti.
+Při **Model size = 1×** zůstane 1 mm dat skutečně 1 mm; automatické zvětšení na
+65 cm je v r8 odstraněné. Rozměry zobrazí řádek **Workspace**.
 R15 maximalizace a návrat do původního rozložení jsou potvrzené na cílovém PC.
 Sekundová diagnostika výkonu zůstává; příčina celého poklesu FPS není určená.
 [Dosavadní zjištění a další měření](docs/FPS_DIAGNOSTICS.md).

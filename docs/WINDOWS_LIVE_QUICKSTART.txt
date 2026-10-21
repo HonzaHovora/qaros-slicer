@@ -1,11 +1,11 @@
-QAROS Live Renderer — přímý renderer Sliceru a náhledy řezů, r17
+QAROS Live Renderer — r8 pro instalované QAROS dev.2927
 
 AKTUALIZACE
 
-1. Zastav přenos a zavři Slicer, Visualizer i náhled kostky.
-2. GitHub Desktop → QAROS_VTK / main → Fetch origin → Pull origin.
-3. Spusť D:\QAROS_VTK\START-PREVIEW.cmd. Ověří a rozbalí r17 včetně nové DLL.
-4. Zavři náhled kostky a otevři Slicer.
+1. Zastav přenos a zavři Slicer.
+2. GitHub Desktop → QAROS_VTK / codex/slicer-headset-streams → Fetch origin → Pull origin.
+3. Spusť D:\QAROS_VTK\UPDATE-LIVE-PLUGIN.cmd. Ověří SDK a nainstaluje r8 včetně DLL.
+4. Otevři instalované QAROS a Slicer.
 5. Zvol QAROS → QAROS Live Renderer.
 
 Je to nový modul. Původní QAROS Streaming dál používá export r9.
@@ -15,12 +15,14 @@ PRVNÍ TEST
 
 1. Ve Sliceru otevři stejnou CT scénu, která fungovala v r9.
 2. Ve Volume Rendering zapni její zobrazení a použij VTK GPU / Composite.
-3. Nastav vzhled v prvním 3D pohledu Sliceru. Přenáší se celý tento pohled.
+3. Nastav vzhled v prvním 3D pohledu Sliceru. Výchozí volba Separate QAROS workspace
+   vytvoří samostatný prostor pro každý viditelný objem. Vypni ji pro celou scénu.
 4. Otevři QAROS Live Renderer a zkontroluj:
    Host bridge DLL: D:/QAROS_VTK/package/windows-start/Release/qarvtk-host.dll
-   QAROS SDK folder: D:/install
-   Viewer: visualizer
-   Center and fit into 65 cm workspace at Start: zapnuto
+   QAROS SDK folder: C:/Program Files/Quaternar/QAROS (nebo tvoje skutečná instalace)
+   Stream to: Visualizer only pro první test s jedním běžícím receiverem; Headset only pro brýle
+   Center model in workspace at Start: zapnuto
+   Model size (at Start): 1x (1:1); posuvník 1/8x až 8x, tlačítko 1:1 vrátí skutečnou velikost
    Use Slicer viewing direction at Start: zapnuto
    Show slice views as panels (preview only): zapnuto
    Slice preview FPS limit: 15; pro rychlejší video můžeš zvolit 30
@@ -68,10 +70,11 @@ PRACOVNÍ PROSTOR VE VISUALIZERU
 R16 při Start nastaví jeho šířku, výšku a hloubku podle bounds viditelných
 objektů v prvním 3D pohledu Sliceru. Započítá natočení i SDK app_scale.
 Pevná kostka 1,2 m je nahrazena kvádrem odpovídajícím scéně.
-Center and fit zapnuto: střed dat je uprostřed pracovního prostoru a nejdelší
-hrana má 65 cm. Ostatní rozměry zachovají poměr stran.
-Center and fit vypnuto: 1 mm dat zůstane 1 mm v prostoru a poloha dat se zachová;
-pracovní kvádr se umístí kolem dat. Řádek Workspace ukazuje šířku × výšku × hloubku
+Center model zapnuto: střed dat je uprostřed pracovního prostoru bez změny velikosti.
+V r8 je výchozí měřítko 1:1: 1 mm dat zůstane 1 mm v prostoru. Model size mění
+všechny objemy stejným násobkem od 1/8x do 8x; střed posuvníku je 1:1.
+Center model vypnuto zachová i polohu dat; pracovní kvádr se umístí kolem nich.
+Řádek Workspace ukazuje šířku × výšku × hloubku
 v centimetrech. Plochá scéna má minimální tloušťku 1 mm.
 Rozměry se zafixují při Start. Změny ROI/presetu se stále vykreslují živě,
 ale ořez ROI automaticky nezmenšuje bounds ani pracovní prostor.

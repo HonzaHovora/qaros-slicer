@@ -68,7 +68,7 @@ def projection(fov, near, far):
 class HostView:
     """One live Slicer 3D view; all methods run on its GUI/render thread."""
 
-    def __init__(self, view, fit=True, match_view=True, render_scale=1., volume=None, name="Slicer live renderer"):
+    def __init__(self, view, fit=True, match_view=True, render_scale=1., volume=None, name="Slicer live renderer", size_multiplier=1.):
         self.view = view
         self.window = view.renderWindow()
         self.context_creation_time = self.window.GetContextCreationTime()
@@ -80,6 +80,9 @@ class HostView:
             raise ValueError("The selected volume is not in the source Slicer view")
         if not math.isfinite(render_scale) or not .25 <= render_scale <= 1.:
             raise ValueError("Render scale must be between 25% and 100%")
+        if not math.isfinite(size_multiplier) or not .125 <= size_multiplier <= 8.:
+            raise ValueError("Model size must be between 1/8x and 8x")
+        self.size_multiplier = float(size_multiplier)
         self.render_scale = render_scale
         self.match_view = match_view
         self.last_render_sizes = []
@@ -115,10 +118,12 @@ class HostView:
         extent = max(extents)
         if not math.isfinite(extent) or extent <= 0:
             raise ValueError("The visible content has empty bounds")
-        self.app_scale = .65 / extent if fit else .001
+        # Centering never changes physical scale. All workspaces use the same
+        # explicit multiplier, preserving size relationships between datasets.
+        self.app_scale = .001 * self.size_multiplier
         scaled_center = tuple(self.app_scale * x for x in _rotate(self.app_orientation, self.center))
         self.app_position = tuple(-x for x in scaled_center)
-        # Without Center and fit, keep the previous physical scene position:
+        # Without centering, keep the previous physical scene position:
         # shift the workspace centre and compensate with app_pose, not actors.
         self.workspace_position = tuple(base + (0. if fit else offset)
                                         for base, offset in zip((0., 0., -1.5), scaled_center))

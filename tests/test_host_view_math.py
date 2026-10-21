@@ -58,13 +58,13 @@ def run():
         # Independent corner transform verifies all axes, including oblique
         # views where permuting the source dimensions would be incorrect.
         extents = np.ptp(corners @ basis, axis=0)
-        assert np.isclose(host.app_scale, .65 / extents.max())
+        assert host.app_scale == .001
         assert np.allclose(host.workspace_size, extents * host.app_scale)
         placed = corners @ rotation(host.app_orientation).T * host.app_scale + host.app_position
         assert np.allclose(placed.min(axis=0), -np.asarray(host.workspace_size)/2)
         assert np.allclose(placed.max(axis=0), np.asarray(host.workspace_size)/2)
         assert np.allclose(host.workspace_position, [0., 0., -1.5])
-        assert np.isclose(max(host.workspace_size), .65)
+        assert np.isclose(max(host.workspace_size), extents.max() * .001)
 
         physical = HostView(view, fit=False)
         assert physical.app_scale == .001
@@ -93,6 +93,20 @@ def run():
         marker = center + right*40
         assert screen(marker, (0, 0, .1))[0] > screen(marker, (0, 0, 0))[0], "+app_pose Z moves content away"
         assert actor.GetPosition() == (0., 0., 0.), "Placement changed the host actor"
+    # Every dataset retains its physical dimensions; magnification is explicit.
+    for factor in (.125, .5, 1., 2., 8.):
+        scaled = HostView(view, match_view=False, size_multiplier=factor)
+        assert np.allclose(scaled.workspace_size, np.array([.24, .32, .18]) * factor)
+        assert np.isclose(scaled.app_scale, .001 * factor)
+        placed_center = rotation(scaled.app_orientation) @ center * scaled.app_scale + scaled.app_position
+        assert np.allclose(placed_center, 0.), "Scaling must stay centered"
+        assert np.allclose(scaled.clip, [.05 / scaled.app_scale, 20 / scaled.app_scale])
+    for factor in (0., -.5, float("nan"), float("inf"), .01, 9.):
+        try:
+            HostView(view, size_multiplier=factor)
+            raise AssertionError("Invalid multiplier accepted")
+        except ValueError:
+            pass
     # Distant native coordinates must not inflate a centred workspace. A
     # hidden prop must not influence the working bounds either.
     actor.SetPosition(10000., -20000., 30000.)
@@ -103,15 +117,15 @@ def run():
     stray.SetPosition(-90000., 80000., 70000.)
     stray.VisibilityOff()
     renderer.AddActor(stray)
-    assert np.allclose(HostView(view, match_view=False).workspace_size, [.4875, .65, .365625])
+    assert np.allclose(HostView(view, match_view=False).workspace_size, [.24, .32, .18])
     stray.VisibilityOn()
     stray.UseBoundsOff()
-    assert np.allclose(HostView(view, match_view=False).workspace_size, [.4875, .65, .365625])
+    assert np.allclose(HostView(view, match_view=False).workspace_size, [.24, .32, .18])
     renderer.RemoveActor(stray)
     source.SetZLength(0.)
     flat = HostView(view, match_view=False)
     assert min(flat.workspace_size) == .001, "Flat scenes need a positive workspace thickness"
-    print("PASS: scene-derived XYZ workspace; fit/physical size and room position; oblique/distant/hidden/flat bounds; "
+    print("PASS: scene-derived XYZ workspace; 1:1 default, multiplicative size and room position; oblique/distant/hidden/flat bounds; "
           "SDK app_pose/app_scale, anterior/posterior/oblique alignment, stereo, head rotations, +X right and +Z toward viewer")
 
 

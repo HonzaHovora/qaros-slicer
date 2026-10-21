@@ -14,7 +14,7 @@ int main() {
   auto source = viewer; source.id.data[0] = 3; source.role = QAR_PEER_ROLE_SOURCE;
   auto internal = viewer; internal.id.data[0] = 4; internal.role = QAR_PEER_ROLE_INTERNAL;
   auto headset = viewer; headset.id.data[0] = 5; headset.category = QAR_DEVICE_CATEGORY_HEADSET;
-  for (auto state : {QAR_APP_STATE_UNKNOWN, QAR_APP_STATE_INITIALIZING, QAR_APP_STATE_SHUTTING_DOWN, QAR_APP_STATE_RETIRED}) {
+  for (auto state : {QAR_APP_STATE_SHUTTING_DOWN, QAR_APP_STATE_RETIRED}) {
     auto inactive = viewer; inactive.state = state;
     assert(!select_host_target({control, source, internal, inactive, headset}, QAR_DEVICE_CATEGORY_VISUALIZER));
   }
@@ -28,10 +28,35 @@ int main() {
   catch (const std::runtime_error&) { ambiguous = true; }
   assert(ambiguous);
   assert(select_host_target({viewer, viewer}, QAR_DEVICE_CATEGORY_VISUALIZER));
+  // A connected headset can arrive after the Visualizer is already running.
+  // Control/source peers and repeated updates must not consume a target slot.
+  HostTargetRegistry registry;
+  registry.seed(control);registry.seed(source);registry.seed(viewer);
+  assert(!select_host_target(registry.snapshot(),QAR_DEVICE_CATEGORY_HEADSET));
+  auto warming=headset;warming.state=QAR_APP_STATE_INITIALIZING;registry.record(warming);
+  assert(select_host_target(registry.snapshot(),QAR_DEVICE_CATEGORY_HEADSET));
+  auto unknown=headset;unknown.state=QAR_APP_STATE_UNKNOWN;registry.record(unknown);
+  assert(select_host_target(registry.snapshot(),QAR_DEVICE_CATEGORY_HEADSET));
+  assert(!select_host_target({viewer},QAR_DEVICE_CATEGORY_HEADSET)); // No Visualizer fallback.
+  assert(!select_host_target({headset},QAR_DEVICE_CATEGORY_VISUALIZER));
+  registry.record(headset);registry.record(headset);
+  assert(select_host_target(registry.snapshot(),QAR_DEVICE_CATEGORY_HEADSET)->id.data[0]==5);
+  assert(select_host_target(registry.snapshot(),QAR_DEVICE_CATEGORY_VISUALIZER)->id.data[0]==1);
+  // Subscription updates win a race with the initial snapshot. A retired peer
+  // must not be resurrected and mistaken for a live receiver at startup.
+  auto retired=headset;retired.state=QAR_APP_STATE_RETIRED;registry.record(retired);
+  registry.seed(headset);
+  assert(!select_host_target(registry.snapshot(),QAR_DEVICE_CATEGORY_HEADSET));
+  auto replacement=headset;replacement.id.data[0]=6;registry.record(replacement);
+  assert(select_host_target(registry.snapshot(),QAR_DEVICE_CATEGORY_HEADSET)->id.data[0]==6);
+  registry.record(headset);ambiguous=false;
+  try{select_host_target(registry.snapshot(),QAR_DEVICE_CATEGORY_HEADSET);}
+  catch(const std::runtime_error&){ambiguous=true;}
+  assert(ambiguous);
   const auto key = host_resource_name(viewer.id, "volume", 0);
   assert(key != host_resource_name(viewer.id, "volume", 1));
   assert(key != host_resource_name(other.id, "volume", 0));
   assert(key != host_resource_name(viewer.id, "panel", 0));
   for (unsigned char c : key) assert(c < 128);
-  std::cout << "PASS: only running targets; category filtering; ambiguity; isolated volume/panel identities\n";
+  std::cout << "PASS: announced targets including Unknown/Initializing; terminal peers excluded; category filtering; ambiguity; isolated volume/panel identities\n";
 }

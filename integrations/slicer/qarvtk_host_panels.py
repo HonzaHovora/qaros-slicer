@@ -4,8 +4,11 @@ No Render(), screen capture, image readback or input forwarding. The latest
 rendered image replaces any older pending image; slow receivers cannot queue it.
 """
 from time import perf_counter
+from math import hypot
 import json
 import vtk
+
+PANEL_DIAGONAL_METERS = 14. * .0254
 
 
 def panel_size(width, height):
@@ -24,10 +27,11 @@ class SlicePreview:
         self.observer = None
         self.handle = None
         self.size = panel_size(*self.window.GetSize())
-        # Each panel fits a 45 cm square and preserves its initial aspect.
-        width_m = min(.45, .45 * self.size[0] / self.size[1])
+        # Physical screen size is independent of voxel/model scale and pixel
+        # resolution. Set it only at creation; QAROS owns later user resizing.
+        self.physical_size = tuple(PANEL_DIAGONAL_METERS * x / hypot(*self.size) for x in self.size)
         self.window.MakeCurrent()
-        self.handle = sink.panel_create("Slicer " + name, self.size, position, width_m)
+        self.handle = sink.panel_create("Slicer " + name, self.size, position, self.physical_size[0])
         self.observer = self.window.AddObserver(vtk.vtkCommand.EndEvent, self.rendered)
 
     def rendered(self, *unused):
@@ -80,12 +84,11 @@ class SlicePreview:
 
 
 class SlicePanels:
-    def __init__(self, layout, sink, workspace_position, workspace_size, fps=15, clock=perf_counter, allowed_views=None):
+    def __init__(self, layout, sink, workspace_position, workspace_size, fps=15, clock=perf_counter):
         if fps not in (5, 10, 15, 30):
             raise ValueError("Slice preview FPS must be 5, 10, 15 or 30")
         self.layout, self.sink = layout, sink
         self.position, self.workspace = workspace_position, workspace_size
-        self.allowed_views = allowed_views
         self.interval, self.clock = 1. / fps, clock
         self.sources, self.errors, self.slots = {}, {}, {}
         self.next_refresh = self.next_status = 0.
@@ -106,8 +109,6 @@ class SlicePanels:
 
     def refresh(self):
         names = [str(name) for name in self.layout.sliceViewNames()]
-        if self.allowed_views is not None:
-            names = [name for name in names if name in self.allowed_views]
         names.sort(key=lambda name: (("Red", "Yellow", "Green").index(name)
                                     if name in ("Red", "Yellow", "Green") else 3, name))
         for name in list(self.sources):
@@ -139,7 +140,8 @@ class SlicePanels:
                                 y - self.workspace[1] * .5 - .06 - (slot // 3) * .5, z + .05)
                     self.sources[name] = SlicePreview(name, view, self.sink, position)
                     self.sink.diagnostics.event("PANEL_SOURCE " + json.dumps(dict(view=name,
-                        stream_size=self.sources[name].size, position=position, fps_limit=round(1/self.interval))))
+                        stream_size=self.sources[name].size, physical_size_m=self.sources[name].physical_size,
+                        position=position, fps_limit=round(1/self.interval))))
             except Exception as error:
                 self._error(name, error)
 
@@ -189,57 +191,3 @@ class SlicePanels:
         for source in self.sources.values():
             source.close()
         self.sources.clear()
-
-
-class PanelStartupProbe:
-    """User-paced separation of panel creation, first video, and extra panels.
-
-    The first step still stages Slicer's slice image locally, so sender creation
-    is identical to normal operation. The native gate prevents begin/show-frame
-    calls until step two. No arbitrary startup sleep or automatic recovery.
-    """
-    labels = ("1. Open Red panel without video", "2. Start Red panel video",
-              "3. Add the other slice panels", "Panel test complete")
-
-    def __init__(self, layout, sink, position, size, fps=15):
-        self.layout, self.sink = layout, sink
-        self.position, self.size, self.fps = position, size, fps
-        self.stage = 0
-        sink.panels_video_enabled(False)
-        sink.diagnostics.event("PANEL_PROBE waiting_for_manual_step volumes_only")
-
-    @property
-    def label(self):
-        return self.labels[self.stage]
-
-    def advance(self):
-        if not self.sink.running or self.sink.stopping:
-            raise RuntimeError("Start live streaming before advancing the panel test")
-        if self.stage == 0:
-            widget = self.layout.sliceWidget("Red")
-            if not widget or not widget.mrmlSliceNode().IsViewVisibleInLayout() or not widget.sliceView().isVisible():
-                raise RuntimeError("Open a Slicer layout with the Red slice view before this step")
-            self.sink.panels = SlicePanels(self.layout, self.sink, self.position, self.size,
-                                          fps=self.fps, allowed_views={"Red"})
-            event = "step=1 red_panel_no_video"
-        elif self.stage == 1:
-            if not self.sink.panels or "Red" not in self.sink.panels.sources:
-                raise RuntimeError("The Red panel source is not ready; check the panel status")
-            source = self.sink.panels.sources["Red"]
-            if not self.sink.panel_status(source.handle).startswith("Diagnostic: panel open"):
-                raise RuntimeError("Wait until the Red panel status says it is open with video not started")
-            self.sink.panels_video_enabled(True)
-            event = "step=2 red_panel_video"
-        elif self.stage == 2:
-            if not self.sink.panels:
-                raise RuntimeError("The panel source stopped; collect the logs")
-            source = self.sink.panels.sources.get("Red")
-            if not source or not self.sink.panel_status(source.handle).startswith("Live "):
-                raise RuntimeError("Wait for the Red panel's first video frame before adding other panels")
-            self.sink.panels.allowed_views = None
-            self.sink.panels.next_refresh = 0.
-            event = "step=3 all_panels_video"
-        else:
-            return
-        self.sink.diagnostics.event("PANEL_PROBE " + event)
-        self.stage += 1

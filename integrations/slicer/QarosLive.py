@@ -12,12 +12,12 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 if (Path(__file__).resolve().parent / "QarosVTKLib").is_dir():
     from QarosVTKLib.qarvtk_host_view import create_host_views, workspace_envelope
     from QarosVTKLib.qarvtk_host_runtime import HostTransport, default_sdk_path, default_host_dll_path
-    from QarosVTKLib.qarvtk_host_panels import SlicePanels, PanelStartupProbe
+    from QarosVTKLib.qarvtk_host_panels import SlicePanels
     from QarosVTKLib.qarvtk_runtime import user_directory
 else:
     from qarvtk_host_view import create_host_views, workspace_envelope
     from qarvtk_host_runtime import HostTransport, default_sdk_path, default_host_dll_path
-    from qarvtk_host_panels import SlicePanels, PanelStartupProbe
+    from qarvtk_host_panels import SlicePanels
     sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
     from qarvtk_runtime import user_directory
 
@@ -36,7 +36,6 @@ class QarosLiveWidget(ScriptedLoadableModuleWidget):
     def setup(self):
         super().setup()
         self.transport = None
-        self.panelProbe = None
         self.cleaned_up = False
         self.settings = qt.QSettings()
         form = qt.QFormLayout()
@@ -52,25 +51,42 @@ class QarosLiveWidget(ScriptedLoadableModuleWidget):
             "Each cube contains only its volume; surfaces and view decorations stay in Slicer. " \
             "Turn off to stream the whole scene in one workspace. Restart streaming after adding/removing a volume."
         form.addRow(self.separateVolumes)
-        self.fit = qt.QCheckBox("Center and fit into 65 cm workspace at Start")
+        self.fit = qt.QCheckBox("Center model in workspace at Start")
         self.fit.checked = True
-        self.fit.toolTip = "At Start, center the scene and fit the workspace's longest edge to 65 cm. " \
-                           "Off keeps physical size (1 mm = 1 mm). Separate workspaces are arranged side by side."
+        self.fit.toolTip = "Center the data without changing their physical size. The workspace fits the data. " \
+                           "Separate workspaces are arranged side by side."
         form.addRow(self.fit)
+        self.modelScale = qt.QSlider(qt.Qt.Horizontal)
+        self.modelScale.minimum = -300
+        self.modelScale.maximum = 300
+        self.modelScale.singleStep = 25
+        self.modelScale.pageStep = 100
+        self.modelScale.tickInterval = 100
+        self.modelScale.tickPosition = qt.QSlider.TicksBelow
+        self.modelScale.value = 0
+        self.modelScale.toolTip = "Applied at Start. Middle = actual size: 1 Slicer mm = 1 physical mm. " \
+            "Each large tick halves or doubles the size (1/8x to 8x). Same factor for every volume."
+        self.modelScaleValue = qt.QLabel("1x (1:1)")
+        self.resetScale = qt.QPushButton("1:1")
+        self.resetScale.toolTip = "Restore actual physical size"
+        self.resetScale.connect("clicked()", lambda: self.modelScale.setValue(0))
+        self.modelScale.connect("valueChanged(int)", self.scale_changed)
+        scaleRow = qt.QHBoxLayout()
+        scaleRow.addWidget(qt.QLabel("1/8x"))
+        scaleRow.addWidget(self.modelScale)
+        scaleRow.addWidget(qt.QLabel("8x"))
+        scaleRow.addWidget(self.modelScaleValue)
+        scaleRow.addWidget(self.resetScale)
+        form.addRow("Model size (at Start)", scaleRow)
         self.matchView = qt.QCheckBox("Use Slicer viewing direction at Start")
         self.matchView.checked = True
         form.addRow(self.matchView)
         self.slicePreviews = qt.QCheckBox("Show slice views as panels (preview only)")
         self.slicePreviews.checked = True
-        self.slicePreviews.toolTip = "Live images of visible slice views, including video/sequences. No remote interaction. Applied at Start."
+        self.slicePreviews.toolTip = "Live images of visible slice views, including video/sequences. " \
+            "Each panel starts with a 14-inch diagonal, independent of model size; resize it in QAROS. " \
+            "No remote slice interaction. Applied at Start."
         form.addRow(self.slicePreviews)
-        self.panelProbeMode = qt.QCheckBox("Test panel startup step by step")
-        self.panelProbeMode.toolTip = "Diagnostic mode only. Starts the volumes first, then opens one panel without video and inspects its registration. The inspection can take a few seconds. Leave off for normal startup."
-        form.addRow(self.panelProbeMode)
-        self.panelProbeButton = qt.QPushButton(PanelStartupProbe.labels[0])
-        self.panelProbeButton.enabled = False
-        self.panelProbeButton.connect("clicked()", self.advance_panel_probe)
-        form.addRow(self.panelProbeButton)
         self.sliceFps = qt.QComboBox()
         self.sliceFps.addItems(["5", "10", "15", "30"])
         self.sliceFps.currentIndex = 2
@@ -100,9 +116,14 @@ class QarosLiveWidget(ScriptedLoadableModuleWidget):
             "QAROS_LIVE/Sdk", self.settings.value("QAROS_VTK/Sdk", "")))
         form.addRow("QAROS SDK folder", self.sdk)
         self.target = qt.QComboBox()
-        self.target.addItems(["visualizer", "headset"])
-        form.addRow("Viewer", self.target)
-        self.hubHint = qt.QLabel("Installed QAROS: start one receiver in Visualizer or connect a headset. Allow Slicer in QAROS when prompted. In dev.2927, if the receiver stops displaying after Stop/Start, remove it and create a new one.")
+        self.targetModes = ("both", "visualizer", "headset")
+        self.target.addItems(["Visualizer + headset", "Visualizer only", "Headset only"])
+        saved_target = str(self.settings.value("QAROS_LIVE/Target", "both"))
+        self.target.currentIndex = self.targetModes.index(saved_target) if saved_target in self.targetModes else 0
+        self.target.toolTip = "Supports one Visualizer receiver and one headset. Each has its own stereo view. " \
+            "Connect the headset through QAROS; it can join after streaming starts. Applied at Start."
+        form.addRow("Stream to", self.target)
+        self.hubHint = qt.QLabel("Connect HoloLens in QAROS and allow Slicer when prompted. Visualizer + headset sends the volumes and slice panels to both; either target may join later. For a replaced receiver, stop and restart streaming. In dev.2927, a stuck Visualizer receiver may need to be removed and created again.")
         self.hubHint.wordWrap = True
         form.addRow(self.hubHint)
         self.startButton = qt.QPushButton("Start live streaming")
@@ -153,24 +174,21 @@ class QarosLiveWidget(ScriptedLoadableModuleWidget):
             hosts = create_host_views(view, separate=self.separateVolumes.checked,
                 names=lambda actor: next((name for prop, name in names if prop == actor), None),
                 fit=self.fit.checked, match_view=self.matchView.checked,
+                size_multiplier=2. ** (self.modelScale.value / 100.),
                 render_scale=(1., .75, .5)[self.renderScale.currentIndex])
             folder = user_directory() / "live-logs" / datetime.now().strftime("%Y%m%d-%H%M%S-%f")
+            target_mode = self.targetModes[self.target.currentIndex]
             self.transport = HostTransport(self.dll.currentPath, self.sdk.currentPath,
-                                            self.target.currentText, folder, hosts)
+                                            target_mode, folder, hosts)
             created_transport = self.transport
-            self.panelProbe = None
-            self.panelProbeButton.text = PanelStartupProbe.labels[0]
             if self.slicePreviews.checked:
                 position, size = workspace_envelope(hosts)
-                if self.panelProbeMode.checked:
-                    self.panelProbe = PanelStartupProbe(lm, self.transport, position, size, fps=int(self.sliceFps.currentText))
-                    self.transport.panel_status_text = "Panel test: wait for both volumes, then open the Red panel with the step button."
-                else:
-                    self.transport.panels = SlicePanels(lm, self.transport, position, size, fps=int(self.sliceFps.currentText))
+                self.transport.panels = SlicePanels(lm, self.transport, position, size, fps=int(self.sliceFps.currentText))
             self.workspaceStatus.text = "\n".join(host.name + ": " + " × ".join(f"{x * 100:.1f}" for x in host.workspace_size)
                                                  + " cm" for host in hosts)
             self.settings.setValue("QAROS_LIVE/Dll", self.dll.currentPath)
             self.settings.setValue("QAROS_LIVE/Sdk", self.sdk.currentPath)
+            self.settings.setValue("QAROS_LIVE/Target", target_mode)
             self.logPath.text = str(folder)
             self.startButton.enabled = False
             self.stopButton.enabled = True
@@ -188,15 +206,9 @@ class QarosLiveWidget(ScriptedLoadableModuleWidget):
         if self.transport:
             self.transport.request_stop("Stop button")
 
-    def advance_panel_probe(self):
-        if not self.panelProbe:
-            return
-        try:
-            self.panelProbe.advance()
-            self.panelProbeButton.text = self.panelProbe.label
-        except Exception as error:
-            self.transport.diagnostics.event("PANEL_PROBE_ERROR " + str(error))
-            slicer.util.errorDisplay(str(error))
+    def scale_changed(self, value):
+        factor = 2. ** (value / 100.)
+        self.modelScaleValue.text = "1x (1:1)" if value == 0 else f"{factor:.3g}x"
 
     def scene_closing(self, *args):
         if self.transport:
@@ -237,9 +249,8 @@ class QarosLiveWidget(ScriptedLoadableModuleWidget):
             if not self.cleaned_up:
                 self.startButton.enabled = not self.transport.running
                 self.stopButton.enabled = self.transport.running and not self.transport.stopping
-                self.panelProbeButton.enabled = bool(self.panelProbe and self.panelProbe.stage < 3
-                    and self.transport.running and not self.transport.stopping)
-                for control in (self.separateVolumes, self.fit, self.matchView, self.renderScale, self.slicePreviews, self.sliceFps, self.panelProbeMode):
+                for control in (self.target, self.separateVolumes, self.fit, self.modelScale, self.resetScale,
+                                self.matchView, self.renderScale, self.slicePreviews, self.sliceFps):
                     control.enabled = not self.transport.running
         if self.cleaned_up and (not self.transport or not self.transport.running):
             self.timer.stop()

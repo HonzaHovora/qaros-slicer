@@ -4,6 +4,7 @@
 #include <memory>
 #include <string>
 #include <cstdint>
+#include <vector>
 
 namespace qarvtk {
 struct HostPanel;
@@ -20,10 +21,10 @@ public:
   int capture(HostPanel*,unsigned texture,unsigned width,unsigned height);
   void visible(HostPanel*,bool);
   void close(HostPanel*);
-  // Diagnostic gate: panels/senders remain alive; no frame cycle is begun.
-  void video_enabled(bool);
   std::string status(HostPanel*);
-  void start(QarSession*,const QarPeerId&);
+  void start(QarSession*,const std::vector<QarPeerId>&);
+  // Thread-safe, additive audience: a late headset sees the existing panels.
+  void add_peers(const std::vector<QarPeerId>&);
   void request_stop();
   void join(); // SDK-owning worker calls this before session destruction.
 };
