@@ -105,7 +105,9 @@ def run():
     for volume in volumes:
         volume.GetMapper().SetAutoAdjustSampleDistances(False)
         volume.GetMapper().SetImageSampleDistance(1.)
-    eyes = [sdk_eye(host, (x, 0., 1.2)) for x in (-.032, .032)]
+    # Physical-size 62 mm fixtures need a closer camera to keep the pixel/depth
+    # oracles well sampled at this small test resolution.
+    eyes = [sdk_eye(host, (x, 0., .5)) for x in (-.032, .032)]
 
     class Oracle:
         def __init__(self, mapper=None):
@@ -278,9 +280,13 @@ def run():
     for h in independent:
         selected = h.selected_volume
         assert h.scene_bounds == selected.GetBounds()
-        assert np.isclose(max(h.workspace_size), .65)
+        bounds = selected.GetBounds()
+        # Default orientation maps RAS XYZ to workspace XZY. No per-volume fit.
+        assert h.app_scale == .001
+        assert np.allclose(h.workspace_size, np.array([
+            bounds[1]-bounds[0], bounds[5]-bounds[4], bounds[3]-bounds[2]]) * .001)
         assert h.diagnostic_state()["volume_count"] == 1
-        requests = [sdk_eye(h, (x, 0., 1.2)) for x in (-.032, .032)]
+        requests = [sdk_eye(h, (x, 0., .5)) for x in (-.032, .032)]
         # Independent native color and VTK RenderToImage depth with explicit
         # manual visibility, not the isolation context under test.
         saved = [(p, p.GetVisibility()) for p in (surface, *volumes)]

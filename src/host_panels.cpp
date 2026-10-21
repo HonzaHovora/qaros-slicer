@@ -101,7 +101,7 @@ struct PanelStream {
     if(created)qar_gui_panels_close_panel(session,&id);
     if(sender)qar_video_sender_handle_destroy(sender);
   }
-  void open(const std::vector<QarPeerId>& peers,bool inspect){
+  void open(const std::vector<QarPeerId>& peers){
     if(peers.empty())throw std::invalid_argument("A slice panel needs a rendering target");
     log("PANEL_SENDER_CREATE name="+panel.name+" size="+std::to_string(panel.width)+"x"+std::to_string(panel.height)+" api=OpenGL views=1 eye=none format=RGBA8");
     auto gl=panel.callbacks->parameters();
@@ -135,9 +135,6 @@ struct PanelStream {
     audience=peers;
     for(const auto& peer:audience)log("PANEL_TARGET name="+panel.name+" peer="+id_text(peer));
     log("PANEL_CREATED name="+panel.name+" id="+id_text(id));
-    // Registry inspection is synchronous and can wait for the query timeout.
-    // Keep it in the explicit manual probe, never in ordinary panel startup.
-    if(inspect)for(const auto& peer:peers)inspect_registration(peer);
     panel.status("Waiting for panel receiver");
   }
   void add_peers(const std::vector<QarPeerId>& peers){
@@ -150,51 +147,13 @@ struct PanelStream {
     for(const auto* peer:additions){audience.push_back(*peer);log("PANEL_TARGET_ADDED name="+panel.name+" peer="+id_text(*peer));}
     last_generation=0; // Send a static slice again for the new receiver.
   }
-  void inspect_registration(const QarPeerId& peer){
-    // Inspect what the SDK actually registered, not just the init we passed.
-    // This is a diagnostic snapshot; a delayed registry entry is not a failure.
-    std::vector<QarGuiPanel*> handles(256,nullptr);
-    struct Cleanup {
-      std::vector<QarGuiPanel*>& handles;
-      ~Cleanup(){for(auto* h:handles)if(h)qar_gui_panel_handle_destroy(h);}
-    } cleanup{handles};
-    try{
-      size_t count{};
-      checked(qar_query_gui_panels(session,handles.data(),handles.size(),&count),"inspect registered panels");
-      if(count>handles.size())throw std::runtime_error("Panel query exceeded its output buffer");
-      for(size_t i=0;i<count;++i){
-        QarGuiPanelId actual{};
-        checked(qar_gui_panel_get_id(handles[i],&actual),"inspect panel ID");
-        if(!qar_gui_panel_id_equals(&actual,&id))continue;
-        QarGuiPanelContentType type{};QarGuiPanelState state{};QarGuiPanelSize size{};
-        checked(qar_gui_panel_get_content_type(handles[i],&type),"inspect panel content type");
-        checked(qar_gui_panel_get_state(handles[i],&state),"inspect panel state");
-        checked(qar_gui_panel_get_size(handles[i],&size),"inspect panel size");
-        std::string content="type="+std::to_string(int(type));
-        if(type==QAR_GUI_PANEL_CONTENT_TYPE_STREAM_ID){
-          QarStreamId actual_stream{};
-          checked(qar_gui_panel_get_content_stream_id(handles[i],&actual_stream),"inspect panel stream ID");
-          content+=" stream="+id_text(actual_stream)+" stream_matches="+(id_text(actual_stream)==id_text(stream_id)?"yes":"NO");
-        }else content+=" UNEXPECTED_WEBSITE_CONTENT";
-        QarPeerId peers[32]{};size_t visible_count{};
-        checked(qar_gui_panel_get_visible_to_peers(handles[i],peers,32,&visible_count),"inspect panel audience");
-        bool target=false;for(size_t j=0;j<std::min(visible_count,size_t(32));++j)target|=id_text(peers[j])==id_text(peer);
-        log("PANEL_REGISTERED name="+panel.name+" "+content+" state="+std::to_string(int(state))+
-            " size_m="+std::to_string(size.width_meters)+"x"+std::to_string(size.height_meters)+
-            " visible_to="+std::to_string(visible_count)+" target_present="+(target?"yes":"no"));
-        return;
-      }
-      log("PANEL_REGISTRATION_PENDING name="+panel.name+" id="+id_text(id));
-    }catch(const std::exception& e){log("PANEL_INSPECT_ERROR name="+panel.name+" error="+e.what());}
-  }
-  void tick(bool video_enabled){
+  void tick(){
     const bool visible=panel.visible.load();
     if(visible!=shown){
       checked(qar_gui_panels_set_state(session,&id,visible?QAR_GUI_PANEL_STATE_VISIBLE:QAR_GUI_PANEL_STATE_HIDDEN),"set panel visibility");
       shown=visible;if(visible)last_generation=0;
     }
     if(!visible)return;
-    if(!video_enabled){panel.status("Diagnostic: panel open, video not started");return;}
     // The latest staged image replaces older video frames. A slow receiver
     // never builds a queue. Refresh a static image every 2 s for reconnects.
     const auto generation=panel.generation.load();
@@ -233,7 +192,6 @@ struct HostPanels::Impl {
   std::vector<QarPeerId> peers;
   std::thread worker;
   std::atomic<bool> stopping{false};
-  std::atomic<bool> video_enabled{true};
   void gui()const{if(GetCurrentThreadId()!=owner)throw std::runtime_error("Panel API must run on the Slicer GUI thread");}
   HostPanel& get(HostPanel* p){
     gui();std::lock_guard<std::mutex> lock(list_mutex);
@@ -253,13 +211,13 @@ struct HostPanels::Impl {
           if(p.closed||p.failed){streams[i].reset();continue;}
           try{
             if(streams[i])streams[i]->add_peers(audience);
-            if(!p.generation||!p.visible){if(streams[i])streams[i]->tick(video_enabled.load());continue;}
+            if(!p.generation||!p.visible){if(streams[i])streams[i]->tick();continue;}
             if(!streams[i]){
               auto next=std::make_unique<PanelStream>(p,session,log);
-              next->open(audience,!video_enabled.load());streams[i]=std::move(next);
+              next->open(audience);streams[i]=std::move(next);
               log("PANEL_OPEN "+p.name+" "+std::to_string(p.width)+"x"+std::to_string(p.height));
             }
-            streams[i]->tick(video_enabled.load());
+            streams[i]->tick();
           }catch(const std::exception& e){p.failed=true;p.status(std::string("Error: ")+e.what());streams[i].reset();log("PANEL_ERROR "+p.name+": "+e.what());}
         }
         std::this_thread::sleep_for(std::chrono::milliseconds(5));
@@ -299,10 +257,6 @@ int HostPanels::capture(HostPanel* handle,unsigned texture,unsigned w,unsigned h
 }
 void HostPanels::visible(HostPanel* p,bool visible){impl_->get(p).visible=visible;}
 void HostPanels::close(HostPanel* p){impl_->get(p).closed=true;}
-void HostPanels::video_enabled(bool value){
-  impl_->gui();impl_->video_enabled=value;
-  impl_->log(std::string("PANEL_VIDEO_GATE enabled=")+(value?"yes":"no"));
-}
 std::string HostPanels::status(HostPanel* handle){auto& p=impl_->get(handle);std::lock_guard<std::mutex> lock(p.status_mutex);return p.state;}
 void HostPanels::start(QarSession* session,const std::vector<QarPeerId>& peers){
   if(impl_->worker.joinable())throw std::runtime_error("Panel worker already started");

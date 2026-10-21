@@ -10,7 +10,7 @@ from qarvtk_host_runtime import Placement, Volume, Frame, EXPECTED_SDK
 dll = c.CDLL(sys.argv[1])
 dll.qarvtk_host_info.restype = c.c_char_p
 info = json.loads(dll.qarvtk_host_info())
-assert info == dict(host_abi=5, modern_api=0, panel_probe=1, runtime_handle_only=1,
+assert info == dict(host_abi=5, modern_api=0, panel_probe=0, target_discovery=2, runtime_handle_only=1,
     multi_target=int(sys.argv[2] == EXPECTED_SDK),
     header_sha256=sys.argv[2],
     eye_size=104, frame_size=240, placement_size=112, volume_size=120)
@@ -45,8 +45,5 @@ panel = c.c_void_p()
 error = c.create_string_buffer(1024)
 assert dll.qarvtk_host_panel_create(None, b"Red", 320, 240, 0., 0., -1.5, .45, c.byref(panel), error, len(error)) == -1
 assert not panel.value and b"No active panel transport" in error.value
-dll.qarvtk_host_panels_video_enabled.argtypes = [c.c_void_p, c.c_uint32]
-dll.qarvtk_host_panels_video_enabled.restype = c.c_int
-assert dll.qarvtk_host_panels_video_enabled(None, 0) == -1
 print("PASS: VTK-free DLL loads; ABI metadata; missing host context fails cleanly and can be retried")
 

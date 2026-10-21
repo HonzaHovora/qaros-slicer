@@ -1,5 +1,34 @@
 # Validation and next work
 
+## Installed Hub Live r8: physical scale and target discovery, 2026-10-21
+
+The manual panel startup mode and native video gate are removed. Centering
+now preserves the default 1 mm = 1 mm scale; an explicit 1/8x–8x multiplier
+applies equally to all workspaces at Start. The workspace fits rotated bounds.
+Headset/combined modes require the current DLL's target-discovery capability.
+The pinned SDK's Unknown/Initializing targets can negotiate a sender instead
+of waiting exclusively for Running; terminal states remain excluded.
+
+Local verification:
+
+- 11/11 CTest suites pass, including target discovery, independent target
+  startup/frame routing, cancellation and Python transport lifecycle tests.
+- 3/3 remaining panel scheduler tests pass; obsolete manual-probe tests removed.
+- VTK 9.3.1 placement math passes: 1:1 in centered/uncentered and oblique views,
+  physical multipliers, clipping distances, invalid scale values and flat bounds.
+- Windows x64 cross-builds pass against all three pinned SDK headers. The Live
+  package uses the unchanged dev.2927 header; no newer SDK functions are loaded.
+- ZIP CRC and payload hashes plus the isolated PowerShell installation,
+  backup and SDK-mismatch rejection checks pass. Python sources compile.
+
+Full Slicer/Qt rendering was not run in this environment. The attempted EGL
+multi-volume smoke test could not start because its VTK 9.3.1 build lacks
+`vtkEGLRenderWindow`. Native Windows DLL loading, encoder output, HoloLens
+display/physical size and comparative performance remain unverified here.
+No current log establishes the cause of the user's blank headset. The target
+selection adjustment and new discovery messages are not proof of resolution.
+Remaining QAROS GUI crashes on Stop/Start are not claimed fixed by r8.
+
 ## Live r17: read-only slice/video GUI panels, 2026-10-15
 
 Visible Slicer slice windows feed their completed GPU color textures to separate

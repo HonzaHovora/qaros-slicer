@@ -46,16 +46,35 @@ public:
   }
 };
 
-// A Visualizer's control peer is not a receiver. Never negotiate frames with
-// a source, infrastructure, an initializing target, or an arbitrary first peer.
+// The pinned dev.2927 header predates peer presence. AppState is not a
+// readiness handshake: a target may join before publishing Running. Let
+// sender negotiation wait for its receiver, but exclude peers leaving/gone.
+inline bool host_target_available(const HostTarget& peer) {
+  return peer.role == QAR_PEER_ROLE_TARGET &&
+    (peer.state == QAR_APP_STATE_UNKNOWN || peer.state == QAR_APP_STATE_INITIALIZING ||
+     peer.state == QAR_APP_STATE_RUNNING);
+}
+
+inline const char* host_peer_state_name(QarAppState state) {
+  switch(state){
+    case QAR_APP_STATE_UNKNOWN:return "Unknown";
+    case QAR_APP_STATE_INITIALIZING:return "Initializing";
+    case QAR_APP_STATE_RUNNING:return "Running";
+    case QAR_APP_STATE_SHUTTING_DOWN:return "ShuttingDown";
+    case QAR_APP_STATE_RETIRED:return "Retired";
+    default:return "Unsupported";
+  }
+}
+
+// A Visualizer's control peer is not a receiver. Only the requested category
+// of target is eligible; headset-only must never fall back to a Visualizer.
 inline std::optional<HostTarget> select_host_target(const std::vector<HostTarget>& peers,
                                                    QarDeviceCategory category) {
   std::optional<HostTarget> selected;
   for (const auto& peer : peers) {
-    if (peer.role != QAR_PEER_ROLE_TARGET || peer.state != QAR_APP_STATE_RUNNING ||
-        peer.category != category) continue;
+    if (!host_target_available(peer) || peer.category != category) continue;
     if (selected && std::memcmp(selected->id.data, peer.id.data, sizeof(peer.id.data)) != 0)
-      throw std::runtime_error("Several matching QAROS receivers are running. Keep one receiver of the selected type running, then restart streaming.");
+      throw std::runtime_error("Several matching QAROS receivers are available. Keep one receiver of the selected type connected, then restart streaming.");
     selected = peer;
   }
   return selected;

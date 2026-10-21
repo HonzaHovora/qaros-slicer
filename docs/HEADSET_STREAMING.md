@@ -1,85 +1,89 @@
-# Slicer Live r7: Visualizer and HoloLens
+# Slicer Live r8: Visualizer and HoloLens
 
-R6 adds simultaneous streaming to one running Visualizer receiver and one
-headset in the installed QAROS dev.2927 Hub. Connecting HoloLens in QAROS
-starts its target application; Slicer must also create a rendering sender
-for that target and each app volume before it can receive scene content.
+Connecting HoloLens to QAROS does not itself stream Slicer content. Slicer
+creates a rendering sender for that target peer and each app volume.
+One Visualizer receiver and one headset can receive independent stereo views
+of the same workspaces. Slice panels are shared previews.
 
-## Install and first test
+## Install and test
 
-1. Close Slicer. Fetch/Pull the checkout containing r7 and run
-   `UPDATE-LIVE-PLUGIN.cmd`. The updater checks the SDK, verifies the package,
-   and backs up the previous plugin.
-2. Open QAROS and connect HoloLens using its existing connection workflow.
-   For a combined test also start one Visualizer receiver. A control window
-   without a receiver does not count as a rendering target.
-3. Open Slicer with the two-volume scene. In **QAROS Live Renderer**, leave
-   **Separate QAROS workspace for each volume** and slice previews enabled.
-   Leave **Test panel startup step by step** unchecked.
-4. Select **Stream to → Visualizer + headset**, then **Start live streaming**.
-   Approve Slicer in QAROS if prompted. The status should list Visualizer and
-   Headset separately, with two connected volumes and increasing frame counts
-   for each. Two volumes and two targets create four rendering senders.
-5. Check both volumes and the visible slice panels in HoloLens. Move your
-   head: the perspective in the glasses must follow your head independently
-   of the Visualizer camera. Change a transfer function or ROI in Slicer and
-   check that both targets receive the change.
-6. Repeat with **Headset only**, without a Visualizer receiver. Then test
-   joining late: start **Visualizer + headset** with just the Visualizer
-   receiver, and connect HoloLens after it is displaying the scene. The
-   existing Visualizer frames should continue while the headset connects;
-   the headset should receive the same volumes and existing panels.
-7. Press Stop in Slicer. QAROS and both target applications must stay running.
-   Start streaming again with the same receivers, without removing/recreating
-   them, and verify volumes and panels. Repeat three times. R7 fixes the
-   incorrect runtime shutdown call; this Stop/Start test is still required.
+1. Close Slicer. Fetch/Pull branch `codex/slicer-headset-streams` containing
+   r8 and run `UPDATE-LIVE-PLUGIN.cmd`. See the
+   [installation guide](QAROS_DEV2927_UPDATE.md).
+2. Connect HoloLens in QAROS to the same Hub session used by Slicer. For the
+   first test, choose **Headset only** and do not create a Visualizer receiver.
+3. Open the two-volume scene in Slicer. Leave **Separate QAROS workspace for
+   each volume**, centering and slice previews enabled. Set **Model size** to
+   **1x (1:1)**. Click **Start live streaming**, approving Slicer if requested.
+4. The status should show **Headset**, two connected volumes and an increasing
+   frame count. Two volumes in this mode create two senders. There should be
+   no Visualizer target or Visualizer rendering sender in the log.
+5. Check both volumes and visible slice panels in HoloLens. Move your head:
+   perspective must follow it. Change a transfer function or ROI in Slicer;
+   the change should appear in the glasses. Check the physical dimensions
+   against the **Workspace** readout and the source data's millimetre spacing.
+6. Stop, change Model size to 0.5x or 2x and Start. Dimensions should halve or
+   double; 1:1 resets the slider. Centering alone must never change size.
+7. Compare **Headset only** with **Visualizer + headset**, using the same
+   scene, scale, panel settings and render resolution. The combined mode
+   creates four senders for two volumes. Compare measured FPS/timings; no
+   speedup is assumed before measurement. The ordinary Slicer desktop view
+   still exists in both modes.
+8. Test a late headset: start combined mode with just the Visualizer receiver,
+   then connect HoloLens. Visualizer frames should continue during headset
+   negotiation, and existing panels should become visible in the glasses.
+9. Repeat Stop/Start three times with the same receivers. QAROS and target
+   applications must remain running. A GUI crash or failed restart remains
+   a separate open issue; r8 does not claim to resolve it.
 
-## Scope and behavior
+## If the headset stays blank
 
-- There is one slot per device category, not per headset model. HoloLens and
-  other headsets must advertise the SDK's `TARGET`, `RUNNING`, `HEADSET`
-  attributes. Control, source and internal peers are excluded.
-- If multiple running receivers match a free slot, its status reports the
-  ambiguity. Keep one target of that category running. A connected other
-  category continues rendering. A selected peer stays selected until Stop.
-- A headset can join later while the other target is running. If neither
-  target yields a usable sender within the initial two-minute wait, startup
-  ends with an error. Failed sender negotiation is reported per workspace.
-- Recreating a receiver changes its peer identity: stop and start Slicer
-  streaming to select the replacement. SDK auto-reconnect remains enabled
-  for the existing sender. R7 fixes the plugin's runtime shutdown during Stop;
-  whether this resolves all restored-receiver/panel symptoms remains to be
-  tested. See [the update guide](QAROS_DEV2927_UPDATE.md).
-- The viewers share app volumes, but each has independent stereo rendering
-  and a separate graphics context per sender. Two viewers therefore require
-  additional rendering/encoding work. **Headset only** avoids the Visualizer
-  streams; **Render resolution** controls rendering cost.
-- Slice panels are video previews; remote slice interaction is not added.
-  A late target is added to the existing panels' visibility list. The list
-  is never emptied, because the SDK interprets an empty list as everyone.
+The log folder is displayed in the module. In `host-bridge.log`, check:
 
-## Implementation and verification
+- `Host build: installed-hub-update-r8` and `Target mode: headset` confirm
+  the intended DLL and mode.
+- `PEER_OBSERVED` reports target/headset peers, their role, category, app state
+  and eligibility. If no headset target appears, check the Hub session and
+  that its target app is connected, not only the physical device pairing.
+- `TARGET_SELECTED type=Headset` means a headset was selected.
+- `SENDER_CONNECT ... target=Headset ... app_volume=...` starts negotiation.
+  `WORKSPACE_FAILED` gives a failure for that volume. No usable sender causes
+  startup to end with an error; a discovered device alone is not success.
+- `FIRST_FRAME` and growing frame counts confirm SDK submission. They do not
+  independently prove the image is visible in the physical glasses.
 
-The flow follows the official
-[Vulkan source example](https://github.com/Quaternar/qaros/blob/be62932d0dcf5919584a3a09c40f5486d0402d90/qar-streaming-c/examples/vulkan_cube/main.cpp):
-subscribe before enumerating peers, select target peers, and pass both
-`QarRenderSenderInit.peer_id` and `app_volume_id` for every sender. Unlike the
-example's all-target policy, this version reserves one slot per selected
-category. Common names remain scoped to the Slicer source peer.
+Use a current attempt's log: previous sessions cannot establish why a new
+attempt is blank. Do not reset all Hub data to collect this distinction.
 
-Native logs identify `TARGET_SELECTED`, `SENDER_CONNECT` and `FIRST_FRAME`
-with the target peer and workspace. `PANEL_TARGET_ADDED` marks a late target's
-panel audience update. These distinguish discovery, negotiation and actual
-frame delivery without adding synchronous diagnostic queries to startup.
+## Selection and implementation
 
-Local tests cover late target discovery, role/category filtering, snapshot
-races, independent target startup, frame routing with different camera poses,
-and cancellation of both target negotiations. Windows x64 cross-builds cover
-all three pinned SDK headers; combined mode requires dev.2927. ABI 5 is
-unchanged, and an older DLL is rejected for combined mode. Hardware output
-and performance still require the manual Windows/NVIDIA/HoloLens test above.
+A target must advertise role `TARGET` and the requested category (`HEADSET`
+or `VISUALIZER`). R8 accepts `Unknown`, `Initializing` and `Running` app
+states on the pinned dev.2927 header; shutting-down/retired and unrelated
+roles are excluded. Multiple available targets of one category are reported
+as ambiguous. Keep one of that category connected. A chosen peer stays pinned
+until Stop; restart streaming after replacing a receiver.
 
-R7 replaces `qar_runtime_destroy` with `qar_runtime_handle_destroy` in both
-native clients. This releases their local runtime handle without requesting
-shutdown of the shared runtime. The loader additionally rejects pre-r7 DLLs
-even when their frame ABI matches. No SDK header change is needed.
+The current official
+[Vulkan source example](https://github.com/Quaternar/qaros/blob/2314325dbc931637007c7e4afe72883314e7a31e/qar-streaming-c/examples/vulkan_cube/main.cpp)
+subscribes before enumerating peers, selects targets and passes both
+`QarRenderSenderInit.peer_id` and `app_volume_id`. The current
+[peer guide](https://github.com/Quaternar/qaros/blob/2314325dbc931637007c7e4afe72883314e7a31e/docs/website/docs/developer-guide/peers.mdx)
+uses peer presence for discovery and deprecates app state as a readiness
+signal. Our installed dev.2927 header predates presence: r8 removes the
+strict Running requirement while leaving sender negotiation responsible for
+connection. It does not load new SDK functions into the older runtime.
+This is a compatibility adjustment, not proof of today's hardware failure.
+
+Per-target startup is independent of frame delivery to another target. Each
+sender has its own graphics context, camera pose and FOV. Headset-only uses
+slot zero for the headset, never a Visualizer fallback. Panels gain a late
+target after its senders finish connecting; their audience is never emptied
+because the SDK treats an empty list as everyone. Panel interaction is not
+implemented. Startup waits up to two minutes if no usable sender appears.
+
+ABI 5 remains unchanged. Both headset and combined modes require metadata
+`multi_target=1` and `target_discovery=2`; the loader also requires r7's
+`runtime_handle_only=1` cleanup. Local selection, routing, cancellation,
+physical-placement and installer tests cannot replace a Windows/NVIDIA/
+HoloLens run. Actual output and performance in r8 remain unverified here.

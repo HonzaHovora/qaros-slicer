@@ -65,9 +65,6 @@ QARVTK_HOST_API int qarvtk_host_panel_capture(QarvtkHost*,QarvtkHostPanel*,uint3
 QARVTK_HOST_API int qarvtk_host_panel_visible(QarvtkHost*,QarvtkHostPanel*,uint32_t visible);
 QARVTK_HOST_API void qarvtk_host_panel_close(QarvtkHost*,QarvtkHostPanel*);
 QARVTK_HOST_API void qarvtk_host_panel_status(QarvtkHost*,QarvtkHostPanel*,char* text,uint32_t size);
-/* Optional diagnostic capability, advertised by host_info.panel_probe.
-   A zero value creates/keeps panels but does not begin video frame cycles. */
-QARVTK_HOST_API int qarvtk_host_panels_video_enabled(QarvtkHost*,uint32_t enabled);
 
 #ifdef __cplusplus
 }

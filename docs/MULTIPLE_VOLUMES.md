@@ -52,9 +52,10 @@ Po jeho použití je pro návrat k experimentu potřeba znovu spustit aktualizac
 ## Chování
 
 - Každý objem dostane jméno odpovídající datům ve Sliceru (případně `Slicer volume N`).
-- Se zapnutým **Center and fit** má každá kostka nejdelší hranu 65 cm.
-  Vypnutí zachová fyzickou velikost dat. Kostky se v obou případech rozmístí
-  vedle sebe s mezerou 12 cm. Řádek Workspace vypíše rozměry jednotlivě.
+- **Center model in workspace at Start** vystředí data bez změny velikosti.
+  V r8 je výchozí měřítko 1:1; **Model size (at Start)** nabízí 1/8× až 8×,
+  stejný násobek pro všechny objemy, aby zůstal zachovaný jejich poměr velikostí.
+  Kostky se rozmístí vedle sebe s mezerou 12 cm. Řádek Workspace vypíše rozměry jednotlivě.
 - Data, transfer funkce, transformace a ROI zůstávají původní živé VTK objekty.
   Během zachycení se dočasně skryje ostatní obsah; desktop se pak obnoví.
   Povrchy, segmentace a dekorace nejsou v samostatných kostkách přiřazovány k datům.

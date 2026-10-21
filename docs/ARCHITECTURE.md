@@ -57,16 +57,17 @@ R17 uses host ABI 4: creation retains SDK placement, workspace XYZ dimensions
 and room centre (112 bytes); each frame still reports both
 color/depth dimensions and the exact near/far supplied to `show_frame`.
 App coordinates are the original Slicer world RAS numbers, without a per-frame
-matrix, centering or scaling. `app_scale=.001` maps one native coordinate unit to 0.001 room metres;
-fit uses `.65 / max_extent_in_workspace_axes` instead.
+matrix, centering or scaling. In Live r8, `app_scale=.001 * size_multiplier`
+maps native RAS millimetres to room metres. The default multiplier is 1,
+independent of centering. A logarithmic slider selects 1/8x through 8x at Start.
 `app_pose` rotates the initial Slicer camera basis onto the app-volume basis
 and translates the scaled, rotated bounds centre to the volume origin.
 SDK poses already account for placement and scale and are used directly by VTK.
 At Start, `ComputeVisiblePropBounds` supplies the visible scene's world AABB.
 All eight corners are rotated into workspace axes before calculating size,
-including oblique camera orientations. With fit enabled the longest edge is
-65 cm and the workspace centre is `(0, 0, -1.5)` room metres. Without fit,
-physical size and the old world placement are retained by moving the workspace
+including oblique camera orientations. Centering places the workspace centre
+at `(0, 0, -1.5)` room metres without changing scale. Without centering,
+the scaled world placement is retained by moving the workspace
 centre to the scaled, rotated scene centre and compensating with `app_pose`.
 XYZ dimensions are assigned by name to the SDK's X/Z/Y width/length/height
 fields; degenerate axes have a 1 mm minimum thickness. Bounds and placement

@@ -46,16 +46,18 @@ class FakeDll:
 
 
 class HostRuntimeTest(unittest.TestCase):
-    def test_combined_mode_requires_capable_dll_before_creation(self):
-        for info in ({}, {"multi_target": 0}, {"multi_target": 1}):
+    def test_headset_modes_require_current_target_discovery(self):
+        for info in ({}, {"multi_target": 0}, {"multi_target": 1},
+                     {"multi_target": 1, "target_discovery": 2}):
             dll = type("Dll", (), {"_qarvtk_info": info})()
-            for mode in ("headset", "visualizer", "quest"):
+            for mode in ("visualizer", "quest"):
                 validate_target_mode(dll, mode)
-            if info.get("multi_target") == 1:
-                validate_target_mode(dll, "both")
-            else:
-                with self.assertRaisesRegex(RuntimeError, "r6 host bridge"):
-                    validate_target_mode(dll, "both")
+            for mode in ("both", "headset"):
+                if info.get("multi_target") == 1 and info.get("target_discovery") == 2:
+                    validate_target_mode(dll, mode)
+                else:
+                    with self.assertRaisesRegex(RuntimeError, "r8 host bridge"):
+                        validate_target_mode(dll, mode)
             with self.assertRaises(ValueError):
                 validate_target_mode(dll, "unknown")
 

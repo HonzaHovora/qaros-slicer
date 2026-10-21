@@ -2,7 +2,7 @@
 
 Pluginy pro **ParaView a 3D Slicer** a OpenGL přenos do QAROS.
 
-**Aktualizace r7: oprava Stop a Visualizer + HoloLens pro QAROS 0.9.0-dev.2927+f291e404.** Zavři Slicer,
+**Aktualizace r8: skutečná velikost 1:1, běžný start panelů a výběr headsetu pro QAROS 0.9.0-dev.2927+f291e404.** Zavři Slicer,
 dej Fetch/Pull checkoutu s touto aktualizací a spusť `UPDATE-LIVE-PLUGIN.cmd`.
 Instalaci najde v registru Windows, obvykle
 `C:\Program Files\Quaternar\QAROS`, ověří SDK a zálohuje předchozí plugin.
@@ -12,23 +12,27 @@ Visualizeru a připoj HoloLens; brýle lze připojit i za běhu streamu.
 Každý objem má samostatný sender pro každý cíl. Brýle dostávají obraz podle
 vlastní polohy hlavy, společné řezové panely jsou viditelné na obou cílech.
 Volby **Headset only** a **Visualizer only** umožňují přenášet jen do jednoho zařízení.
-R7 zatím nebyla ověřena na fyzickém headsetu; [postup testu brýlí](docs/HEADSET_STREAMING.md).
-**Panely jsou zapnuté a běžný start už nečeká na diagnostický dotaz po každém okně.**
-Volbu **Test panel startup step by step** nech pro běžné použití vypnutou.
+R8 už při výběru cíle nečeká výhradně na stav `Running`; připojení vyjedná sender.
+Stav a log rozlišují nenalezený headset, chybu senderu a odeslané snímky.
+Funkčnost r8 na fyzickém headsetu ještě není potvrzená; [postup testu brýlí](docs/HEADSET_STREAMING.md).
+**Panely se spouštějí automaticky; ruční testovací režim je odstraněný.**
+Centrovaný model má výchozí velikost **1:1**. Posuvník **Model size (at Start)**
+mění velikost od **1/8× do 8×**, uprostřed je 1:1. Použije se při Startu,
+stejný násobek pro všechny objemy. Rozlišení renderu se nastavuje zvlášť.
 V dev.2927 může po Stop/Start přestat fungovat obraz a obnovený receiver může
 vyvolat problém s panely. Ověřený postup obnovy je receiver odebrat a vytvořit nový.
 **R7 opravuje chybu našeho ukončování:** plugin volal `qar_runtime_destroy`,
 které ukončuje runtime. Nyní uvolňuje pouze vlastní handle přes
 `qar_runtime_handle_destroy`; sdílený QAROS má zůstat běžet. Opraven je Live
 bridge i zdroj standalone senderu. Nový Python odmítne starou DLL bez této
-opravy. Zda tím mizí i pády panelů a potíže Stop/Start, musí potvrdit živý test.
+opravy. Pády GUI při Stop/Start zůstávají otevřeným problémem; r8 jejich opravu netvrdí.
 Starší dev.2540 má jiné API; samotné přepsání cesty v původním pluginu nestačí.
 [Postup a ověření](docs/QAROS_DEV2927_UPDATE.md).
 
 **Experiment: vlastní QAROS kostka pro každý objem.** Výchozí volba
 **Separate QAROS workspace for each volume** vytvoří samostatné pracovní objemy
 vedle sebe, každý s vlastním streamem, měřítkem a živým ROI. Sdílejí jednu relaci
-a v r6 je může současně sledovat jeden Visualizer a jeden headset.
+a může je současně sledovat jeden Visualizer a jeden headset.
 Vypnutím volby se přenáší celá scéna společně.
 Nový aktualizátor výše obsahuje tuto podporu i DLL ABI 5 pro nové SDK.
 Původní verze používala SDK v `D:/install`. Popis a omezení jsou v
@@ -45,8 +49,9 @@ Na cílové NVIDIA kartě je potřeba ověřit obraz a náklady dalších enkod�
 
 R16 pracovní prostor podle rozsahu scény zůstává zachovaný.
 Při Start se nastaví kvádr podle viditelných objektů, jejich natočení a měřítka.
-Zapnuté **Center and fit** vystředí scénu a nastaví nejdelší hranu na 65 cm;
-vypnuté zachová skutečnou velikost a polohu. Rozměry zobrazí řádek **Workspace**.
+Volba **Center model in workspace at Start** scénu vystředí bez změny velikosti.
+Při **Model size = 1×** zůstane 1 mm dat skutečně 1 mm; automatické zvětšení na
+65 cm je v r8 odstraněné. Rozměry zobrazí řádek **Workspace**.
 R15 maximalizace a návrat do původního rozložení jsou potvrzené na cílovém PC.
 Sekundová diagnostika výkonu zůstává; příčina celého poklesu FPS není určená.
 [Dosavadní zjištění a další měření](docs/FPS_DIAGNOSTICS.md).

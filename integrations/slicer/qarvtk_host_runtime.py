@@ -238,7 +238,7 @@ def library(path):
         (5, 0, c.sizeof(Eye), c.sizeof(Frame), c.sizeof(Placement), c.sizeof(Volume))):
         raise RuntimeError("Host DLL ABI or SDK fingerprint does not match this plugin. Close Slicer and install the ABI 5 DLL with UPDATE-LIVE-PLUGIN.cmd.")
     if info.get("runtime_handle_only") != 1:
-        raise RuntimeError("Host DLL lacks the shared-runtime cleanup fix. Close Slicer and install the r7 update with UPDATE-LIVE-PLUGIN.cmd.")
+        raise RuntimeError("Host DLL lacks the shared-runtime cleanup fix. Close Slicer and install the current update with UPDATE-LIVE-PLUGIN.cmd.")
     signatures = {
         "create": ([c.c_char_p, c.c_char_p, c.c_char_p, c.POINTER(Placement), c.POINTER(c.c_void_p), c.c_char_p, c.c_uint32], c.c_int),
         "create_volumes": ([c.c_char_p, c.c_char_p, c.c_char_p, c.POINTER(Volume), c.c_uint32, c.POINTER(c.c_void_p), c.c_char_p, c.c_uint32], c.c_int),
@@ -259,9 +259,6 @@ def library(path):
     for name, (args, result) in signatures.items():
         function = getattr(dll, "qarvtk_host_" + name)
         function.argtypes, function.restype = args, result
-    if info.get("panel_probe") == 1:
-        dll.qarvtk_host_panels_video_enabled.argtypes = [c.c_void_p, c.c_uint32]
-        dll.qarvtk_host_panels_video_enabled.restype = c.c_int
     dll._qarvtk_info = info
     _libraries[path] = dll
     return dll
@@ -270,9 +267,10 @@ def library(path):
 def validate_target_mode(dll, target):
     if target not in ("both", "visualizer", "headset", "quest"):
         raise ValueError("Choose Visualizer + headset, Visualizer only or Headset only")
-    if target == "both" and dll._qarvtk_info.get("multi_target") != 1:
-        raise RuntimeError("Visualizer + headset requires the r6 host bridge and installed QAROS dev.2927. "
-                           "Install the Live plugin update and restart Slicer, or select a single viewer.")
+    if target in ("both", "headset") and (dll._qarvtk_info.get("multi_target") != 1
+                                           or dll._qarvtk_info.get("target_discovery") != 2):
+        raise RuntimeError("Headset streaming requires the r8 host bridge and installed QAROS dev.2927. "
+                           "Install the Live plugin update and restart Slicer, or select Visualizer only.")
 
 
 class HostTransport:
@@ -327,7 +325,7 @@ class HostTransport:
             self.diagnostics.event("PLACEMENT " + json.dumps(dict(volume_index=index, name=host.name,
                 app_position=host.app_position, app_orientation=host.app_orientation, app_scale=host.app_scale,
                 workspace_size_m=host.workspace_size, workspace_position_m=host.workspace_position,
-                scene_bounds=host.scene_bounds, center_and_fit=host.fit,
+                scene_bounds=host.scene_bounds, centered=host.fit, size_multiplier=host.size_multiplier,
                 render_scale=host.render_scale, match_view=host.match_view)))
 
     @property
@@ -363,12 +361,6 @@ class HostTransport:
         if result != 0:
             raise RuntimeError(error.value.decode("utf-8", "replace"))
         return handle
-
-    def panels_video_enabled(self, enabled):
-        if self.dll._qarvtk_info.get("panel_probe") != 1:
-            raise RuntimeError("Panel diagnosis needs the r4 DLL. Close Slicer and run UPDATE-LIVE-PLUGIN.cmd.")
-        if self.dll.qarvtk_host_panels_video_enabled(self.handle, int(enabled)) != 0:
-            raise RuntimeError("Cannot change diagnostic panel video gate")
 
     def panel_capture(self, panel, texture, width, height):
         error = c.create_string_buffer(2048)

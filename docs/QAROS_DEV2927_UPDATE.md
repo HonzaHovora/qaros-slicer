@@ -1,113 +1,89 @@
-# Slicer Live with installed QAROS dev.2927
+# Slicer Live r8 with installed QAROS dev.2927
 
-The supported installation is **0.9.0-dev.2927+f291e404**, normally
-`C:\Program Files\Quaternar\QAROS`. The Live update is
-**installed-hub-update-r7**, with host ABI 5, `multi_target=1` and
-`runtime_handle_only=1`.
+Supported installation: **0.9.0-dev.2927+f291e404**, normally
+`C:\Program Files\Quaternar\QAROS`. Package: **installed-hub-update-r8**,
+host ABI 5, `multi_target=1`, `target_discovery=2`, `runtime_handle_only=1`.
 
 ## Install and start
 
-1. Close Slicer. Fetch/Pull the repository checkout containing this update.
+1. Close Slicer. Fetch/Pull the checkout containing r8, currently branch
+   `codex/slicer-headset-streams` in draft PR #3.
 2. Run `UPDATE-LIVE-PLUGIN.cmd`. It reads the 64-bit machine registry key
    `HKLM\SOFTWARE\Quaternar\QAROS\InstallFolder`, falling back to
    `%ProgramFiles%\Quaternar\QAROS`. For a custom installation use
    `UPDATE-LIVE-PLUGIN.cmd -SdkRoot "E:\Quaternar\QAROS"`.
-3. Open the installed QAROS. In **Stream Graph → This PC watches**, create
-   and start a receiver, then open its **Texture Grid** tab. Alternatively,
-   connect HoloLens through QAROS. The Visualizer control window alone is not
-   a running receiver. This bridge can serve one Visualizer receiver and one
-   headset at the same time; either can join after streaming starts.
-4. Open Slicer → **QAROS Live Renderer**. `QAROS SDK folder` is the installation
-   root containing `include` and `bin`. `Host bridge DLL` is
+3. Open QAROS. For Visualizer streaming, create and start one receiver in
+   **Stream Graph → This PC watches** and open its **Texture Grid** tab.
+   For headset streaming, connect HoloLens to the same QAROS Hub session.
+   A Visualizer control window alone is not a rendering receiver.
+4. Open Slicer → **QAROS Live Renderer**. The SDK folder is the installation
+   root containing `include` and `bin`. The bridge DLL is
    `package\windows-start\Release\qarvtk-host.dll` in the updated checkout.
-5. Leave **Test panel startup step by step** unchecked for normal use.
-   Slice panels are enabled by default. Leave **Stream to → Visualizer + headset**,
-   click **Start live streaming**, and approve Slicer in QAROS if prompted.
-   **Visualizer only** and **Headset only** are also available. The choice is
-   remembered and cannot change during streaming.
+5. Select **Stream to**: **Visualizer + headset**, **Visualizer only**, or
+   **Headset only**. Click **Start live streaming** and approve Slicer in
+   QAROS if prompted. Slice panels start automatically when enabled; the
+   manual step-by-step test mode has been removed.
 
-## Runtime cleanup correction in r7
+## Physical size and centering
 
-The plugin previously called `qar_runtime_destroy(runtime)` when stopping or
-unwinding an SDK error. A client attached to the shared QAROS Hub must release
-its own handle with `qar_runtime_handle_destroy(runtime)`, documented by the
-SDK as leaving the runtime running. R7 corrects the Live bridge and standalone
-sender source. Sender, panel, volume and session cleanup still happens first.
-The Live ZIP includes the rebuilt host DLL; archived standalone preview
-binaries are not rebuilt by this update.
+**Center model in workspace at Start** centers the content without resizing
+it. **Model size (at Start)** defaults to **1x (1:1)**: one Slicer RAS millimetre
+is one physical millimetre. The workspace fits the rotated physical bounds;
+there is no automatic enlargement to a 65 cm longest edge.
 
-The Python loader rejects a DLL without `runtime_handle_only=1`, including
-r6 with the same ABI. The manifest records `runtime_teardown=handle_only`.
-This corrects a concrete client lifecycle bug; it does not by itself prove
-that every prior panel crash or receiver failure had the same cause.
+The slider is logarithmic, from **1/8x to 8x**. Its middle is 1:1, each major
+step halves or doubles the size, and the **1:1** button resets it. All volumes
+use the same multiplier, preserving their relative sizes. Separate workspaces
+remain side by side with 12 cm gaps. Dimensions are shown in **Workspace**.
+The slider is applied at Start and is disabled during streaming. Stop, adjust,
+and Start to change it. **Render resolution** independently controls pixels.
 
-For the regression test, start with a working receiver, stream the scene,
-press Stop in Slicer and check that QAROS and its target applications remain
-running. Start Slicer streaming again with that same receiver. Repeat three
-times without deleting the receiver, and verify the volumes and panels after
-each restart. If another source is active, its content must remain available
-when Slicer stops. This live test remains pending.
+## Headset target selection
 
-## Headsets introduced in r6
+Each selected target gets one rendering sender per app volume, with both
+`peer_id` and `app_volume_id` supplied. **Headset only** uses a single headset
+slot and creates no Visualizer sender or Visualizer stereo render.
 
-Pairing a headset with QAROS does not by itself create a rendering sender.
-R6 watches running target peers and creates a sender for each selected target
-and each workspace, passing that target's peer ID and the shared app-volume ID.
-Each sender supplies its own stereo pose/FOV and uses a private SDK graphics
-context. The GUI still renders the corresponding original Slicer workspace.
+R8 removes the strict `Running` gate: with the pinned dev.2927 API, target
+peers in `Unknown`, `Initializing`, or `Running` can negotiate a sender.
+Shutting-down and retired peers, control/source/internal roles and the wrong
+device category remain excluded. The current official SDK documents app
+state as unsuitable for a readiness handshake; see the references in
+[HEADSET_STREAMING.md](HEADSET_STREAMING.md). The newer peer-presence API is
+not imported into this older installed SDK.
 
-Target negotiation runs independently of frame delivery and of the other
-target. Slice panels are created once and their audience expands when a late
-headset's senders have finished connecting. No normal registration-query delay
-is introduced. The status reports volumes and frame counts separately for
-Visualizer and headset. See [headset test and limitations](HEADSET_STREAMING.md).
+If no headset is discovered, the status explicitly asks for a headset in the
+same Hub session. `PEER_OBSERVED`, `TARGET_SELECTED`, `SENDER_CONNECT`,
+`WORKSPACE_FAILED`, and `FIRST_FRAME` distinguish discovery, negotiation and
+frame submission. Python rejects older DLLs for headset and combined modes.
+These changes address a restrictive selection policy and improve diagnosis;
+without a current hardware log, they do not establish the cause of the
+reported blank headset or prove it resolved. Follow the headset test guide.
 
-## Normal panel startup in r5
+## Runtime lifecycle and panel limitations
 
-Ordinary panel creation no longer performs the synchronous registration
-inspection that delayed each panel in r4. The inspection is retained only
-when opening a panel with video disabled in the explicit manual diagnostic
-mode. Sender creation, panel registration, first-frame logs, normal frame
-pacing and independent volume workspaces remain available.
+R7's cleanup correction remains: senders and panels close first, app volumes
+close next, and the plugin releases its session and runtime handles using
+`qar_runtime_handle_destroy`. It must not shut down the shared QAROS runtime.
 
-The package manifest records `panel_registration_snapshot=manual_probe_only`.
-R7 also corrects the runtime cleanup described above.
-
-## Earlier receiver symptoms and observed recovery
-
-The user can stream the volumes and GUI panels successfully with a newly
-created receiver. After stopping Slicer streaming, the existing receiver can
-fail to display again. Removing that receiver in Visualizer and creating a
-new one restores the working configuration and avoids the observed panel
-startup problem. This is the current operational workaround.
-
-The r7 runtime cleanup fix must now be checked against these earlier symptoms.
-Compare startup with a restored receiver against startup with a new receiver,
-then repeat Stop/Start while retaining it. Retained state is still a hypothesis
-for any remaining failures. Do not reset all Hub data for this comparison.
-
-The optional **Test panel startup step by step** remains available for the
-QAROS developer: start the volumes, open only Red without panel video,
-then enable its video and finally add the other panels. The registration
-inspection in this mode may take a few seconds. It is not part of normal
-startup and need not be enabled for everyday use.
+The panel test UI, manual video gate and synchronous registration inspection
+are removed in r8 (`panel_probe=0`, `panel_registration_snapshot=none`).
+Normal panel creation and frame logs remain. This does not claim to fix the
+remaining QAROS GUI crash on Stop/Start with the same receiver. If that
+receiver becomes stuck, removing it and creating a new one remains the
+observed workaround; restart Slicer streaming to select its new peer ID.
 
 ## Package checks and rollback
 
-The SDK header SHA256 is
+The unchanged pinned SDK header SHA256 is
 `a32cecd4137dd3b28e0d5e0c1642a066cbea976f81b90f1f31fbac4d0fba8d4a`.
 The updater verifies the complete installed SDK, archive checksum and every
-payload hash. It backs up replaced plugin files under
-`package/live-backup-<timestamp>` and rolls back a failed copy. To restore a
-previous update, close Slicer and copy the backed-up files to their matching
-paths under `package/windows-start`.
+payload hash. It backs up replaced files under `package/live-backup-<timestamp>`
+and rolls back a failed copy. To restore a backup, close Slicer and copy its
+files to matching paths under `package/windows-start`.
 
-`START-PREVIEW.cmd` preserves an installed Live update instead of overwriting
-it with the older preview bundle. That archived standalone preview has its
-own SDK support; it is separate from the Live bridge updated here.
-
-The ZIP contains the Windows x64 bridge and Python plugin, not QAROS runtime
-binaries. It preserves ABI 5 and the manual probe capability. Cross-build and
-installer verification do not replace a live Windows/NVIDIA/HoloLens test of
-r7; runtime preservation across Stop, headset output, panel display and
-long-running stability remain unverified on the target hardware.
+`START-PREVIEW.cmd` preserves an installed Live update. The older standalone
+preview archive is separate and is not rebuilt here. The Live ZIP contains
+the Windows x64 bridge and Python plugin, with no QAROS runtime binaries.
+Cross-builds and automated tests do not verify Windows/NVIDIA encoding,
+physical headset size, headset display, speed or long-running stability.

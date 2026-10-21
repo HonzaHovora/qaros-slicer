@@ -185,7 +185,7 @@ struct QarvtkHost {
     std::filesystem::create_directories(std::filesystem::u8path(log_folder));
     log.open(std::filesystem::u8path(log_folder)/"host-bridge.log",std::ios::app);
     if(!log)throw std::runtime_error("Cannot open host bridge log");
-    log<<"Host build: installed-hub-update-r7 (ABI 5); SDK header " QARVTK_HOST_SDK_HASH<<std::endl;
+    log<<"Host build: installed-hub-update-r8 (ABI 5); SDK header " QARVTK_HOST_SDK_HASH<<std::endl;
     log<<"SDK root: "<<sdk_root<<std::endl;
     log<<"Target mode: "<<target<<"; workspaces="<<volumes.size()<<std::endl;
     copying=std::make_unique<qarvtk::HostSharedWgl>(dc,host_context);
@@ -267,6 +267,7 @@ struct Session {
 #if QARVTK_HOST_ONBOARDING_API
   QarPeerId source_peer=qar_peer_id_default();
   qarvtk::HostTargetRegistry target_registry;
+  std::string peer_inventory;
 #endif
   bool panels_started{};
   qarvtk::LegacyPeerObserver peers;
@@ -523,7 +524,7 @@ struct Session {
     for(std::size_t t=0;t<host.target_count();++t){
       const auto& target=targets[t];if(t)text+=" | ";text+=target_label(t)+": ";
       if(!target.startup){
-        text+=target.discovery_error.empty()?"waiting for a running target in QAROS":target.discovery_error;
+        text+=target.discovery_error.empty()?"waiting for an available target in QAROS":target.discovery_error;
         continue;
       }
       uint64_t frames=0;for(std::size_t v=0;v<volumes.size();++v)frames+=streams[routes.index(t,v)].sent;
@@ -538,6 +539,16 @@ struct Session {
     bool changed=false;
 #if QARVTK_HOST_ONBOARDING_API
     const auto available=target_registry.snapshot();
+    // Record discovery changes once, including why a headset is filtered out.
+    // Callbacks still only copy metadata; no logging or SDK work on that thread.
+    std::string inventory;
+    for(const auto& peer:available)if(peer.role==QAR_PEER_ROLE_TARGET || peer.category==QAR_DEVICE_CATEGORY_HEADSET){
+      inventory+="PEER_OBSERVED peer="+id_text(peer.id)+" role="+std::to_string(int(peer.role))+
+        " category="+std::to_string(int(peer.category))+" state="+qarvtk::host_peer_state_name(peer.state)+
+        " eligible="+(qarvtk::host_target_available(peer)?"yes":"no")+" name="+peer.name+" device="+peer.device+"\n";
+    }
+    if(inventory.empty())inventory="PEER_DISCOVERY no target peers in this Hub session\n";
+    if(inventory!=peer_inventory){host.note(inventory);peer_inventory=inventory;}
     for(std::size_t t=0;t<host.target_count()&&!host.stopping;++t){
       auto& target=targets[t];if(target.startup)continue; // Pin a selected peer until Stop; never silently switch viewers.
       const auto category=target_label(t)=="Visualizer"?QAR_DEVICE_CATEGORY_VISUALIZER:QAR_DEVICE_CATEGORY_HEADSET;
@@ -552,7 +563,13 @@ struct Session {
       }
       if(selected){
         start_target(t,selected->id,selected->name+(selected->device.empty()?"":" ("+selected->device+")"));changed=true;
-      }else if(!target.discovery_error.empty()){target.discovery_error.clear();changed=true;}
+      }else{
+        const std::string reason=target_label(t)=="Headset"?
+          "No available headset target in this QAROS session; connect the headset to the same Hub":
+          "No available Visualizer receiver in this QAROS session; create a receiver in QAROS";
+        if(target.discovery_error!=reason){target.discovery_error=reason;changed=true;
+          host.note("TARGET_WAIT type="+target_label(t)+" reason="+reason);}
+      }
     }
 #endif
     for(std::size_t i=0;i<streams.size();++i){
@@ -685,7 +702,7 @@ void QarvtkHost::run() noexcept {
 
 extern "C" {
 const char* qarvtk_host_info(){
-  return "{\"host_abi\":5,\"modern_api\":0,\"panel_probe\":1,\"runtime_handle_only\":1,\"multi_target\":"
+  return "{\"host_abi\":5,\"modern_api\":0,\"panel_probe\":0,\"target_discovery\":2,\"runtime_handle_only\":1,\"multi_target\":"
 #if QARVTK_HOST_ONBOARDING_API
     "1"
 #else
@@ -778,9 +795,6 @@ void qarvtk_host_panel_status(QarvtkHost* h,QarvtkHostPanel* p,char* text,uint32
   try{message(text,size,h&&h->panels?h->panels->status(reinterpret_cast<qarvtk::HostPanel*>(p)):"Stopped");}
   catch(const std::exception& e){message(text,size,e.what());}
 }
-int qarvtk_host_panels_video_enabled(QarvtkHost* h,uint32_t enabled){
-  try{if(!h||!h->panels||h->stopping||enabled>1)return -1;h->panels->video_enabled(enabled!=0);return 0;}
-  catch(...){return -1;}
-}
+
 }
 static_assert(sizeof(QarvtkHostEye)==104&&sizeof(QarvtkHostFrame)==240&&sizeof(QarvtkHostPlacement)==112&&sizeof(QarvtkHostVolume)==120,"Unexpected host C ABI packing");

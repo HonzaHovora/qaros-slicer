@@ -69,13 +69,13 @@ def run():
     view.resetFocalPoint()
     window.Render()
     host = HostView(view, match_view=False)
-    # Real Slicer volume matrix carries its 3 mm spacing; fit and workspace
+    # Real Slicer volume matrix carries its 3 mm spacing; centering and workspace
     # must use world bounds, not voxel counts or raw mapper input dimensions.
-    assert np.allclose(host.workspace_size, [.65, .65, .65]), host.workspace_size
+    assert np.allclose(host.workspace_size, [.093, .093, .093]), host.workspace_size
     physical = HostView(view, fit=False, match_view=False)
     assert np.allclose(physical.workspace_size, [.093, .093, .093]), physical.workspace_size
     physical.close()
-    print("PASS: real Slicer CT world bounds set fitted and physical workspace dimensions", flush=True)
+    print("PASS: real Slicer CT stays 1:1 with and without centering", flush=True)
     print("HOST: VTK", vtk.vtkVersion.GetVTKVersion(), "window", window.GetClassName(),
           "mapper", host.volumes()[0].GetMapper().GetClassName(), "app_scale", host.app_scale, flush=True)
     original_camera = camera_state(host.camera)
