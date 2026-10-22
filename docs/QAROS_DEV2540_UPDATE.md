@@ -1,3 +1,7 @@
+> Historical SDK migration record. For the current Slicer installation use
+> [INSTALLATION.md](INSTALLATION.md). The separate-renderer Slicer module and
+> the r17 starter were retired on 2026-10-22.
+
 # Slicer Live update for QAROS 0.9.0-dev.2540+1ed038e4
 
 Historical dev.2540 notes. The actual installed QAROS supplied afterwards is

@@ -7,6 +7,8 @@ jobs:
     runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@v4
+      - name: Verify Slicer package upgrade removes the retired exporter
+        run: python3 tests/test_plugin_packaging.py
       - name: Install development dependencies
         run: sudo apt-get update && sudo apt-get install -y ninja-build libvtk9-dev libglfw3-dev libgl1-mesa-dev xvfb
       - name: Fetch pinned public SDK header for compile coverage (no runtime)

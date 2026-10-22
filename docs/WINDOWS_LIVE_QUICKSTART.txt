@@ -1,19 +1,22 @@
-QAROS Live Renderer — r8 pro instalované QAROS dev.2927
+QAROS Live Renderer — r8.2 pro instalované QAROS dev.2927
 
 AKTUALIZACE
 
 1. Zastav přenos a zavři Slicer.
-2. GitHub Desktop → QAROS_VTK / codex/slicer-headset-streams → Fetch origin → Pull origin.
-3. Spusť D:\QAROS_VTK\UPDATE-LIVE-PLUGIN.cmd. Ověří SDK a nainstaluje r8 včetně DLL.
+2. GitHub Desktop → QAROS_VTK / main → Fetch origin → Pull origin.
+3. Spusť D:\QAROS_VTK\UPDATE-LIVE-PLUGIN.cmd. Ověří SDK a nainstaluje r8.2 včetně DLL; funguje i při první instalaci.
 4. Otevři instalované QAROS a Slicer.
 5. Zvol QAROS → QAROS Live Renderer.
 
-Je to nový modul. Původní QAROS Streaming dál používá export r9.
+Je to jediný QAROS modul ve Sliceru. Starý QAROS Streaming a jeho exportní
+helpery aktualizátor zazálohuje a odstraní ze spravovaných složek.
+Při první instalaci přidej níže uvedenou složku v Edit > Application Settings >
+Modules > Additional module paths a restartuj Slicer.
 Additional module paths zůstává D:/QAROS_VTK/package/windows-start/plugins/slicer.
 
 PRVNÍ TEST
 
-1. Ve Sliceru otevři stejnou CT scénu, která fungovala v r9.
+1. Ve Sliceru otevři CT scénu.
 2. Ve Volume Rendering zapni její zobrazení a použij VTK GPU / Composite.
 3. Nastav vzhled v prvním 3D pohledu Sliceru. Výchozí volba Separate QAROS workspace
    vytvoří samostatný prostor pro každý viditelný objem. Vypni ji pro celou scénu.
@@ -33,7 +36,6 @@ PRVNÍ TEST
 7. Zapni Crop a posuň ROI. Také ořez se má měnit živě ve Visualizeru.
 8. Stop live streaming ukončí přenos; počkej, až se znovu povolí Start.
 
-Pokud je starý QAROS Streaming spuštěný, nejprve v něm dej Stop streaming.
 Maximalizace stejného 3D pohledu a návrat zachovávají přenos. Odebrání zdrojového
 pohledu, změna OpenGL kontextu nebo zavření scény přenos zastaví.
 Natočení, vystředění a měřítko se při Start nastaví přes SDK app_pose/app_scale.
@@ -45,7 +47,8 @@ Pro nové výchozí natočení, rozsah scény nebo jiné renderovací rozlišen�
 
 Zvol ve Sliceru rozložení Four-up, aby byly vidět 3D pohled a červený, žlutý
 a zelený řez. Po Start se jejich živé obrazy zobrazí jako samostatné panely
-pod pracovním objemem. Náhledy mají nejvýše 768 pixelů na delší straně,
+pod pracovním objemem. Každý nový panel má úhlopříčku 14 palců, nezávisle na
+měřítku modelu; uživatel jej může v QAROS změnit. Náhledy mají nejvýše 768 pixelů na delší straně,
 zachovávají poměr stran a při změně tvaru okna doplní černé okraje.
 Změny dat, polohy řezu, anotací, video a přehrávání časové sekvence se přenášejí
 podle vykreslování Sliceru. Panel neřídí přehrávání ani nepřijímá interakce.
@@ -108,9 +111,8 @@ a SDK. Původní renderer na monitoru se po každém stereo snímku obnoví.
 U standardního CT/MR vykreslování ve Sliceru 5.12.4 se barva a hloubka získávají
 společně, jedním vykreslením pro každé oko. Původní desktopové textury se
 uchovají na GPU a vrátí bez dalšího renderu. Dočasné změny kamery nespouštějí
-automatické překreslení Sliceru. R17 aktualizuje Python plugin i nativní DLL
-(host ABI 4), aby přidal samostatné GUI video panely. Proto rozbal celý
-balíček se zavřeným Slicerem. Synchronizace a vlastnictví snímku zůstávají.
+automatické překreslení Sliceru. Použitá nativní DLL má host ABI 5.
+Instalaci prováděj se zavřeným Slicerem. Synchronizace a vlastnictví snímku zůstávají.
 SDK pózy se použijí přímo v původních RAS souřadnicích Sliceru. Převod milimetrů
 na metry, přizpůsobení velikosti i otočení zajišťují app_scale a app_pose.
 
@@ -119,11 +121,12 @@ nebo konfliktního shaderu zůstává původní doplňkový průchod pro hloubku
 Dvě vykreslení očí stále mají náklady na hlavním vlákně a GPU. Zlepšení FPS na
 tvém PC je potřeba změřit, tato verze neslibuje 60 FPS ani nulový vliv streamu.
 
-První verze ověřuje jeden VTK GPU Composite objem a neprůhledné povrchy.
-ROI ořez je podporovaný. Multi-volume, MIP a průhledné povrchy v kombinaci
-s objemem zatím nemají ověřenou hloubku a modul je odmítne. Jedna hloubka na
+Podporované jsou VTK GPU Composite objemy, jednotlivě ve vlastních pracovních
+prostorech nebo ve společné scéně podle volby Separate QAROS workspace.
+ROI ořez je podporovaný. VTK Multi-Volume fusion, MIP a průhledné povrchy
+v kombinaci s objemem nemají ověřenou hloubku a modul je odmítne. Jedna hloubka na
 pixel je aproximace objemu: první přispívající vzorek, ne všechny vrstvy.
-Přenos panelů a ovládání zpět do Sliceru ještě není součástí.
+Náhledy řezů jsou podporované; ovládání zpět do Sliceru není součástí.
 ParaView zůstává u dosavadního povrchového exportu.
 
 R15 pokračuje při maximalizaci stejného 3D pohledu a návratu do původního
@@ -137,7 +140,7 @@ PŘI CHYBĚ
 Zkopíruj text ze stavového řádku nového modulu. Log folder obsahuje jeho logy.
 D:\QAROS_VTK\COLLECT-LOGS.cmd přidá host-bridge.log, host-python.log a host-system.log do ZIPu.
 Při aktualizaci musí být Slicer zavřený, jinak Windows drží DLL zamčenou.
-SDK hlavičku ani knihovny v D:\install neměň.
+SDK hlavičku ani knihovny v instalovaném QAROS neměň.
 
 R11 opravuje opakované převzetí už dokončeného snímku (Duplicate host frame plane).
 Pád Visualizeru s touto chybou zatím není prokázaný. Pro měření výkonu nech
@@ -162,5 +165,5 @@ JDE O PRVNÍ TESTOVACÍ VYDÁNÍ
 Testy v oficiálním Sliceru 5.12.4 ověřují stereo obraz, CT hloubku, vlastní
 shadery, živý ROI ořez a obnovu stavu i po chybě. Windows build,
 ABI a sdílení OpenGL textur mají samostatné testy. Přenos na cílovém PC již
-funguje; nové automatické rozměry pracovního prostoru ještě vyžadují
-potvrzení ve Visualizeru.
+funguje včetně brýlí a 14palcových panelů. R8.2 mění instalaci a odstraňuje
+starý exportní modul; nativní DLL zůstává stejná jako v r8.1.

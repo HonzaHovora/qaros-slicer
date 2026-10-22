@@ -1,5 +1,32 @@
 # Validation and next work
 
+## Slicer Live r8.2: retire the separate renderer, 2026-10-22
+
+QarosLive is now the only Slicer module in source registration and generated
+packages. QarosVTK, its Slicer scene exporter and its obsolete smoke test are
+removed. Old combined starter archives and their publish/store definitions are
+retained as historical artifacts. Publishing jobs and the combined packager are
+disabled; the active installer never extracts those archives. The standalone ParaView prototype
+and shared rendering test code are outside this Slicer change.
+
+Local validation:
+
+- Two packaging tests pass: a fresh ZIP and repeated upgrades remove the old
+  module, export helpers and import caches while preserving unrelated files.
+- PowerShell 7.4.6 on Linux passes the isolated updater fixture: fresh install,
+  payload hashes, both managed install paths, backups, removal, rollback after
+  an injected failure during retirement, and rejection of a mismatched SDK.
+- Existing host runtime (15 tests), diagnostics (4 pass, 1 Windows-only skip),
+  view/placement math and panel (3 tests) checks pass. Python compilation and
+  diff whitespace checks pass.
+- The r8.2 ZIP contains only QarosLive and its support files. All payload hashes
+  match. The native host DLL is byte-identical to the shipped r8.1 DLL.
+
+Windows PowerShell 5.1/native DLL loading and actual Slicer GUI/GPU streaming
+were not rerun locally for this cleanup; the existing Windows and Slicer CI
+jobs retain those checks, with live-module discovery replacing exporter smoke.
+ANARI integration is unchanged and no new ANARI capture support is claimed.
+
 ## Installed Hub Live r8.1: 14-inch panels, 2026-10-21
 
 The user reported that r8 works, including headset streaming. This is a

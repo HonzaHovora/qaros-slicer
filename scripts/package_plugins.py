@@ -12,16 +12,12 @@ def package(output):
     output = Path(output).resolve()
     bundle = output / "QAROS-VTK-plugins"
     files = {
-        "slicer/QarosVTK.py": "integrations/slicer/QarosVTK.py",
         "slicer/QarosLive.py": "integrations/slicer/QarosLive.py",
         "slicer/QarosVTKLib/qarvtk_host_view.py": "integrations/slicer/qarvtk_host_view.py",
         "slicer/QarosVTKLib/qarvtk_host_panels.py": "integrations/slicer/qarvtk_host_panels.py",
         "slicer/QarosVTKLib/qarvtk_host_gpu.py": "integrations/slicer/qarvtk_host_gpu.py",
         "slicer/QarosVTKLib/qarvtk_host_runtime.py": "integrations/slicer/qarvtk_host_runtime.py",
         "slicer/QarosVTKLib/qarvtk_host_diagnostics.py": "integrations/slicer/qarvtk_host_diagnostics.py",
-        "slicer/QarosVTKLib/qarvtk_slicer.py": "integrations/slicer/qarvtk_slicer.py",
-        "slicer/QarosVTKLib/qarvtk_scene.py": "integrations/qarvtk_scene.py",
-        "slicer/QarosVTKLib/qarvtk_bridge.py": "integrations/qarvtk_bridge.py",
         "slicer/QarosVTKLib/qarvtk_runtime.py": "integrations/qarvtk_runtime.py",
         "paraview/QarosVTKPlugin.py": "integrations/paraview/QarosVTKPlugin.py",
         "paraview/qarvtk_paraview.py": "integrations/paraview/qarvtk_paraview.py",
@@ -38,10 +34,15 @@ def package(output):
     (bundle / init).write_text('"""Private support package, not a Slicer module."""\n')
     # Remove only known obsolete generated files, so Slicer will not discover them
     # as separate modules after an upgrade from the first packaging layout.
-    for name in ("qarvtk_slicer.py", "qarvtk_bridge.py", "qarvtk_scene.py", "qarvtk_runtime.py"):
-        old = bundle / "slicer" / name
-        if old.exists():
-            old.unlink()
+    retired = ("QarosVTK", "qarvtk_slicer", "qarvtk_bridge", "qarvtk_scene", "qarvtk_runtime")
+    for directory, names in ((bundle / "slicer", retired),
+                             (bundle / "slicer/QarosVTKLib", retired[1:4])):
+        for name in names:
+            for old in [directory / (name + suffix) for suffix in (".py", ".pyc", ".pyo")]:
+                if old.is_file():
+                    old.unlink()
+            for old in (directory / "__pycache__").glob(name + ".*.pyc"):
+                old.unlink()
     archive = output / "QAROS-VTK-plugins.zip"
     # Explicit allowlist: no caches, SDKs, local credentials or extra user files.
     with zipfile.ZipFile(archive, "w", zipfile.ZIP_DEFLATED) as stream:

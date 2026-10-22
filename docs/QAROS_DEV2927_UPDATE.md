@@ -1,15 +1,15 @@
-# Slicer Live r8.1 with installed QAROS dev.2927
+# Slicer Live r8.2 with installed QAROS dev.2927
 
 Supported installation: **0.9.0-dev.2927+f291e404**, normally
-`C:\Program Files\Quaternar\QAROS`. Package: **installed-hub-update-r8.1**,
+`C:\Program Files\Quaternar\QAROS`. Package: **installed-hub-update-r8.2**,
 host ABI 5, `multi_target=1`, `target_discovery=2`, `runtime_handle_only=1`.
-R8.1 changes the Python panel defaults and reuses the verified r8 native DLL;
+R8.2 retires the separate-renderer Slicer module and supports fresh installation.
+It keeps r8.1 panel defaults and reuses the verified r8 native DLL;
 `Host build` in the native log therefore still reports r8.
 
 ## Install and start
 
-1. Close Slicer. Fetch/Pull the checkout containing r8.1, currently branch
-   `codex/slicer-headset-streams` in draft PR #3.
+1. Close Slicer. Fetch/Pull the checkout on `main`.
 2. Run `UPDATE-LIVE-PLUGIN.cmd`. It reads the 64-bit machine registry key
    `HKLM\SOFTWARE\Quaternar\QAROS\InstallFolder`, falling back to
    `%ProgramFiles%\Quaternar\QAROS`. For a custom installation use
@@ -95,8 +95,10 @@ payload hash. It backs up replaced files under `package/live-backup-<timestamp>`
 and rolls back a failed copy. To restore a backup, close Slicer and copy its
 files to matching paths under `package/windows-start`.
 
-`START-PREVIEW.cmd` preserves an installed Live update. The older standalone
-preview archive is separate and is not rebuilt here. The Live ZIP contains
+Since r8.2, `UPDATE-LIVE-PLUGIN.cmd` also performs a fresh installation and
+removes the retired Slicer exporter with backup. `START-PREVIEW.cmd` redirects
+to that installer; old combined preview archives are historical only and their
+publishing jobs are disabled. The current Live ZIP contains
 the Windows x64 bridge and Python plugin, with no QAROS runtime binaries.
 Cross-builds and automated tests do not verify Windows/NVIDIA encoding,
 physical headset size, headset display, speed or long-running stability.

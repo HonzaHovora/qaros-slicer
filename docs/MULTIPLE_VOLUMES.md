@@ -1,6 +1,6 @@
 # Samostatný pracovní objem pro každá data
 
-Experiment na větvi `codex/slicer-multiple-volumes` rozšiřuje r17 o vlastní
+Experiment na větvi `main` rozšiřuje r17 o vlastní
 QAROS app volume a stereo sender pro každý viditelný GPU objem z prvního 3D
 pohledu Sliceru. Všechny používají jednu SDK relaci a jedno pozvání vieweru.
 Kostky mají různá ID, vlastní umístění a lze s nimi manipulovat samostatně.
@@ -30,10 +30,10 @@ SDK/vieweru ale ze starého ZIPu není prokázaná: oprava blokování neprokazu
 ## Vyzkoušení na Windows
 
 1. Zastav streaming a zavři Slicer.
-2. V GitHub Desktop přepni na `codex/slicer-multiple-volumes` a dej Fetch/Pull.
+2. V GitHub Desktop přepni na `main` a dej Fetch/Pull.
 3. Spusť `UPDATE-LIVE-PLUGIN.cmd`. Ověří přibalený ZIP a aktualizuje Python
    plugin i `package/windows-start/Release/qarvtk-host.dll` na ABI 5.
-   Pokud r17 dosud není rozbalený, nejdřív spusť `START-PREVIEW.cmd` a zavři náhled.
+   Instalátor funguje i bez předchozího balíčku r17.
 4. Otevři Slicer. V QAROS Live Renderer nech zapnuté
    **Separate QAROS workspace for each volume** (výchozí stav).
 5. V prvním 3D pohledu zobraz oba objemy přes **VTK GPU Ray Casting** a
@@ -42,12 +42,11 @@ SDK/vieweru ale ze starého ZIPu není prokázaná: oprava blokování neprokazu
    každá pouze se svými daty. Vyzkoušej přesun/natočení jedné v QAROS,
    změnu presetu a ROI pouze jednoho objemu ve Sliceru a Stop/Start.
 
-SDK v `D:/install` se nemění. Nový plugin vyžaduje přibalenou DLL ABI 5;
+Použij kompletní instalované QAROS dev.2927, obvykle `C:/Program Files/Quaternar/QAROS`. Nový plugin vyžaduje přibalenou DLL ABI 5;
 starou DLL odmítne s vysvětlením. Pokud máš v poli **Host bridge DLL** vlastní
 cestu, vyber aktualizovanou DLL z `package/windows-start/Release`.
 
-`START-PREVIEW.cmd` obnovuje původní r17, včetně jeho DLL a pluginu.
-Po jeho použití je pro návrat k experimentu potřeba znovu spustit aktualizaci.
+`START-PREVIEW.cmd` nyní přesměruje na instalátor Live; původní r17 neobnovuje.
 
 ## Chování
 

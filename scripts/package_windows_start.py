@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Package pinned, already-tested CI outputs without rebuilding or adding an SDK."""
+"""Historical combined starter packager; disabled after Slicer exporter retirement."""
 import argparse
 import datetime
 import hashlib
@@ -21,6 +21,7 @@ def verified_zip(path, expected_sha):
 
 
 def package(native_archive, plugins_archive, output):
+    raise RuntimeError("Combined starter packaging is retired. Use scripts/package_live_update.py and UPDATE-LIVE-PLUGIN.cmd for Slicer.")
     config = json.loads((ROOT / 'releases/windows-start.json').read_text())
     filename = config['filename']
     if Path(filename).name != filename or not filename.endswith('.zip'):

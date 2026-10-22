@@ -1,110 +1,30 @@
-# První spuštění přes GitHub Desktop
+# Instalace přes GitHub Desktop
 
-Tento postup používá již přihlášený GitHub Desktop a checkout `D:\QAROS_VTK`.
-Slicer je nainstalovaný v `D:\3D Slicer 5.12.4`.
+Příklad používá checkout `D:\QAROS_VTK` a nainstalovaný Slicer.
 
-Při aktualizaci nejdřív zastav stream a zavři Slicer, Visualizer i náhled kostky.
+1. Zastav přenos a zavři Slicer.
+2. V GitHub Desktop otevři QAROS_VTK a vyber větev **main**.
+3. Klikni **Fetch origin**, potom **Pull origin**.
+4. Spusť `D:\QAROS_VTK\UPDATE-LIVE-PLUGIN.cmd`.
+5. Instalátor ověří QAROS dev.2927, ZIP a jeho soubory. Nainstaluje jediný modul
+   **QAROS Live Renderer** a zazálohuje i odstraní původní exportní modul.
+6. Při první instalaci přidej do Slicer **Edit → Application Settings → Modules →
+   Additional module paths** cestu
+   `D:/QAROS_VTK/package/windows-start/plugins/slicer` a restartuj Slicer.
+7. Otevři **QAROS → QAROS Live Renderer**. DLL je
+   `D:/QAROS_VTK/package/windows-start/Release/qarvtk-host.dll`, SDK obvykle
+   `C:/Program Files/Quaternar/QAROS`.
+8. Spusť receiver v QAROS nebo připoj brýle, zvol **Stream to** a klikni
+   **Start live streaming**. Případný přístup Sliceru povol v Hubu.
 
-1. V GitHub Desktop otevři repozitář QAROS_VTK na větvi main.
-2. Klikni **Fetch origin**, potom **Pull origin**, pokud se nabízí.
-3. Spusť `D:\QAROS_VTK\START-PREVIEW.cmd`.
-4. Skript ověří přiložený ZIP, rozbalí ho do `package\windows-start` a otevře náhled zelené kostky.
+Funguje to i bez dříve rozbaleného Windows starteru. Kompilátor ani samostatný
+Python nejsou potřeba. Původní `START-PREVIEW.cmd` nyní spustí stejný instalátor;
+nenačítá starý balíček ani náhled kostky.
 
-Balíček je skutečný soubor v `downloads/`, nikoli Git LFS pointer nebo odkaz.
-Tento postup nepotřebuje přihlášení v prohlížeči, instalaci GitHub CLI ani kompilátor.
-Podporovaná grafika a Visual C++ Runtime x64 jsou stále potřeba.
-Při chybě pošli text z otevřeného okna; při hlášení o chybějícím ZIPu dokonči Pull origin.
+Záloha je v `package/live-backup-*`. Pokud máš ruční kopii starého pluginu mimo
+checkout, odeber její cestu z Additional module paths. V nabídce Sliceru má
+zůstat pouze **QAROS Live Renderer**. Privátní složka `QarosVTKLib` je knihovna
+pro Live modul a její název neznamená druhý renderer.
 
-## Přímý renderer Sliceru: r17
-
-Po aktualizaci otevři **QAROS → QAROS Live Renderer**. Modul používá první
-3D pohled Sliceru. Host bridge DLL je
-`D:/QAROS_VTK/package/windows-start/Release/qarvtk-host.dll`, SDK `D:/install`
-a Viewer `visualizer`. Přenos spustíš tlačítkem **Start live streaming**.
-Preset, viditelnost a ROI se mění živě, bez Update scene.
-Pracovní kvádr se při Start nastaví podle viditelné scény, natočení a měřítka.
-**Center and fit** zapnuto znamená vystředění a nejdelší hranu 65 cm;
-vypnuto zachová fyzickou velikost i polohu. **Workspace** ukazuje výsledné
-rozměry v centimetrech. Pro přepočet rozsahu po změně dat dej Stop a Start.
-R17 vyžaduje novou DLL i plugin z balíčku, proto aktualizuj se zavřeným Slicerem.
-Zapnuté **Show slice views as panels (preview only)** zobrazí viditelné řezy
-jako panely pod 3D objemem. Použij rozložení **Four-up**. Náhled zahrnuje video
-a časové sekvence; limit je výchozích 15 FPS nebo 5/10/15/30 podle volby.
-Staré snímky se při zpoždění zahazují. Panely jsou bez interakce a Qt lišt.
-Pro srovnání výkonu je vypni před Start; další enkodéry mají vlastní náklady.
-[Celý postup a rozsah testovací verze](WINDOWS_LIVE_QUICKSTART.txt).
-
-Předchozí QAROS Streaming musí být zastavený. První verze podporuje jeden
-VTK GPU Composite objem a neprůhledné povrchy; ROI ořez je podporovaný.
-R12 u standardního vykreslování spojuje barvu a hloubku do jednoho průchodu pro
-každé oko, uchovává desktopové textury a potlačuje automatický redraw při změně
-kamery. Neověřené vlastní renderovací průchody mají původní doplňkovou cestu.
-R13 předává natočení, umístění i velikost SDK pomocí app_pose/app_scale.
-Nech zapnuté **Use Slicer viewing direction at Start**. Depth má poloviční
-šířku i výšku oproti barvě. **Render resolution** 100/75/50 % mění velikost
-skutečného renderu; 50 % používá čtvrtinu pixelů. Rozměry se zobrazují v modulu.
-R11 oprava opakovaného snímku a měření zůstávají zachované.
-R14 doplňuje sekundová měření snímků, aktivního okna a volitelná data NVIDIA GPU.
-Pro další měření nastav 50 %, střídej aktivní okno po 20–30 sekundách bez změny
-pohledu a scény, po 2–3 minutách zastav stream a spusť COLLECT-LOGS.cmd.
-ZIP zahrne host-bridge.log, host-python.log a host-system.log.
-R15 zachovává stream při maximalizaci stejného 3D pohledu i při návratu do
-původního rozložení. Při odebrání zdrojového pohledu nebo změně OpenGL kontextu
-stream ukončí s konkrétním důvodem v modulu a v záznamu STOP_REQUEST.
-Poslední měření potvrdilo 960 × 540 na oko i ve fullscreen a teplotní omezení
-GPU při 86–87 °C. Měnila se i SDK kamera; samotné přepínání aktivního okna
-není prokázanou příčinou poklesu. R15 opravuje ukončení při změně rozložení,
-nejde o další potvrzenou opravu FPS. Podrobnosti: [měření](FPS_DIAGNOSTICS.md).
-
-## Instalace modulu a dosavadní exportní cesta
-
-Po prvním spuštění náhledu přidej v **Edit → Application Settings → Modules →
-Additional module paths** složku:
-
-```text
-D:/QAROS_VTK/package/windows-start/plugins/slicer
-```
-
-Restartuj Slicer a otevři **QAROS → QAROS Streaming**. Nainstaluj pouze tuto kopii
-modulu; pokud už máš stejný modul přidaný z `D:/QAROS_VTK-bin/plugins/slicer`,
-nahraď starou cestu novou.
-
-- Sender executable: `D:/QAROS_VTK/package/windows-start/Release/qarvtk-sender.exe`
-- Testovací model: `D:/QAROS_VTK/package/windows-start/sample/cube-200mm.vtp`
-- QAROS SDK folder: `D:/install` (stávající kompletní SDK s include a bin).
-- Legacy viewer: `visualizer`.
-- Legacy invite, Hub pairing code a Hub host: prázdné.
-
-Podrobný postup pro první použití Sliceru je v
-[WINDOWS_SESSION_QUICKSTART.txt](WINDOWS_SESSION_QUICKSTART.txt) a v rozbaleném
-`package/windows-start/ZACNI_ZDE.txt`. Přiložený sender používá **session API**
-a odpovídá přesné hlavičce z existujícího SDK:
-`022c40b670f87a066664c37daeb06da525db37fffdf5810e72cff8a5b81e677d`.
-Plugin tuto shodu ověřuje automaticky. Toto SDK neposkytuje nové Hub párování;
-pole Hub identity se nepoužívá. SDK runtime a viewer nejsou součástí balíčku.
-
-Balíček odpovídá testovacímu vydání `windows-start-2026-10-15-session022c40b6r17`.
-Nový modul QAROS Live Renderer používá postup uvedený výše. Následující popis
-se týká zachovaného modulu QAROS Streaming s exportem r9.
-R9 přidává osvětlení, barvy, viditelné modely/segmenty a jeden CT/MR objem ze Sliceru.
-V modulu zvol **Selected object** nebo **Visible 3D scene (first view)** a nech
-zapnuté **Center and fit**. Pro CT/MR nejdřív nastav preset ve **Volume Rendering**;
-po změnách použij **Update scene**. Podrobnosti a omezení jsou v krátkém postupu výše.
-
-R7/r8 mají na testovacím PC potvrzený přenos a transformace. Nové scény a objemy
-je ještě potřeba ověřit v cílovém Visualizeru. Diagnostika `PERF`/`PACING` z r8
-zůstává zachovaná; toto vydání nepředstavuje ověřené zvýšení FPS.
-
-## Když po zobrazení volume přenos spadne
-
-Po pádu spusť `D:\QAROS_VTK\COLLECT-LOGS.cmd`. Slicer může zůstat otevřený.
-Skript vytvoří ZIP v `D:\QAROS_VTK\diagnostics` a vybere ho v Průzkumníku.
-Přilož tento ZIP do chatu. Obsahuje poslední tři logy senderu, informace o
-nainstalované verzi a související záznamy pádů z Windows. Modely ani pozvánky
-do balíčku nekopíruje. Nic automaticky neodesílá a nepotřebuje správce.
-
-Napiš také, zda zmizí celé okno Visualizeru, nebo jen pracovní volume. Pokud
-Slicer zůstane otevřený, připiš číslo z hlášení `Sender exited with code ...`
-nad polem Sender log. To rozliší chybu senderu od pádu vieweru.
-
-
+[Instalace a řešení potíží](INSTALLATION.md) ·
+[Ovládání přenosu](WINDOWS_LIVE_QUICKSTART.txt) · [Brýle](HEADSET_STREAMING.md)

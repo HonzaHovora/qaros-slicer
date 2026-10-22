@@ -1,5 +1,20 @@
 # Architecture
 
+## Slicer product scope (decision, 2026-10-22)
+
+Slicer has one QAROS module: direct host streaming (`QarosLive`). The snapshot
+module (`QarosVTK`) and Slicer exporter have been removed, including registration,
+packaging and the active installation path. Historical combined installers
+and publication definitions are retained, but their packager and jobs are
+disabled. We do not maintain a replacement Slicer renderer. ANARI remains an independent renderer
+route, not a new capture mode added by this cleanup. The private `QarosVTKLib`
+name is retained for installation compatibility and does not register a module.
+
+`UPDATE-LIVE-PLUGIN.cmd` supports first installation and backed-up migration.
+Historical prototype details below document earlier work; they do not advertise
+the retired Slicer module. Shared standalone code remains for the earlier
+ParaView prototype and development tests.
+
 ## Host rendering first (decision, 2026-10-14)
 
 The next integration must use the host application's actual rendering pipeline.
@@ -21,7 +36,8 @@ R13 moves all placement, axis conversion and fitting into SDK `app_pose` and
 depth at half the color width/height. The user can select 100/75/50% host render
 resolution independently of the negotiated stream color dimensions.
 Stable end-to-end operation and the receiver exit remain to be verified; the
-milestone is not yet declared complete. R9 remains a separate snapshot renderer.
+milestone was not yet declared complete at that date. The R9 Slicer snapshot
+module was subsequently retired on 2026-10-22.
 
 The live module uses the original view's resolved display framebuffer. On VTK
 9.6's standard Composite pipeline, a scoped shader addition writes the first

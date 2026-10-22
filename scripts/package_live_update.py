@@ -9,7 +9,7 @@ import zipfile
 
 ROOT = Path(__file__).resolve().parents[1]
 SDK_SHA = 'a32cecd4137dd3b28e0d5e0c1642a066cbea976f81b90f1f31fbac4d0fba8d4a'
-BUILD = 'installed-hub-update-r8.1'
+BUILD = 'installed-hub-update-r8.2'
 NATIVE_BUILD = 'installed-hub-update-r8'
 
 
@@ -41,6 +41,7 @@ def package(dll, output, compiler):
     info = dict(sdk_version='0.9.0-dev.2927+f291e404', sdk_header_sha256=SDK_SHA,
                 host_abi=5, build=BUILD,
                 native_build=NATIVE_BUILD, compiler=compiler,
+                slicer_modules=['QarosLive'], retired_slicer_modules=['QarosVTK'],
                 slice_previews_default=True, panel_probe=0, target_discovery=2,
                 default_model_scale=1.0, model_scale_range=[0.125, 8.0],
                 slice_panel_diagonal_inches=14.0,
@@ -56,7 +57,7 @@ def package(dll, output, compiler):
     archive_path = output / 'qarvtk-live-dev2927.zip'
     with zipfile.ZipFile(archive_path, 'w', zipfile.ZIP_DEFLATED) as archive:
         for name, data in sorted(payload.items()):
-            entry = zipfile.ZipInfo(name, (2026, 10, 21, 0, 0, 0))
+            entry = zipfile.ZipInfo(name, (2026, 10, 22, 0, 0, 0))
             entry.compress_type = zipfile.ZIP_DEFLATED
             entry.external_attr = 0o100644 << 16
             archive.writestr(entry, data)

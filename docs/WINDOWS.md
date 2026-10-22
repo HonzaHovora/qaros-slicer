@@ -1,3 +1,6 @@
+> Tento dokument popisuje samostatné vývojové/ParaView nástroje. Pro instalaci
+> Sliceru použij [INSTALLATION.md](INSTALLATION.md); nepotřebuje tento renderer.
+
 # Windows: doplňující poznámky k backendu
 
 **Aktuální postup včetně pluginů je v [INSTALLATION.md](INSTALLATION.md).**
@@ -75,7 +78,7 @@ potřeba. Tento postup není implementací nového Hub párování se starými D
 3. Spustit sender pro 300 snímků. Musí se objevit `Submitted 1 stereo frames`.
 4. Ve vieweru zkontrolovat obě oči, orientaci, velikost 0,4 m, hloubku a pozadí.
 5. Posunout hlavu: perspektiva musí reagovat bez prohození očí.
-6. Otevřít Slicer export s `--ras --meters-per-unit 0.001`; znovu exportovat při
+6. Otevřít vlastní testovací VTP s odpovídajícími jednotkami; znovu načíst při
    zapnutém `--watch` a ověřit aktualizaci.
 7. Přerušit a obnovit spojení; ověřit reconnect v limitu `--timeout`.
 

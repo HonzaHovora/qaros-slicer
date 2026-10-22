@@ -1,4 +1,4 @@
-# Slicer Live r8.1: Visualizer and HoloLens
+# Slicer Live r8.2: Visualizer and HoloLens
 
 Connecting HoloLens to QAROS does not itself stream Slicer content. Slicer
 creates a rendering sender for that target peer and each app volume.
@@ -8,8 +8,7 @@ panel a 14-inch diagonal, independent of model scale; resize it in QAROS as need
 
 ## Install and test
 
-1. Close Slicer. Fetch/Pull branch `codex/slicer-headset-streams` containing
-   r8.1 and run `UPDATE-LIVE-PLUGIN.cmd`. See the
+1. Close Slicer. Fetch/Pull `main` with r8.2 and run `UPDATE-LIVE-PLUGIN.cmd`. See the
    [installation guide](QAROS_DEV2927_UPDATE.md).
 2. Connect HoloLens in QAROS to the same Hub session used by Slicer. For the
    first test, choose **Headset only** and do not create a Visualizer receiver.

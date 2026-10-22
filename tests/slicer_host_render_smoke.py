@@ -36,6 +36,7 @@ def depths(window):
 def run():
     check_placement()
     assert hasattr(slicer.modules, "qaroslive"), "Packaged live module was not discovered"
+    assert not hasattr(slicer.modules, "qarosvtk"), "Retired export module was discovered"
     live_widget = slicer.modules.qaroslive.widgetRepresentation().self()
     assert live_widget.startButton.enabled and not live_widget.stopButton.enabled
     slicer.app.layoutManager().setLayout(slicer.vtkMRMLLayoutNode.SlicerLayoutOneUp3DView)

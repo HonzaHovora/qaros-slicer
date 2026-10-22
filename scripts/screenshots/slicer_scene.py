@@ -29,13 +29,10 @@ def prepare():
 
         slicer.app.layoutManager().setLayout(
             slicer.vtkMRMLLayoutNode.SlicerLayoutOneUp3DView)
-        slicer.util.selectModule("QarosVTK")
-        widget = slicer.modules.qarosvtk.widgetRepresentation().self()
-        widget.node.setCurrentNode(model)
-        widget.publish_surface()
-        assert Path(widget.backend.scene).is_file(), "Surface was not exported"
+        slicer.util.selectModule("QarosLive")
+        widget = slicer.modules.qaroslive.widgetRepresentation().self()
         # No SDK, credentials or network session are fabricated for a screenshot.
-        assert not widget.backend.running
+        assert widget.transport is None
 
         window = slicer.util.mainWindow()
         window.resize(1680, 1040)

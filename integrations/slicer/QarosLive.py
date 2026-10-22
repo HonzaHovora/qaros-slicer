@@ -157,11 +157,6 @@ class QarosLiveWidget(ScriptedLoadableModuleWidget):
         try:
             if self.transport and self.transport.running:
                 return
-            old = getattr(slicer.modules, "qarosvtk", None)
-            if old:
-                old_widget = old.widgetRepresentation().self()
-                if old_widget.backend.running:
-                    raise RuntimeError("Stop streaming in QAROS Streaming before starting the live renderer")
             lm = slicer.app.layoutManager()
             if not lm or lm.threeDViewCount < 1:
                 raise RuntimeError("Open a Slicer layout containing a 3D view")

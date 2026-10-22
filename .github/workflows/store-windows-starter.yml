@@ -12,6 +12,9 @@ concurrency:
   cancel-in-progress: false
 jobs:
   store:
+    # Historical combined installers contain the retired Slicer module.
+    # Keep this definition for provenance; current installs use UPDATE-LIVE-PLUGIN.cmd.
+    if: ${{ false }}
     runs-on: ubuntu-24.04
     timeout-minutes: 10
     permissions:

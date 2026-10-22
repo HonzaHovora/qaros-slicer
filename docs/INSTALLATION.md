@@ -1,150 +1,98 @@
-# Instalace a první spuštění QAROS VTK
+# Instalace QAROS Live do Sliceru
 
-**Pro první pokus použij [hotový Windows ZIP](https://github.com/HonzaHovora/QAROS_VTK/releases/tag/windows-start-2026-10-14-session022c40b6r9)
-a [krátký postup pro r9](WINDOWS_SESSION_QUICKSTART.txt).** Windows sestavení i core testy už prošly.
-Níže je plný postup ze zdrojů, potřebný například pro jiné SDK.
+Slicer má jeden QAROS modul: **QAROS Live Renderer**. Přenáší hotový obraz
+z rendereru Sliceru. Starý **QAROS Streaming** se samostatným rendererem byl
+odstraněn. ANARI je samostatná alternativa, kterou tento instalátor nemění.
 
-Tento návod je pro první pokus na Windows po návratu. Projekt se od začátku instaluje jako **plugin do Sliceru a ParaView**. Oba pluginy spouštějí stejný C++ backend v samostatném procesu. Není potřeba přestavovat Slicer ani ParaView.
+## Co potřebuješ
 
-Slicer v r9 přenáší vybraný objekt nebo viditelné modely/segmenty a jeden skalární CT/MR objem z prvního 3D pohledu. Zachová barvy, voxelová data a nastavení z Volume Rendering. Povrchy mají osvětlení, backend renderuje stereo barvu i hloubku. ParaView zatím používá dosavadní přenos povrchu. Popisky, řezy, ovladače a výběr objektů z headsetu nejsou součástí scény.
+- Windows x64 se Slicerem; referenční hostitelské testy používají Slicer 5.12.4.
+- Kompletní QAROS **0.9.0-dev.2927+f291e404**, včetně `include/qar_streaming.h`
+  a původní složky `bin`, s podporovanou GPU.
+- Checkout `HonzaHovora/QAROS_VTK`, větev `main`, například `D:\QAROS_VTK`.
 
-Objem používá Composite režim bez ROI ořezu, podporuje lineární transformace a lze jej kombinovat s neprůhlednými povrchy. Více objemů a MIP/MinIP zatím nejsou podporované. Nový Slicer plugin potřebuje sender s `plugin_protocol: 2`.
+Pro instalaci hotového balíčku nepotřebuješ Python, VTK, vcpkg ani kompilátor.
+Použije se Python a renderer dodaný se Slicerem. Nepřepisuj jednotlivé soubory SDK.
 
-## 1. Co si připravit
+## První instalace i aktualizace
 
-- Windows x64, podporovanou NVIDIA GPU a její aktuální ovladač pro použitou verzi QAROS.
-- QAROS Hub/viewer a **kompletní SDK**: `include/qar_streaming.h` a původní `bin/`. Samotná hlavička nestačí. SDK musí odpovídat backendu.
-- [3D Slicer](https://download.slicer.org/) nebo [ParaView](https://www.paraview.org/download/). Referenční hostitelské testy používají Slicer 5.12.4 a oficiální balík ParaView 5.12.1 na Linuxu; Windows hosty ověříme na tvém PC.
-- Pro sestavení backendu: Git, Python 3.9+, CMake 3.20+ a Visual Studio 2022 s **Desktop development with C++**, MSVC v143 a Windows SDK.
+1. Zastav streaming a zavři Slicer, aby nedržel DLL.
+2. V GitHub Desktop proveď **Fetch origin → Pull origin** na větvi `main`.
+3. Spusť `D:\QAROS_VTK\UPDATE-LIVE-PLUGIN.cmd`.
+4. Skript najde QAROS v registru, případně v `C:\Program Files\Quaternar\QAROS`.
+   Ověří SDK, ZIP a jednotlivé soubory; připraví
+   `D:\QAROS_VTK\package\windows-start` i bez předchozí instalace.
+5. Spusť Slicer. V **Edit → Application Settings → Modules → Additional module
+   paths** přidej `D:/QAROS_VTK/package/windows-start/plugins/slicer`, pokud tam
+   ještě není. Potom Slicer restartuj.
+6. V nabídce **QAROS** otevři **QAROS Live Renderer**.
 
-Instalace Python pluginů nevyžaduje `pip install vtk` do Sliceru ani ParaView. Každý host používá vlastní VTK. SDK ani jeho DLL se do hostitelské aplikace nekopírují.
-
-## 2. Stáhnout projekt a připravit pluginy
-
-V běžném PowerShellu (cesty uprav podle svého disku):
-
-```powershell
-New-Item -ItemType Directory -Force C:\dev | Out-Null
-cd C:\dev
-git clone https://github.com/HonzaHovora/QAROS_VTK.git
-cd QAROS_VTK
-py -3 scripts/package_plugins.py
-```
-
-Pokud už checkout máš, nejdřív v něm proveď `git pull --ff-only` a pak příkaz s Pythonem. Soukromý repozitář vyžaduje přihlášení ke GitHubu s oprávněním k projektu.
-
-Vzniknou:
-
-- `package/QAROS-VTK-plugins/slicer/` — kompletní Slicer modul;
-- `package/QAROS-VTK-plugins/paraview/` — kompletní ParaView plugin;
-- `package/QAROS-VTK-plugins.zip` — přenositelný archiv obou složek.
-
-Archiv je pro ruční rozbalení. **Není to balíček pro Slicer Extensions Manager.** Pro standardní sestavení extension je už připravený `integrations/slicer/CMakeLists.txt`; ten vyžaduje vývojový build Sliceru. Na první instalaci není potřeba.
-
-Hotový ZIP je také mezi artefakty úspěšného workflow **Build and test**, pod názvem `QAROS-VTK-python-plugins` (uchování 30 dní). Příkaz výše ho kdykoli vytvoří z aktuálního checkoutu.
-
-## 3. Sestavit backend na Windows
-
-Jednorázově připrav vcpkg. Pokud už máš jeho samostatný checkout, použij jeho cestu:
+Pro nestandardní umístění QAROS lze instalátor spustit z PowerShellu:
 
 ```powershell
-git clone https://github.com/microsoft/vcpkg.git C:\dev\vcpkg
-C:\dev\vcpkg\bootstrap-vcpkg.bat -disableMetrics
+.\UPDATE-LIVE-PLUGIN.cmd -SdkRoot 'D:\moje-kompletni-instalace-QAROS'
 ```
 
-V kořeni `QAROS_VTK` nastav skutečnou složku SDK. Níže je příklad `D:\install`; musí přímo obsahovat `include` a `bin`, případně zvol jeho podadresář.
+Předchozí soubory ukládá do `package/live-backup-*`. Při chybě instalace obnoví
+původní soubory. Starý `QarosVTK.py`, jeho exportní helpery a import cache
+odstraní ze `package/windows-start/plugins/slicer` a případné složky
+`package/QAROS-VTK-plugins/slicer`. Soukromé nastavení ani jiná rozšíření nemaže.
 
-```powershell
-$qarSdk = 'D:\install'
-Test-Path "$qarSdk/include/qar_streaming.h"
-Test-Path "$qarSdk/bin/qar-streaming-c.dll"
-cmake -S . -B build-windows-release -G "Visual Studio 17 2022" -A x64 "-DCMAKE_TOOLCHAIN_FILE=C:/dev/vcpkg/scripts/buildsystems/vcpkg.cmake" "-DVCPKG_OVERLAY_TRIPLETS=$PWD/cmake/triplets" -DVCPKG_TARGET_TRIPLET=x64-windows-release -DQARVTK_BUILD_SENDER=ON "-DQAROS_SDK_ROOT=$qarSdk"
-```
+Pokud po restartu stále vidíš **QAROS Streaming**, máš jeho další kopii v jiné
+cestě. Odeber cestu ke starému balíčku z Additional module paths; ponech novou
+složku výše. Záložní složky nepřidávej mezi moduly.
 
-Oba `Test-Path` musí vrátit `True`. Po úspěšném configure:
+Starý `START-PREVIEW.cmd` je pouze kompatibilní zkratka k instalátoru Live.
+Staré kombinované ZIPy ani náhled kostky pro tento postup nepoužívej.
 
-```powershell
-cmake --build build-windows-release --config Release --parallel 4
-ctest --test-dir build-windows-release -C Release --output-on-failure
-.\build-windows-release\Release\qarvtk-preview.exe --frames 300
-.\build-windows-release\Release\qarvtk-sender.exe --sdk-info
-```
+## První přenos
 
-Po každém příkazu zkontroluj, že skončil bez chyby. První kompilace VTK může trvat přes hodinu a potřebuje dost místa na disku; další buildy využijí cache. Triplet sestavuje pouze Release. Původní Windows CI vypršelo při kompilaci Debug VTK; aktuální stav plného buildu je v [GitHub Actions](https://github.com/HonzaHovora/QAROS_VTK/actions/workflows/windows-native.yml).
+1. Načti scénu do Sliceru. U CT/MR zapni **Volume Rendering**, zvol **VTK GPU /
+   Composite** a ověř obraz v prvním 3D pohledu. ROI a presety mohou zůstat živé.
+2. V QAROS spusť jeden receiver Visualizeru; pro brýle připoj headset.
+3. V QAROS Live Renderer ověř **Host bridge DLL**:
+   `D:/QAROS_VTK/package/windows-start/Release/qarvtk-host.dll`
+   a **QAROS SDK folder**: obvykle `C:/Program Files/Quaternar/QAROS`.
+4. Vyber **Stream to**: Visualizer only, Headset only nebo Visualizer + headset.
+5. Klikni **Start live streaming**. Případný přístup aplikace Slicer povol v Hubu.
+6. Změny scény se přenášejí živě. **Stop live streaming** uvolní vlastní
+   prostředky; před restartem počkej na opětovné povolení Start.
 
-Preview má zobrazit zelenou kostku. Nevyžaduje Hub ani SDK runtime. GPU test vyžaduje funkční OpenGL 3.3, proto ho spouštěj v místní grafické relaci. `--sdk-info` vypíše fingerprint hlavičky, typ API a `plugin_protocol: 2`.
+**Model size = 1×** zachovává fyzické měřítko 1:1. Centrovaní scénu pouze
+vystředí. Násobek 1/8× až 8× i nové rozměry pracovního prostoru se použijí
+při Start. Náhledy viditelných řezů ve Four-up mají při vytvoření úhlopříčku 14″.
+Podrobnosti: [rychlý návod](WINDOWS_LIVE_QUICKSTART.txt),
+[brýle](HEADSET_STREAMING.md), [více objemů](MULTIPLE_VOLUMES.md).
 
-Při přesunu backendu zkopíruj **celou složku `Release` s DLL**, ne samotné EXE. SDK ponech zvlášť a kompletní. Binárky z CI sestavené jen s veřejnou hlavičkou nemusí odpovídat tvému SDK; plugin nesoulad odmítne.
+Aktuální Live capture očekává podporovanou VTK GPU pipeline. Tato změna
+nepřidává automatické zachycení libovolného ANARI rendereru.
 
-## 4. Slicer — doporučený první pokus
+## Vývoj a jiné balení
 
-1. Spusť Slicer. V **Edit → Application Settings → Modules → Additional module paths** přidej `C:/dev/QAROS_VTK/package/QAROS-VTK-plugins/slicer` a restartuj Slicer.
-2. Vyber modul **QAROS → QAROS Streaming**.
-3. Načti model/segmentaci nebo CT/MR. Pro CT/MR zapni **Volume Rendering**, vyber preset a vypni Crop. V QAROS vyber **Selected object**, nebo **Visible 3D scene (first view)**. U vybrané segmentace vyber segment. **Center and fit** je zapnuté jako výchozí.
-4. **Sender executable** nastav na `C:/dev/QAROS_VTK/build-windows-release/Release/qarvtk-sender.exe`. **QAROS SDK folder** nastav na svou složku SDK.
-5. U nového Hub SDK zadej **Hub pairing code** při prvním spojení. Identita se uloží mimo repozitář do `%LOCALAPPDATA%/QAROS_VTK/onboarding-id.txt`. Kód se po pokusu vymaže z políčka a plugin ho neukládá do nastavení. Volitelně vyplň Hub host.
-6. U staršího SDK 2540 se používá session invite: případně vyber **Legacy invite**, zvol **Legacy viewer** (`visualizer` nebo `quest`). Pole Hub identity/kód se u něj nepoužívají.
-7. Klikni **Start streaming**. U nového API otevři aplikaci/volume v Hub vieweru. Sleduj **Sender log**; chyba GPU, SDK nebo připojení je vidět zde.
-8. Po změně modelu, barvy nebo presetu objemu stiskni **Update scene**. Automatická aktualizace je jen pro změněné povrchy; objemy se exportují ručně.
-9. **Stop streaming** požádá backend o ukončení. Během blokujícího SDK připojení to může trvat až přibližně 65 sekund. Při zavření Sliceru se neukončený proces po krátkém čekání ukončí vynuceně.
+`py -3 scripts/package_plugins.py` vytvoří `package/QAROS-VTK-plugins/slicer`
+a ZIP Python modulů. Slicer složka obsahuje pouze `QarosLive.py` a jeho privátní
+knihovny. Při opakovaném balení odstraní starý exportní modul a jeho cache.
+Tento Python ZIP neobsahuje nativní DLL ani SDK; není to balíček pro Extensions
+Manager. `integrations/slicer/CMakeLists.txt` slouží k sestavení standardní
+extension s vývojovým buildem Sliceru a registruje jen Live modul.
 
-Transformace rodičů MRML se aplikují automaticky; jednotky jsou RAS milimetry a převod do QAROS metrů provádí backend. **Center and fit** standardně vycentruje scénu a přizpůsobí nejdelší rozměr na 65 cm. Pro původní fyzické rozměry a světovou polohu tuto volbu vypni; model mimo počátek pak může být mimo pracovní prostor.
+Host DLL se sestavuje s `QARVTK_BUILD_RENDERER=OFF` a
+`QARVTK_BUILD_HOST_BRIDGE=ON`; postup je v README. Není třeba kompilovat ani
+udržovat samostatný renderer kvůli Sliceru.
 
-Bez SDK můžeš ověřit načtení pluginu a **Export surface to file**. Export má fungovat i bez senderu. Vzniklý VTP lze otevřít lokálně:
+ParaView má vlastní postup v [HOST_INTEGRATIONS.md](HOST_INTEGRATIONS.md).
+Jeho nový Live plugin se připravuje v [PR #4](https://github.com/HonzaHovora/QAROS_VTK/pull/4).
 
-```powershell
-.\build-windows-release\Release\qarvtk-preview.exe --scene C:\data\model.vtp --ras --meters-per-unit 0.001
-```
+## Když se něco nepovede
 
-## 5. ParaView — skutečný plugin přes Plugin Manager
-
-1. Spusť ParaView s lokálním **built-in** připojením. Tato verze pluginu nepodporuje `pvserver` ani MPI.
-2. **Tools → Manage Plugins → Local Plugins → Load New**: vyber `package/QAROS-VTK-plugins/paraview/QarosVTKPlugin.py`. Nech vedle něj ostatní `.py` soubory. Volitelně zapni **Auto Load**.
-3. Vytvoř např. **Sources → Sphere**, klikni **Apply** a vyber zdroj. Přidej filtr **QAROS Streaming** přes vyhledávání filtrů.
-4. Nastav **Sender Executable**, **SDK Folder** a **Metres Per Unit**. Pro data v metrech je to `1`, pro milimetry `0.001`. Klikni **Apply**.
-5. Pro nové Hub API nejdřív jednou proveď pairing přes Slicer nebo terminál (níže). **Identity File** ponech prázdné pro společnou výchozí identitu. Pro starší SDK nastav případný **Legacy Invite File** a **Legacy Target**.
-6. Klikni **Start streaming**. **Show sender log** vypíše stav a log do výstupu ParaView. **Stop streaming** ukončí proces. Před změnou SDK/cest/měřítka nejprve zastav streaming.
-7. Změna vstupu filtru a jeho přepočet publikuje nový povrch pro běžící sender. Nepřenáší se změny provedené jen v části **Display**. Pro posun/otočení/měřítko vlož před QAROS filtr standardní **Transform** filtr.
-
-Pairing pro ParaView z PowerShellu, pokud nepoužiješ Slicer:
-
-```powershell
-New-Item -ItemType Directory -Force "$env:LOCALAPPDATA/QAROS_VTK" | Out-Null
-py -3 scripts/run_sender.py --exe build-windows-release/Release/qarvtk-sender.exe --sdk D:/install --identity "$env:LOCALAPPDATA/QAROS_VTK/onboarding-id.txt"
-```
-
-Kód zadej až na výzvu programu. Potom program ukonči Ctrl+C a identitu použij v pluginu. ParaView nemá pole pro pairing kód, aby se kód neukládal do `.pvsm` stavu. Po expiraci/zrušení identity zopakuj párování. Pro první test používej jeden sender současně.
-
-## 6. Linux
-
-Pro ParaView použij oficiální binární balík z webu projektu. Ubuntu 24.04 balíček ParaView 5.11.2 se systémovým Pythonem 3.12 má chybu loaderu Python pluginů (`inspect.getargspec`); samotný exportní helper v něm funguje, plugin se ale nenačte. Neupravuj kvůli tomu systémový Python.
-
-Slicer i ParaView mají Linuxové verze. Python pluginy se instalují stejnými kroky. Backend:
-
-```bash
-sudo apt-get update
-sudo apt-get install -y cmake ninja-build g++ libvtk9-dev libglfw3-dev libgl1-mesa-dev
-python3 scripts/package_plugins.py
-bash scripts/build-linux.sh /cesta/k/linuxovemu/QAROS-SDK
-```
-
-Pro streaming je potřeba Linuxové SDK s `bin/libqar-streaming-c.so`, podporovaná GPU a X11/GLX. Windows DLL na Linuxu nefungují. Bez Linuxového SDK lze sestavit preview pomocí `bash scripts/build-linux.sh` a ověřit hostitelské pluginy/export. Výchozí Hub identita je `$XDG_STATE_HOME/QAROS_VTK/onboarding-id.txt`, případně `~/.local/state/QAROS_VTK/onboarding-id.txt`.
-
-## 7. Jak poznat úspěch a co poslat při chybě
-
-První test je úspěšný, až když uvidíš správně velký model ve vieweru, reaguje na pohyb hlavy, **Update surface** změní geometrii a **Stop streaming** ukončí sender bez pádu hostitele. Zvlášť ověř hloubku/okluzi a polohu na skutečném zařízení.
-
-Při chybě pošli: verzi Sliceru/ParaView, commit repozitáře, výstup `--sdk-info`, poslední chybu z logu a typ GPU/ovladače. Log je v dočasné složce `qarvtk-*`, kterou ukazuje stav pluginu. Neukládej do Gitu pairing kódy, onboarding identitu, pozvánky ani pacientská data. Soukromé pracovní VTP/VTM a voxelové exporty plugin odstraní při úklidu; po pádu aplikace může zůstat v dočasné složce.
-
-| Projev | Co zkontrolovat |
+| Projev | Co ověřit |
 | --- | --- |
-| Plugin není v nabídce | Správná složka s celým balíčkem, restart Sliceru / načtení `.py` v Plugin Manageru ParaView. |
-| SDK does not match | Překonfigurovat a sestavit sender proti hlavičce z téhož SDK jako runtime. |
-| Sender is too old | Znovu sestavit backend z aktuálního checkoutu; plugin potřebuje protokol 2 pro scény/objemy. |
-| Missing runtime / DLL | Kompletní SDK a kompletní složka Release s DLL; ne míchat verze. |
-| OpenGL/GPU identity chyba | Ovladač, podporovaná GPU, stejný adaptér pro OpenGL a QAROS; Linux X11. |
-| No viewer request / timeout | Spuštěný Hub/viewer, správné párování/invite, otevřená app volume, síť. |
-| Model není vidět | Jednotky, poloha vůči počátku, platný polygonální povrch, velikost vůči app volume. |
+| Modul není v nabídce | Celá složka pluginu v Additional module paths, restart Sliceru. |
+| Vidíš i starý QAROS Streaming | Odeber cestu k jiné staré kopii pluginu, nepřidávej zálohu. |
+| SDK / DLL mismatch | Kompletní QAROS dev.2927 a DLL z téhož Live balíčku; nemíchej SDK soubory. |
+| Start bez obrazu | Receiver nebo připojený headset, správný Stream to, schválení v Hubu. |
+| Po Stop/Start není obraz | Známý problém dev.2927: odeber receiver a vytvoř nový, pak stream restartuj. |
+| Nepodporovaný mapper nebo režim objemu | Pro Live CT/MR použij podporovaný VTK GPU Composite; ověř nejdřív jednoduchou scénu. |
 
-Aktuální stav ověření a známé mezery: [VALIDATION.md](https://github.com/HonzaHovora/QAROS_VTK/blob/main/docs/VALIDATION.md). Pluginy nejsou zatím publikované v oficiálních katalozích. Toto je instalovatelný vývojový prototyp, nikoli hotová medicínská aplikace.
-
+Log folder ukazuje záznamy pluginu; `COLLECT-LOGS.cmd` je zabalí k diagnostice.
+Při chybě pošli přesnou hlášku, verzi Sliceru/QAROS a logy.

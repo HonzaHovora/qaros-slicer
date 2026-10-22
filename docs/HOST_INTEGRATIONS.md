@@ -1,27 +1,53 @@
-# Host plugins and export API
+# Host integrations
 
-The primary workflow is an installed plugin. Use [INSTALLATION.md](INSTALLATION.md)
-for installation and Start/Stop instructions. The Slicer scripted module and the
-ParaView Python plugin both control `qarvtk-sender` through the shared process
-controller. They do not load QAROS SDK libraries inside the host.
+## Slicer: direct rendering only
 
-| Host | Plugin entry point | Geometry and update behavior |
-| --- | --- | --- |
-| Slicer | `integrations/slicer/QarosVTK.py` | Selected model/segment/CT/MR, or visible models/segments and one volume in the first 3D view. Colors, linear volume transforms, transfer functions, optional scene fit. Manual volume updates; optional automatic changed-surface updates. |
-| ParaView | `integrations/paraview/QarosVTKPlugin.py` | Pipeline filter; surface extraction from dataset/composite input; geometry republishes when the pipeline updates. Local built-in connection only. |
+`integrations/slicer/QarosLive.py` is the only registered Slicer module.
+It uses Slicer's live view and a VTK/Qt-free `qarvtk-host.dll` transport.
+The private `QarosVTKLib` directory is a support package, not a second module.
 
-The backend watches a private VTP or VTM manifest. It preserves the previous scene
-if a new file cannot be read. Slicer snapshots carry materials and scalar CT/MR
-voxels with RGB, scalar-opacity and gradient-opacity transfer functions. Annotations,
-slice planes, overlays and picking are not transferred. ParaView remains surface-only.
-One volume is supported, in Composite mode without ROI cropping, combined only
-with opaque surfaces. The plugin rejects unsupported combinations with a message.
+The separate-renderer Slicer module (`QarosVTK.py`) and its scene-export helper
+were retired on 2026-10-22. They are absent from source, extension registration,
+Python packages and the current Windows Live installer. ANARI remains a separate
+renderer route; retirement does not add ANARI capture support to the VTK Live path.
 
-## Optional ParaView Python helper
+Use [INSTALLATION.md](INSTALLATION.md). The Windows installer handles both fresh
+installs and upgrades, with backup and removal of retired files in managed paths.
+For Python-only packaging, run `python3 scripts/package_plugins.py`.
 
-The older export API remains useful for a manual snapshot including the active
-view's **display transform**. This differs from the plugin, where transforms must
-be in the pipeline (e.g. a standard Transform filter).
+Host tests use the actual Slicer application and its bundled VTK:
+
+```bash
+python3 scripts/package_plugins.py
+python3 tests/test_plugin_packaging.py
+Slicer --no-splash --ignore-slicerrc --additional-module-paths "$PWD/package/QAROS-VTK-plugins/slicer" --python-script tests/slicer_host_render_smoke.py
+Slicer --no-splash --ignore-slicerrc --additional-module-paths "$PWD/package/QAROS-VTK-plugins/slicer" --python-script tests/slicer_panels_smoke.py
+Slicer --no-splash --ignore-slicerrc --additional-module-paths "$PWD/package/QAROS-VTK-plugins/slicer" --python-script tests/slicer_multivolume_smoke.py
+```
+
+For headless Linux prefix host commands with `xvfb-run -a env LIBGL_ALWAYS_SOFTWARE=1`.
+These tests do not establish a real Windows QAROS/headset connection.
+
+## ParaView
+
+The direct Live integration is being prepared in
+[PR #4](https://github.com/HonzaHovora/QAROS_VTK/pull/4), branch
+`codex/paraview-live`. It is separate from this Slicer cleanup.
+
+Main still contains the earlier surface-export prototype:
+`integrations/paraview/QarosVTKPlugin.py`. It controls a standalone
+`qarvtk-sender` via the shared process controller. The Slicer Live installer
+does not install or invoke that sender.
+
+To use the earlier prototype, package the Python files and load
+`package/QAROS-VTK-plugins/paraview/QarosVTKPlugin.py` through ParaView's Plugin
+Manager. Use a local built-in connection, add its QAROS Streaming filter, set
+Sender Executable, SDK Folder and Metres Per Unit, then Apply and Start streaming.
+The input pipeline must supply transforms; display-only changes are not exported.
+If its SDK requires pairing, use `scripts/run_sender.py` in a terminal. Pairing
+through the retired Slicer module is no longer available.
+
+The optional snapshot helper includes the active view's display transform:
 
 ```python
 import sys
@@ -30,72 +56,18 @@ import qarvtk_paraview
 qarvtk_paraview.export_active(r"C:/data/paraview-surface.vtp")
 ```
 
-`ExtractSurface` executes on the selected output and `Fetch` gathers geometry to
-the client. Composite outputs are flattened. The temporary filter is deleted and
-the active source restored. This helper can gather remote/MPI data, which may be
-expensive; the streaming plugin deliberately rejects those sessions.
+`ExtractSurface` executes on the selected output and `Fetch` gathers geometry
+to the client. Composite outputs are flattened; the temporary filter is deleted
+and the active source restored. The streaming filter rejects remote/MPI sessions.
+The standalone sender and preview build instructions are in [WINDOWS.md](WINDOWS.md).
+They are development/ParaView tools and are not required by Slicer.
 
-ParaView data has no universal physical unit. Choose the correct scale and Y-up
-orientation; a pipeline Transform is required to change the plugin's coordinates.
-
-## Optional Slicer Python helper
-
-```python
-import sys
-sys.path.insert(0, r"C:/dev/QAROS_VTK/integrations/slicer")
-import qarvtk_slicer
-node = slicer.util.getNode("MyModel")
-qarvtk_slicer.export_node(node, r"C:/data/slicer-surface.vtp")
-
-segmentation = slicer.util.getNode("Segmentation")
-segment_id = segmentation.GetSegmentation().GetSegmentIdBySegmentName("Liver")
-qarvtk_slicer.export_node(segmentation, r"C:/data/liver.vtp", segment_id)
-```
-
-Closed surfaces are created when necessary. All parent MRML transforms are baked,
-including nonlinear transforms supported by VTK. Source geometry and transforms
-are preserved; a closed-surface representation may be added to a segmentation.
-File coordinates remain world RAS mm. For a manual launch:
-
-```powershell
-py -3 scripts/run_sender.py --exe build-windows-release/Release/qarvtk-sender.exe --sdk D:/install --scene C:/data/slicer-surface.vtp --ras --meters-per-unit 0.001 --watch --preview
-```
-
-For a scene snapshot with the Slicer bridge (requires protocol 2 sender):
-
-```python
-qarvtk_slicer.export_selection(node, r"C:/data/scene.vtm", fit=True)
-qarvtk_slicer.export_selection(None, r"C:/data/scene.vtm", visible_scene=True, fit=False)
-```
-
-Keep the adjacent `scene-data-*` folders with the manifest. The selected scalar
-volume must have a configured Volume Rendering display/property node. `fit=False`
-preserves world RAS mm; launch with `--ras --meters-per-unit 0.001`. `fit=True`
-centers the whole scene and sets its maximum dimension to 0.65 m.
-
-## Reproduce host tests
-
-Use a fresh host process and its own Python, not a separate pip VTK installation.
-The process fixture is a test double and does not connect to QAROS.
+The process fixture is a test double, not a QAROS connection:
 
 ```bash
-python3 scripts/package_plugins.py
 cmake -S . -B build-fixture -DQARVTK_BUILD_RENDERER=OFF
 cmake --build build-fixture --parallel 2
 export QARVTK_TEST_BACKEND="$PWD/build-fixture/qarvtk-process-fixture"
 pvpython tests/paraview_smoke.py
 pvpython tests/paraview_plugin_smoke.py
-Slicer --no-splash --no-main-window --ignore-slicerrc --additional-module-paths "$PWD/package/QAROS-VTK-plugins/slicer" --python-script tests/slicer_smoke.py
 ```
-
-For a headless Linux machine prefix host commands with
-`xvfb-run -a env LIBGL_ALWAYS_SOFTWARE=1`. On Windows use the corresponding `.exe`
-fixture from the `Release` build folder and set `$env:QARVTK_TEST_BACKEND`.
-
-## API sources
-
-- [ParaView Python plugin decorators](https://www.paraview.org/paraview-docs/v5.12.0/python/paraview.util.vtkAlgorithm.html)
-- [ParaView Fetch](https://www.paraview.org/paraview-docs/v5.12.0/python/paraview.servermanager.html#paraview.servermanager.Fetch)
-- [Slicer extensions and module paths](https://slicer.readthedocs.io/en/latest/developer_guide/extensions.html)
-- [Slicer model transforms](https://slicer.readthedocs.io/en/latest/developer_guide/script_repository/models.html)
-- [Slicer segmentation surfaces](https://slicer.readthedocs.io/en/latest/developer_guide/script_repository/segmentations.html)

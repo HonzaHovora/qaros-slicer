@@ -38,9 +38,6 @@ foreach ($name in @('include\qar_streaming.h', 'bin\qar-streaming-c.dll', 'bin\q
 if ((Get-FileHash -LiteralPath (Join-Path $SdkRoot 'include\qar_streaming.h') -Algorithm SHA256).Hash -ine $expectedSdk) {
     throw 'This update requires the installed dev.2927 SDK header a32cecd4. Do not replace individual SDK files.'
 }
-if (-not (Test-Path -LiteralPath (Join-Path $destination 'plugins\slicer\QarosLive.py') -PathType Leaf)) {
-    throw 'Existing package/windows-start plugin is missing. Run START-PREVIEW.cmd once, close the preview, then rerun this updater.'
-}
 $expected = (Get-Content -LiteralPath ($archive + '.sha256') -Raw).Trim().Split(' ')[0]
 if ((Get-FileHash -LiteralPath $archive -Algorithm SHA256).Hash -ine $expected) {
     throw 'Live plugin archive checksum mismatch. Pull the complete update from GitHub.'
@@ -78,8 +75,8 @@ $info = Get-Content -LiteralPath (Join-Path $staging 'HOST_UPDATE_INFO.json') -R
 if ($info.sdk_header_sha256 -ne $expectedSdk -or $info.host_abi -ne 5) {
     throw 'Archive SDK or ABI metadata differs from this updater.'
 }
-if ($info.multi_target -ne 1 -or $info.build -ne 'installed-hub-update-r8.1' -or $info.runtime_teardown -ne 'handle_only' -or $info.target_discovery -ne 2 -or $info.panel_probe -ne 0 -or $info.slice_panel_diagonal_inches -ne 14) {
-    throw 'This updater requires the r8.1 package with 14-inch slice panels.'
+if ($info.multi_target -ne 1 -or $info.build -ne 'installed-hub-update-r8.2' -or $info.runtime_teardown -ne 'handle_only' -or $info.target_discovery -ne 2 -or $info.panel_probe -ne 0 -or $info.slice_panel_diagonal_inches -ne 14) {
+    throw 'This updater requires the r8.2 Live-only package with 14-inch slice panels.'
 }
 foreach ($relative in $files) {
     if ($relative -eq 'HOST_UPDATE_INFO.json') { continue }
@@ -87,7 +84,41 @@ foreach ($relative in $files) {
     if ($hash -ine $info.files.$relative) { throw "Payload checksum mismatch: $relative" }
 }
 
-# Back up every file before replacing any. Restore the previous set on failure.
+# Remove only known files of the retired Slicer exporter, including import caches.
+# The second path covers users who previously packaged the Python modules locally.
+$retired = @()
+$roots = @(
+    @{ Path = (Join-Path $destination 'plugins\slicer'); Backup = 'plugins/slicer' },
+    @{ Path = (Join-Path $RepoRoot 'package\QAROS-VTK-plugins\slicer'); Backup = 'QAROS-VTK-plugins/slicer' }
+)
+foreach ($root in $roots) {
+    foreach ($subdir in @('', 'QarosVTKLib')) {
+        $directory = if ($subdir) { Join-Path $root.Path $subdir } else { $root.Path }
+        $savedDirectory = if ($subdir) { Join-Path $root.Backup $subdir } else { $root.Backup }
+        $names = if ($subdir) { @('qarvtk_slicer', 'qarvtk_bridge', 'qarvtk_scene') } else { @('QarosVTK', 'qarvtk_slicer', 'qarvtk_bridge', 'qarvtk_scene', 'qarvtk_runtime') }
+        foreach ($name in $names) {
+            foreach ($suffix in @('.py', '.pyc', '.pyo')) {
+                $source = Join-Path $directory ($name + $suffix)
+                if (Test-Path -LiteralPath $source -PathType Leaf) {
+                    $retired += @{ Source = $source; Saved = (Join-Path $backup (Join-Path $savedDirectory ($name + $suffix))) }
+                }
+            }
+            $cache = Join-Path $directory '__pycache__'
+            if (Test-Path -LiteralPath $cache -PathType Container) {
+                foreach ($item in @(Get-ChildItem -LiteralPath $cache -File -Filter ($name + '.*.pyc'))) {
+                    $retired += @{ Source = $item.FullName; Saved = (Join-Path $backup (Join-Path $savedDirectory ('__pycache__/' + $item.Name))) }
+                }
+            }
+        }
+    }
+}
+
+# Back up every replacement and retirement before changing the installation.
+New-Item -ItemType Directory -Force -Path $backup | Out-Null
+foreach ($item in $retired) {
+    New-Item -ItemType Directory -Force -Path (Split-Path -Parent $item.Saved) | Out-Null
+    Copy-Item -LiteralPath $item.Source -Destination $item.Saved
+}
 $existing = @{}
 foreach ($relative in $files) {
     $target = Join-Path $destination $relative
@@ -104,6 +135,9 @@ try {
         New-Item -ItemType Directory -Force -Path (Split-Path -Parent $target) | Out-Null
         Copy-Item -LiteralPath (Join-Path $staging $relative) -Destination $target -Force
     }
+    foreach ($item in $retired) {
+        Remove-Item -LiteralPath $item.Source -Force
+    }
 } catch {
     $failure = $_
     foreach ($relative in $files) {
@@ -114,11 +148,16 @@ try {
             Remove-Item -LiteralPath $target
         }
     }
+    foreach ($item in $retired) {
+        Copy-Item -LiteralPath $item.Saved -Destination $item.Source -Force
+    }
     throw $failure
 }
 Remove-Item -LiteralPath $staging -Recurse
-Write-Host 'QAROS Live Renderer r8.1 updated for installed QAROS 0.9.0-dev.2927+f291e404 (ABI 5).'
+Write-Host 'QAROS Live Renderer r8.2 installed for QAROS 0.9.0-dev.2927+f291e404 (ABI 5).'
+Write-Host 'The retired QAROS Streaming module and its export helpers were removed from managed plugin folders.'
 Write-Host "Previous plugin saved to: $backup"
+Write-Host "Slicer Additional module paths: $(Join-Path $destination 'plugins\slicer')"
 Write-Host "Open Slicer, QAROS Live Renderer. SDK folder: $SdkRoot"
 Write-Host 'In QAROS, start one Visualizer receiver and/or connect HoloLens. Either can join later.'
 Write-Host 'Stream to: Visualizer + headset is the default. Headset only and Visualizer only are also available.'
