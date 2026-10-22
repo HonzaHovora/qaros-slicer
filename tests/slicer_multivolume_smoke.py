@@ -99,7 +99,7 @@ def run():
         slicer.app.processEvents()
     view.resetFocalPoint()
     window.Render()
-    host = HostView(view, match_view=False)
+    host = HostView(view)
     volumes = host.volumes()
     assert len(volumes) == 2
     for volume in volumes:
@@ -270,7 +270,7 @@ def run():
     # dataset, opaque/translucent surfaces or decorations from the source view.
     renderer.AddActor(surface)
     surface.GetProperty().SetOpacity(.4)
-    independent = create_host_views(view, match_view=False,
+    independent = create_host_views(view,
         names=lambda v: "red data" if v == volumes[0] else "blue data")
     assert len(independent) == 2
     assert independent[0].desktop is independent[1].desktop

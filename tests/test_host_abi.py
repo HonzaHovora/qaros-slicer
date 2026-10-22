@@ -10,7 +10,7 @@ from qarvtk_host_runtime import Placement, Volume, Frame, EXPECTED_SDK
 dll = c.CDLL(sys.argv[1])
 dll.qarvtk_host_info.restype = c.c_char_p
 info = json.loads(dll.qarvtk_host_info())
-assert info == dict(host_abi=5, modern_api=0, panel_probe=0, target_discovery=2, runtime_handle_only=1,
+assert info == dict(host_abi=5, modern_api=0, panel_probe=0, panel_size_on_start=1, panel_image_region=1, target_discovery=2, runtime_handle_only=1,
     multi_target=int(sys.argv[2] == EXPECTED_SDK),
     header_sha256=sys.argv[2],
     eye_size=104, frame_size=240, placement_size=112, volume_size=120)
@@ -38,7 +38,7 @@ for count in (0, 2, 33):
 dll.qarvtk_host_destroy.argtypes = [c.c_void_p]
 dll.qarvtk_host_destroy.restype = c.c_int
 assert dll.qarvtk_host_destroy(None) == 1
-for name in ("create", "capture", "visible", "close", "status"):
+for name in ("create", "capture", "capture_region", "visible", "close", "status"):
     assert getattr(dll, "qarvtk_host_panel_" + name)
 dll.qarvtk_host_panel_create.argtypes = [c.c_void_p, c.c_char_p] + [c.c_uint32]*2 + [c.c_double]*4 + [c.POINTER(c.c_void_p), c.c_char_p, c.c_uint32]
 panel = c.c_void_p()

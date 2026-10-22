@@ -69,11 +69,11 @@ def run():
     slicer.app.processEvents()
     view.resetFocalPoint()
     window.Render()
-    host = HostView(view, match_view=False)
+    host = HostView(view)
     # Real Slicer volume matrix carries its 3 mm spacing; centering and workspace
     # must use world bounds, not voxel counts or raw mapper input dimensions.
     assert np.allclose(host.workspace_size, [.093, .093, .093]), host.workspace_size
-    physical = HostView(view, fit=False, match_view=False)
+    physical = HostView(view, fit=False)
     assert np.allclose(physical.workspace_size, [.093, .093, .093]), physical.workspace_size
     physical.close()
     print("PASS: real Slicer CT stays 1:1 with and without centering", flush=True)

@@ -46,6 +46,14 @@ class FakeDll:
 
 
 class HostRuntimeTest(unittest.TestCase):
+    def test_old_bridge_cannot_silently_claim_14_inch_panels(self):
+        transport = object.__new__(HostTransport)
+        transport.dll = MagicMock()
+        transport.dll._qarvtk_info = {"host_abi": 5}
+        with self.assertRaisesRegex(RuntimeError, "r8.3 host bridge"):
+            transport.panel_create("Slicer Red", (640, 360), (0., 0., -1.5), .31)
+        transport.dll.qarvtk_host_panel_create.assert_not_called()
+
     def test_headset_modes_require_current_target_discovery(self):
         for info in ({}, {"multi_target": 0}, {"multi_target": 1},
                      {"multi_target": 1, "target_discovery": 2}):

@@ -9,8 +9,8 @@ import zipfile
 
 ROOT = Path(__file__).resolve().parents[1]
 SDK_SHA = 'a32cecd4137dd3b28e0d5e0c1642a066cbea976f81b90f1f31fbac4d0fba8d4a'
-BUILD = 'installed-hub-update-r8.2'
-NATIVE_BUILD = 'installed-hub-update-r8'
+BUILD = 'installed-hub-update-r8.3'
+NATIVE_BUILD = 'installed-hub-update-r8.3'
 
 
 def package(dll, output, compiler):
@@ -23,6 +23,10 @@ def package(dll, output, compiler):
         raise ValueError('DLL does not contain the exact dev.2927 SDK fingerprint')
     if b'"panel_probe":0' not in native:
         raise ValueError('DLL still provides the retired panel test mode')
+    if b'"panel_size_on_start":1' not in native:
+        raise ValueError('DLL does not apply physical panel size after registration')
+    if b'"panel_image_region":1' not in native:
+        raise ValueError('DLL does not provide image-only GPU panel capture')
     if b'"target_discovery":2' not in native:
         raise ValueError("DLL does not provide updated target discovery")
     if b'"multi_target":1' not in native:
@@ -45,6 +49,7 @@ def package(dll, output, compiler):
                 slice_previews_default=True, panel_probe=0, target_discovery=2,
                 default_model_scale=1.0, model_scale_range=[0.125, 8.0],
                 slice_panel_diagonal_inches=14.0,
+                orientation_mode='fixed_ras', panel_size_on_start=1, panel_image_region=1,
                 multi_target=1, default_target_mode='both',
                 max_visualizer_targets=1, max_headset_targets=1,
                 runtime_teardown='handle_only',

@@ -1,14 +1,16 @@
-# Slicer Live r8.2: Visualizer and HoloLens
+# Slicer Live r8.3: Visualizer and HoloLens
 
 Connecting HoloLens to QAROS does not itself stream Slicer content. Slicer
 creates a rendering sender for that target peer and each app volume.
 One Visualizer receiver and one headset can receive independent stereo views
-of the same workspaces. Slice panels are shared previews. R8.1 gives each new
-panel a 14-inch diagonal, independent of model scale; resize it in QAROS as needed.
+of the same workspaces. Image-only slice panels start with a 14-inch diagonal,
+independent of model scale; resize them in QAROS as needed. R8.3 applies size
+after registration, crops surrounding margins on the GPU and moves data names
+to the title. Slicer corner labels are hidden while streaming and restored on Stop.
 
 ## Install and test
 
-1. Close Slicer. Fetch/Pull `main` with r8.2 and run `UPDATE-LIVE-PLUGIN.cmd`. See the
+1. Close Slicer. Fetch/Pull `main` with r8.3 and run `UPDATE-LIVE-PLUGIN.cmd`. See the
    [installation guide](QAROS_DEV2927_UPDATE.md).
 2. Connect HoloLens in QAROS to the same Hub session used by Slicer. For the
    first test, choose **Headset only** and do not create a Visualizer receiver.
@@ -40,7 +42,7 @@ panel a 14-inch diagonal, independent of model scale; resize it in QAROS as need
 
 The log folder is displayed in the module. In `host-bridge.log`, check:
 
-- `Host build: installed-hub-update-r8` and `Target mode: headset` confirm
+- `Host build: installed-hub-update-r8.3` and `Target mode: headset` confirm
   the intended DLL and mode.
 - `PEER_OBSERVED` reports target/headset peers, their role, category, app state
   and eligibility. If no headset target appears, check the Hub session and
@@ -87,5 +89,6 @@ ABI 5 remains unchanged. Both headset and combined modes require metadata
 `runtime_handle_only=1` cleanup. Local selection, routing, cancellation,
 physical-placement and installer tests cannot replace a Windows/NVIDIA/
 HoloLens run. On 2026-10-21 the user confirmed r8 works, including the headset.
-No measured performance comparison was supplied. R8.1 reuses the same native
-DLL and only changes the initial panel size; its appearance needs a user check.
+No measured performance comparison was supplied. R8.3 rebuilds the DLL for panel
+size application and GPU cropping. Its appearance and physical size in the
+headset still need a user check; local geometry/GPU tests cannot establish them.

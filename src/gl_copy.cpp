@@ -14,19 +14,22 @@ void main(){vec2 p=vec2((gl_VertexID<<1)&2,gl_VertexID&2);uv=p;gl_Position=vec4(
 const char* fragment=R"(#version 330 core
 in vec2 uv;out vec4 pixel;uniform sampler2D sourceImage;uniform ivec2 flipAxis;uniform int isDepth;
 uniform bool resample;
+uniform ivec2 sourceOrigin,sourceExtent;
 vec4 sampleColor(vec2 t, ivec2 size){
   if(!resample)return texture(sourceImage,t);
   vec2 p=t*vec2(size)-0.5;ivec2 a=ivec2(floor(p));vec2 f=fract(p);
-  vec4 c00=texelFetch(sourceImage,clamp(a,ivec2(0),size-1),0);
-  vec4 c10=texelFetch(sourceImage,clamp(a+ivec2(1,0),ivec2(0),size-1),0);
-  vec4 c01=texelFetch(sourceImage,clamp(a+ivec2(0,1),ivec2(0),size-1),0);
-  vec4 c11=texelFetch(sourceImage,clamp(a+ivec2(1,1),ivec2(0),size-1),0);
+  ivec2 lo=sourceOrigin,hi=sourceOrigin+sourceExtent-1;
+  vec4 c00=texelFetch(sourceImage,clamp(a,lo,hi),0);
+  vec4 c10=texelFetch(sourceImage,clamp(a+ivec2(1,0),lo,hi),0);
+  vec4 c01=texelFetch(sourceImage,clamp(a+ivec2(0,1),lo,hi),0);
+  vec4 c11=texelFetch(sourceImage,clamp(a+ivec2(1,1),lo,hi),0);
   return mix(mix(c00,c10,f.x),mix(c01,c11,f.x),f.y);
 }
 void main(){vec2 t=mix(uv,1.0-uv,vec2(flipAxis));ivec2 size=textureSize(sourceImage,0);
 // Never interpolate foreground and background depth at silhouettes.
 if(isDepth!=0){float d=texelFetch(sourceImage,clamp(ivec2(t*vec2(size)),ivec2(0),size-1),0).r;
-pixel=vec4(d,0,0,1);gl_FragDepth=d;}else{pixel=sampleColor(t,size);}}
+pixel=vec4(d,0,0,1);gl_FragDepth=d;}else{
+t=(vec2(sourceOrigin)+t*vec2(sourceExtent))/vec2(size);pixel=sampleColor(t,size);}}
 )";
 unsigned compile(GLenum kind,const char* text){
   const auto shader=glCreateShader(kind);glShaderSource(shader,1,&text,nullptr);glCompileShader(shader);
@@ -106,7 +109,7 @@ GlCopy::GlCopy(){
   glGenVertexArrays(1,&vao_);glGenFramebuffers(1,&fbo_);
 }
 GlCopy::~GlCopy(){glDeleteFramebuffers(1,&fbo_);glDeleteVertexArrays(1,&vao_);glDeleteProgram(program_);}
-void GlCopy::plane(unsigned source,const Texture& t,const View& v,bool depth,bool report,bool source_top_left){
+void GlCopy::plane(unsigned source,const Texture& t,const View& v,bool depth,bool report,bool source_top_left,const ColorRegion* region){
   std::ostringstream context;
   context<<(v.eye==Eye::left?"left":"right")<<' '<<(depth?"depth":"color")
     <<"; texture["<<v.texture<<"]="<<t.handle<<"; source="<<source
@@ -151,8 +154,14 @@ void GlCopy::plane(unsigned source,const Texture& t,const View& v,bool depth,boo
   GLint sourceWidth=0,sourceHeight=0;
   glGetTexLevelParameteriv(GL_TEXTURE_2D,0,GL_TEXTURE_WIDTH,&sourceWidth);
   glGetTexLevelParameteriv(GL_TEXTURE_2D,0,GL_TEXTURE_HEIGHT,&sourceHeight);
+  const auto crop=region?*region:ColorRegion{0,0,unsigned(sourceWidth),unsigned(sourceHeight)};
+  if(!crop.width||!crop.height||crop.x>=unsigned(sourceWidth)||crop.y>=unsigned(sourceHeight)||
+     crop.width>unsigned(sourceWidth)-crop.x||crop.height>unsigned(sourceHeight)-crop.y)
+    throw std::invalid_argument("Panel crop exceeds the source texture");
+  glUniform2i(glGetUniformLocation(program_,"sourceOrigin"),crop.x,crop.y);
+  glUniform2i(glGetUniformLocation(program_,"sourceExtent"),crop.width,crop.height);
   glUniform1i(glGetUniformLocation(program_,"resample"),
-    sourceWidth!=static_cast<GLint>(width(v))||sourceHeight!=static_cast<GLint>(height(v)));
+    region||crop.width!=width(v)||crop.height!=height(v));
   // VTK's framebuffer has row zero at the bottom. QAROS view pixels run
   // top-to-bottom (as in its CPU/D3D/Vulkan renderers). Convert that origin
   // for BOTH color and depth, then compose with each view's optional flips.
@@ -188,7 +197,7 @@ void GlCopy::copy_plane(const RenderedEye& s,const Frame& f,const EyeViews& v,bo
   if(!source||!glIsTexture(source))throw std::runtime_error("Host texture is not shared with the copy context");
   plane(source,f.textures[view.texture],view,depth,false);
 }
-void GlCopy::copy_color(const RenderedEye& s,const Frame& f,bool source_top_left,bool fit){
+void GlCopy::copy_color(const RenderedEye& s,const Frame& f,bool source_top_left,bool fit,const ColorRegion* region){
   if(f.views.size()!=1||f.views[0].plane!=Plane::color||!s.width||!s.height)
     throw std::invalid_argument("Panel copy requires one color view and a positive source size");
   auto view=f.views[0];
@@ -202,6 +211,10 @@ void GlCopy::copy_color(const RenderedEye& s,const Frame& f,bool source_top_left
   glColorMask(GL_TRUE,GL_TRUE,GL_TRUE,GL_TRUE);glUseProgram(program_);glBindVertexArray(vao_);
   glActiveTexture(GL_TEXTURE0);glBindSampler(0,0);glUniform1i(glGetUniformLocation(program_,"sourceImage"),0);
   if(!s.color||!glIsTexture(s.color))throw std::runtime_error("Panel source texture is not shared");
+  const auto crop=region?*region:ColorRegion{0,0,s.width,s.height};
+  if(!crop.width||!crop.height||crop.x>=s.width||crop.y>=s.height||
+     crop.width>s.width-crop.x||crop.height>s.height-crop.y)
+    throw std::invalid_argument("Panel crop exceeds the source image");
   if(fit){
     // Clear the whole view first, retaining the caller's clear colour. This
     // path targets our owned 2D staging image, never an SDK array texture.
@@ -215,15 +228,15 @@ void GlCopy::copy_color(const RenderedEye& s,const Frame& f,bool source_top_left
     GLfloat clear[4]{};glGetFloatv(GL_COLOR_CLEAR_VALUE,clear);
     glClearColor(0,0,0,1);glClear(GL_COLOR_BUFFER_BIT);glClearColor(clear[0],clear[1],clear[2],clear[3]);
     const auto w=width(view),h=height(view);
-    const double scale=std::min(double(w)/s.width,double(h)/s.height);
-    const auto fitted_w=std::max(1u,static_cast<unsigned>(s.width*scale));
-    const auto fitted_h=std::max(1u,static_cast<unsigned>(s.height*scale));
+    const double scale=std::min(double(w)/crop.width,double(h)/crop.height);
+    const auto fitted_w=std::max(1u,static_cast<unsigned>(crop.width*scale));
+    const auto fitted_h=std::max(1u,static_cast<unsigned>(crop.height*scale));
     const auto x=std::min(view.x0,view.x1)+(w-fitted_w)/2;
     const auto y=std::min(view.y0,view.y1)+(h-fitted_h)/2;
     const bool flip_x=view.x1<view.x0,flip_y=view.y1<view.y0;
     view.x0=x+(flip_x?fitted_w:0);view.x1=x+(flip_x?0:fitted_w);
     view.y0=y+(flip_y?fitted_h:0);view.y1=y+(flip_y?0:fitted_h);
   }
-  plane(s.color,texture,view,false,false,source_top_left);
+  plane(s.color,texture,view,false,false,source_top_left,region);
 }
 }

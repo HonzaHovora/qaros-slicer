@@ -1,5 +1,49 @@
 # Validation and next work
 
+## Slicer Live r8.3: stable orientation and compact panels, 2026-10-22
+
+The desktop camera no longer initializes the model's orientation. Fixed RAS
+axes apply before and during streaming; actual data transforms remain live.
+R8.1/r8.2's 14-inch calculation was present in both main and the ZIP. The native
+registration path only passed that size through `get_or_create` init, which
+does not necessarily update a retained panel. R8.3 explicitly applies size
+after registration. This closes a demonstrated API-contract gap; it does not
+establish the cause of the user's physical-size observation without a live run.
+
+Panels now crop the source texture to geometry-derived image bounds. Data names
+are in `display_name`. Source corner annotations are hidden for the lifetime of
+the preview and restored on close, including errors; no persistent setting is
+changed. The first capture waits for Slicer's normal clean frame. The crop uses
+no brightness threshold, readback or substitute renderer. Nonlinear transforms
+and lightbox layouts retain the full viewport to avoid cutting valid data.
+
+Local validation:
+
+- All 12 CTest suites pass, including a new SDK fixture returning a retained
+  panel with stale size, explicit size application and registration/resize failures.
+- Seven panel tests pass: geometry crop, DPI scaling, transformed bounds, safe
+  fallback, data title, corner-label lifetime, physical diagonal across model
+  sizes/aspects, compact initial rows and the existing scheduler/cleanup cases.
+- VTK placement tests cover opposite and oblique desktop views, orbit/roll,
+  restarts, data transforms, scale, centering and SDK stereo/head poses.
+- The production C++ GPU copy runs on Mesa EGL/llvmpipe: 16 rectangle/full-frame
+  copies cover 2D/array targets, SDK flips, black pixels, interpolation at crop
+  edges and rejection of invalid bounds. A further check preserves letterboxing.
+  Native GPU regression tests and the real-Slicer smoke fixture are updated.
+- The Windows x64 DLL is cross-built with MinGW-w64 GCC 13.2.0-posix against the
+  unchanged dev.2927 header. Core tests include Python transport/diagnostics;
+  packaging tests and Python compilation pass.
+- ZIP CRC, payload hashes and source/binary identity checks pass. The isolated
+  PowerShell updater fixture passes fresh install, upgrade/backup, removal of
+  retired files, rollback and rejection of a mismatched SDK on Linux.
+
+Real Slicer GUI/Qt rendering, native DLL loading on Windows, QAROS registration,
+NVIDIA encoding and physical headset appearance/size are not exercised locally.
+The field check is: install with Slicer closed, confirm **Live plugin r8.3**,
+restart after different camera orbits, check a square animated image and 14-inch
+diagonal, manually resize, then Stop and verify slice annotations return.
+Remaining GUI crashes on receiver reuse are not claimed resolved.
+
 ## Slicer Live r8.2: retire the separate renderer, 2026-10-22
 
 QarosLive is now the only Slicer module in source registration and generated

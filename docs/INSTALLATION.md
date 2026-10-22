@@ -85,6 +85,12 @@ Jeho nový Live plugin se připravuje v [PR #4](https://github.com/HonzaHovora/Q
 
 ## Když se něco nepovede
 
+Aktuální modul ukazuje **Live plugin r8.3**; najetím na tento řádek zjistíš
+cestu skutečně načteného souboru. Po Pull vždy spusť `UPDATE-LIVE-PLUGIN.cmd`
+se zavřeným Slicerem. Nastavení 14″ je od r8.3 předané explicitně i již
+existujícímu panelu. U náhledů se skrývají rohové anotace řezů i ve Sliceru;
+po Stop se obnoví. Podrobnosti jsou v [popisu aktualizace](QAROS_DEV2927_UPDATE.md).
+
 | Projev | Co ověřit |
 | --- | --- |
 | Modul není v nabídce | Celá složka pluginu v Additional module paths, restart Sliceru. |

@@ -8,6 +8,7 @@
 
 namespace qarvtk {
 struct HostPanel;
+struct ColorRegion;
 // Owned by the GUI thread. SDK video/panel work runs on its own worker and
 // finishes before the shared session/library can be destroyed. No input API.
 class HostPanels {
@@ -18,7 +19,7 @@ public:
   ~HostPanels();
   HostPanel* create(const char* name,unsigned width,unsigned height,
                     double x,double y,double z,double width_meters);
-  int capture(HostPanel*,unsigned texture,unsigned width,unsigned height);
+  int capture(HostPanel*,unsigned texture,unsigned width,unsigned height,const ColorRegion* region=nullptr);
   void visible(HostPanel*,bool);
   void close(HostPanel*);
   std::string status(HostPanel*);

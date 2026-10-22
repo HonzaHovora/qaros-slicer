@@ -185,7 +185,7 @@ struct QarvtkHost {
     std::filesystem::create_directories(std::filesystem::u8path(log_folder));
     log.open(std::filesystem::u8path(log_folder)/"host-bridge.log",std::ios::app);
     if(!log)throw std::runtime_error("Cannot open host bridge log");
-    log<<"Host build: installed-hub-update-r8 (ABI 5); SDK header " QARVTK_HOST_SDK_HASH<<std::endl;
+    log<<"Host build: installed-hub-update-r8.3 (ABI 5); SDK header " QARVTK_HOST_SDK_HASH<<std::endl;
     log<<"SDK root: "<<sdk_root<<std::endl;
     log<<"Target mode: "<<target<<"; workspaces="<<volumes.size()<<std::endl;
     copying=std::make_unique<qarvtk::HostSharedWgl>(dc,host_context);
@@ -702,7 +702,7 @@ void QarvtkHost::run() noexcept {
 
 extern "C" {
 const char* qarvtk_host_info(){
-  return "{\"host_abi\":5,\"modern_api\":0,\"panel_probe\":0,\"target_discovery\":2,\"runtime_handle_only\":1,\"multi_target\":"
+  return "{\"host_abi\":5,\"modern_api\":0,\"panel_probe\":0,\"panel_size_on_start\":1,\"panel_image_region\":1,\"target_discovery\":2,\"runtime_handle_only\":1,\"multi_target\":"
 #if QARVTK_HOST_ONBOARDING_API
     "1"
 #else
@@ -778,10 +778,15 @@ int qarvtk_host_panel_create(QarvtkHost* h,const char* name,uint32_t w,uint32_t 
   }catch(const std::exception& e){message(error,size,e.what());return -1;}
 }
 int qarvtk_host_panel_capture(QarvtkHost* h,QarvtkHostPanel* p,uint32_t color,uint32_t w,uint32_t height,char* error,uint32_t size){
+  return qarvtk_host_panel_capture_region(h,p,color,w,height,0,0,w,height,error,size);
+}
+int qarvtk_host_panel_capture_region(QarvtkHost* h,QarvtkHostPanel* p,uint32_t color,uint32_t w,uint32_t height,
+    uint32_t x,uint32_t y,uint32_t crop_width,uint32_t crop_height,char* error,uint32_t size){
   try{
     if(!h||!h->panels)throw std::invalid_argument("No active panel transport");
     if(h->stopping)return 0;
-    return h->panels->capture(reinterpret_cast<qarvtk::HostPanel*>(p),color,w,height);
+    const qarvtk::ColorRegion region{x,y,crop_width,crop_height};
+    return h->panels->capture(reinterpret_cast<qarvtk::HostPanel*>(p),color,w,height,&region);
   }catch(const std::exception& e){message(error,size,e.what());return -1;}
 }
 int qarvtk_host_panel_visible(QarvtkHost* h,QarvtkHostPanel* p,uint32_t visible){

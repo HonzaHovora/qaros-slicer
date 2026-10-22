@@ -46,17 +46,23 @@ def run():
     center = np.array([140., -80., 55.])
     corners = np.asarray([center + np.array(signs)*[120., 90., 160.]
                           for signs in product((-1, 1), repeat=3)])
+    # Fixed data axes: R -> +X, A -> -Z, S -> +Y, independent of desktop pose.
+    basis = np.array([[1., 0., 0.], [0., 0., -1.], [0., 1., 0.]])
+    expected_orientation = None
     for back in ([0, 1, 0], [0, -1, 0], [.7, 1, .4]):
         back = np.asarray(back, dtype=float) / np.linalg.norm(back)
         right = np.cross(-back, [0, 0, 1]); right /= np.linalg.norm(right)
         up = np.cross(right, -back)
-        basis = np.column_stack((right, up, back))
         camera.SetPosition(center + back*1000)
         camera.SetFocalPoint(center)
         camera.SetViewUp(up)
         host = HostView(view)
-        # Independent corner transform verifies all axes, including oblique
-        # views where permuting the source dimensions would be incorrect.
+        assert np.allclose(rotation(host.app_orientation), basis.T)
+        if expected_orientation is None:
+            expected_orientation = host.app_orientation
+        assert host.app_orientation == expected_orientation, "Desktop camera changed the streamed orientation at Start"
+        # Independent corner transform verifies stable physical bounds even
+        # when a new stream starts from an oblique or opposite desktop view.
         extents = np.ptp(corners @ basis, axis=0)
         assert host.app_scale == .001
         assert np.allclose(host.workspace_size, extents * host.app_scale)
@@ -74,6 +80,14 @@ def run():
         assert np.allclose(physical_room, corners @ basis*.001 + [0., 0., -1.5]), "Physical placement changed"
         assert np.allclose((physical_app.min(axis=0)+physical_app.max(axis=0))/2, 0.), "Workspace misses its content"
         assert np.isclose(np.linalg.det(rotation(host.app_orientation)), 1), "Placement mirrors the scene"
+        # A desktop orbit during streaming cannot change placement or XR eyes.
+        before = (host.app_orientation, host.app_position, host.workspace_size)
+        camera.Azimuth(37.)
+        camera.Elevation(21.)
+        camera.Roll(19.)
+        assert (host.app_orientation, host.app_position, host.workspace_size) == before
+        restarted = HostView(view)
+        assert (restarted.app_orientation, restarted.app_position, restarted.workspace_size) == before
         for orientation in ((0, 0, 0, 1), (.1, .2, -.05, .97)):
             for x in (-.032, .032):
                 pose = np.array([x, .05, 1.2])
@@ -90,12 +104,12 @@ def run():
             return np.asarray(result[:3]) / result[3]
         initial = screen(center, (0, 0, 0))
         assert screen(center, (.1, 0, 0))[0] > initial[0] + .1, "+app_pose X moves content left"
-        marker = center + right*40
+        marker = center + basis[:, 0]*40
         assert screen(marker, (0, 0, .1))[0] > screen(marker, (0, 0, 0))[0], "+app_pose Z moves content away"
         assert actor.GetPosition() == (0., 0., 0.), "Placement changed the host actor"
     # Every dataset retains its physical dimensions; magnification is explicit.
     for factor in (.125, .5, 1., 2., 8.):
-        scaled = HostView(view, match_view=False, size_multiplier=factor)
+        scaled = HostView(view, size_multiplier=factor)
         assert np.allclose(scaled.workspace_size, np.array([.24, .32, .18]) * factor)
         assert np.isclose(scaled.app_scale, .001 * factor)
         placed_center = rotation(scaled.app_orientation) @ center * scaled.app_scale + scaled.app_position
@@ -107,26 +121,34 @@ def run():
             raise AssertionError("Invalid multiplier accepted")
         except ValueError:
             pass
+    # Actual data transforms are preserved, unlike desktop camera rotation.
+    actor.RotateY(30.)
+    transformed = HostView(view)
+    assert transformed.app_orientation == expected_orientation
+    assert np.allclose(transformed.scene_bounds, actor.GetBounds())
+    assert not np.allclose(transformed.workspace_size, [.24, .32, .18])
+    assert np.isclose(actor.GetOrientation()[1], 30.), "Streaming changed the data transform"
+    actor.SetOrientation(0., 0., 0.)
     # Distant native coordinates must not inflate a centred workspace. A
     # hidden prop must not influence the working bounds either.
     actor.SetPosition(10000., -20000., 30000.)
-    distant = HostView(view, match_view=False, fit=False)
+    distant = HostView(view, fit=False)
     assert np.allclose(distant.workspace_size, [.24, .32, .18])
     stray = vtk.vtkActor()
     stray.SetMapper(mapper)
     stray.SetPosition(-90000., 80000., 70000.)
     stray.VisibilityOff()
     renderer.AddActor(stray)
-    assert np.allclose(HostView(view, match_view=False).workspace_size, [.24, .32, .18])
+    assert np.allclose(HostView(view).workspace_size, [.24, .32, .18])
     stray.VisibilityOn()
     stray.UseBoundsOff()
-    assert np.allclose(HostView(view, match_view=False).workspace_size, [.24, .32, .18])
+    assert np.allclose(HostView(view).workspace_size, [.24, .32, .18])
     renderer.RemoveActor(stray)
     source.SetZLength(0.)
-    flat = HostView(view, match_view=False)
+    flat = HostView(view)
     assert min(flat.workspace_size) == .001, "Flat scenes need a positive workspace thickness"
     print("PASS: scene-derived XYZ workspace; 1:1 default, multiplicative size and room position; oblique/distant/hidden/flat bounds; "
-          "SDK app_pose/app_scale, anterior/posterior/oblique alignment, stereo, head rotations, +X right and +Z toward viewer")
+          "fixed RAS orientation across desktop orbits and restarts, live data transforms, SDK stereo/head poses")
 
 
 if __name__ == "__main__":

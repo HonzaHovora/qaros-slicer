@@ -256,6 +256,8 @@ def library(path):
         "panel_close": ([c.c_void_p, c.c_void_p], None),
         "panel_status": ([c.c_void_p, c.c_void_p, c.c_char_p, c.c_uint32], None),
     }
+    if info.get("panel_image_region") == 1:
+        signatures["panel_capture_region"] = ([c.c_void_p, c.c_void_p] + [c.c_uint32]*7 + [c.c_char_p, c.c_uint32], c.c_int)
     for name, (args, result) in signatures.items():
         function = getattr(dll, "qarvtk_host_" + name)
         function.argtypes, function.restype = args, result
@@ -326,7 +328,7 @@ class HostTransport:
                 app_position=host.app_position, app_orientation=host.app_orientation, app_scale=host.app_scale,
                 workspace_size_m=host.workspace_size, workspace_position_m=host.workspace_position,
                 scene_bounds=host.scene_bounds, centered=host.fit, size_multiplier=host.size_multiplier,
-                render_scale=host.render_scale, match_view=host.match_view)))
+                render_scale=host.render_scale, orientation_mode="fixed_ras")))
 
     @property
     def running(self):
@@ -355,6 +357,8 @@ class HostTransport:
             vd.GetHandle() if vd else 0, width, height))
 
     def panel_create(self, name, size, position, width_m):
+        if any(self.dll._qarvtk_info.get(key) != 1 for key in ("panel_size_on_start", "panel_image_region")):
+            raise RuntimeError("Image-only 14-inch panels require the r8.3 host bridge. Close Slicer and run UPDATE-LIVE-PLUGIN.cmd.")
         handle, error = c.c_void_p(), c.create_string_buffer(2048)
         result = self.dll.qarvtk_host_panel_create(self.handle, name.encode("utf-8"), *size,
             *position, width_m, c.byref(handle), error, len(error))
@@ -362,9 +366,10 @@ class HostTransport:
             raise RuntimeError(error.value.decode("utf-8", "replace"))
         return handle
 
-    def panel_capture(self, panel, texture, width, height):
+    def panel_capture(self, panel, texture, width, height, region=None):
         error = c.create_string_buffer(2048)
-        result = self.dll.qarvtk_host_panel_capture(self.handle, panel, texture, width, height, error, len(error))
+        region = region or (0, 0, width, height)
+        result = self.dll.qarvtk_host_panel_capture_region(self.handle, panel, texture, width, height, *region, error, len(error))
         if result < 0:
             raise RuntimeError(error.value.decode("utf-8", "replace"))
         return bool(result)

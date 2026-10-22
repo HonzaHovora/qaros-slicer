@@ -1,8 +1,10 @@
 """Preview/video scheduling without a graphics context or SDK receiver."""
 import importlib.util
+from math import hypot
 from pathlib import Path
 import sys
 import unittest
+from types import SimpleNamespace
 
 path = Path(__file__).resolve().parents[1] / "integrations/slicer/qarvtk_host_panels.py"
 spec = importlib.util.spec_from_file_location("host_panels_test_module", path)
@@ -40,11 +42,15 @@ class Sink:
     def __init__(self):
         self.next = 0
         self.copies, self.closed, self.visibility, self.events = [], [], [], []
+        self.created = []
         self.diagnostics = type("Diagnostics", (), {"event": self.events.append})()
         self.ready, self.fail = True, False
         self.running, self.stopping, self.panels = True, False, None
-    def panel_create(self, *args): self.next += 1; return self.next
-    def panel_capture(self, handle, texture, width, height):
+    def panel_create(self, *args):
+        self.created.append(args)
+        self.next += 1
+        return self.next
+    def panel_capture(self, handle, texture, width, height, region=None):
         if self.fail: raise RuntimeError("Panel encoder failed")
         if not self.ready: return False
         self.copies.append((handle, texture, width, height))
@@ -103,6 +109,78 @@ class PanelTest(unittest.TestCase):
     def test_dimensions_are_bounded_and_even(self):
         self.assertEqual(panels.panel_size(1920, 1080), (768, 432))
         self.assertEqual(panels.panel_size(451, 726), (450, 726))
+
+    def test_initial_rows_are_compact_centered_and_do_not_overlap(self):
+        sizes = dict(Red=(.25, .25), Yellow=(.31, .174), Green=(.174, .31), Video=(.25, .25))
+        placed = panels.panel_positions(sizes, (0., 0., -1.5), (.2, .3, .4))
+        self.assertAlmostEqual(placed['Red'][0]-.125, -(placed['Green'][0]+.087))
+        for a, b in (('Red','Yellow'), ('Yellow','Green')):
+            self.assertAlmostEqual(placed[b][0]-sizes[b][0]/2 - (placed[a][0]+sizes[a][0]/2), .025)
+        self.assertEqual(placed['Video'][0], 0.)
+        self.assertAlmostEqual(placed['Red'][1]-.31-placed['Video'][1], .025)
+
+    def test_physical_size_reaches_transport_once_independent_of_model_size(self):
+        for pixels in ((1920, 1080), (640, 360), (360, 640), (512, 512)):
+            for workspace in ((.03, .04, .02), (.24, .32, .18), (2.4, 3.2, 1.8)):
+                with self.subTest(pixels=pixels, workspace=workspace):
+                    window, sink, view, now, manager = self.fixture()
+                    window.size = pixels
+                    manager.workspace = workspace
+                    manager.tick()
+                    name, size, position, width_m = sink.created[0]
+                    height_m = width_m * size[1] / size[0]  # Native boundary contract.
+                    self.assertAlmostEqual(hypot(width_m, height_m), .3556)
+                    self.assertAlmostEqual(width_m / height_m, size[0] / size[1])
+                    # Resizing the source or hiding/showing cannot reset a user's
+                    # physical panel size; only a new stream/panel does that.
+                    window.size = (800, 600); window.frame(); now[0] = .3; manager.tick()
+                    view.visible = False; now[0] = .6; manager.tick()
+                    view.visible = True; now[0] = .9; manager.tick()
+                    self.assertEqual(len(sink.created), 1)
+                    manager.close()
+
+    def test_crop_uses_geometry_including_black_pixels_and_transformed_slices(self):
+        image = panels.vtk.vtkImageData()
+        image.SetDimensions(100, 100, 1)
+        # Voxel edges map to x=120..220, y=70..170 within a 640x360 view.
+        transform = panels.vtk.vtkTransform()
+        transform.Translate(-120.5, -70.5, 0.)
+        volume = SimpleNamespace(GetImageData=lambda: image, GetParentTransformNode=lambda: None,
+                                 GetName=lambda: "Animated data")
+        layer = SimpleNamespace(GetVolumeNode=lambda: volume, GetXYToIJKTransform=lambda: transform)
+        composite = SimpleNamespace(GetForegroundOpacity=lambda: 0., GetLabelOpacity=lambda: 0.)
+        logic = SimpleNamespace(GetBackgroundLayer=lambda: layer, GetSliceCompositeNode=lambda: composite)
+        node = SimpleNamespace(GetLayoutGridRows=lambda: 1, GetLayoutGridColumns=lambda: 1,
+                               GetDimensions=lambda: (640, 360, 1))
+        widget = SimpleNamespace(sliceLogic=lambda: logic, mrmlSliceNode=lambda: node)
+        self.assertEqual(panels.image_region(widget, (640, 360)), (120, 70, 100, 100))
+        self.assertEqual(panels.image_region(widget, (1280, 720)), (240, 140, 200, 200))
+        self.assertEqual(panels.panel_title(widget, "Red"), "Animated data · Red")
+        # Rotating image coordinates must include all visible image corners.
+        transform.Identity(); transform.RotateZ(90.); transform.Translate(-200.5, -50.5, 0.)
+        self.assertEqual(panels.image_region(widget, (640, 360)), (200, 0, 100, 51))
+        # Nonlinear geometry needs a conservative full-view fallback.
+        volume.GetParentTransformNode = lambda: SimpleNamespace(IsTransformToWorldLinear=lambda: False)
+        self.assertEqual(panels.image_region(widget, (640, 360)), (0, 0, 640, 360))
+
+    def test_corner_labels_wait_for_clean_frame_and_are_restored(self):
+        window, sink, view, now, manager = self.fixture()
+        annotation = panels.vtk.vtkCornerAnnotation()
+        annotation.SetVisibility(True)
+        view.cornerAnnotation = lambda: annotation
+        scheduled = []
+        view.scheduleRender = lambda: scheduled.append(True)
+        manager.tick()
+        self.assertFalse(annotation.GetVisibility())
+        self.assertFalse(sink.copies, "An old annotated texture was sent before a clean frame")
+        # Fake an ordinary Slicer render's completion, not a plugin Render().
+        manager.sources["Red"].rendered()
+        now[0] = .1; manager.tick()
+        self.assertEqual(len(sink.copies), 1)
+        manager.close()
+        self.assertTrue(annotation.GetVisibility())
+        self.assertEqual(len(scheduled), 2)
+        self.assertFalse(window.observers)
 
 
 

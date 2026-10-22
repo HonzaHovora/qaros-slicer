@@ -11,7 +11,7 @@ from vtk.util.numpy_support import vtk_to_numpy
 root = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(root / "package/QAROS-VTK-plugins/slicer"))
 sys.path.insert(0, str(root / "tests"))
-from QarosVTKLib.qarvtk_host_panels import SlicePanels
+from QarosVTKLib.qarvtk_host_panels import SlicePanels, image_region
 import test_host_panels
 
 
@@ -20,6 +20,13 @@ def pixels(window):
     data = vtk.vtkUnsignedCharArray()
     window.GetRGBACharPixelData(0, 0, w-1, h-1, 1, data)
     return vtk_to_numpy(data).copy()
+
+def image_pixels(name):
+    widget = slicer.app.layoutManager().sliceWidget(name)
+    window = widget.sliceView().renderWindow()
+    w, h = window.GetSize()
+    x, y, cw, ch = image_region(widget, (w, h))
+    return pixels(window).reshape(h, w, 4)[y:y+ch, x:x+cw].copy()
 
 
 def run():
@@ -38,6 +45,7 @@ def run():
     slicer.util.resetSliceViews()
     slicer.app.processEvents()
     windows = {name: lm.sliceWidget(name).sliceView().renderWindow() for name in ("Red", "Yellow", "Green")}
+    annotations = {name: lm.sliceWidget(name).sliceView().cornerAnnotation().GetVisibility() for name in windows}
     counts = dict.fromkeys(windows, 0)
     observers = []
     for name, window in windows.items():
@@ -54,17 +62,19 @@ def run():
             self.diagnostics = type("Log", (), {"event": self.events.append})()
         def panel_create(self, name, size, position, width_m):
             self.next += 1
-            self.names[self.next], self.sizes[self.next] = name.removeprefix("Slicer "), size
+            self.names[self.next], self.sizes[self.next] = name.rsplit(" · ", 1)[-1].removeprefix("Slicer "), size
+            assert "Moving slice frames" in name, "Data name missing from panel title"
             assert max(size) <= 768 and all(x % 2 == 0 for x in size)
             assert width_m <= .45
             return self.next
-        def panel_capture(self, handle, texture, w, h):
+        def panel_capture(self, handle, texture, w, h, region):
             if not self.ready: return False
             name = self.names[handle]
             window = lm.sliceWidget(name).sliceView().renderWindow()
             color = window.GetDisplayFramebuffer().GetColorAttachmentAsTextureObject(0)
             assert texture == color.GetHandle() and (w, h) == (color.GetWidth(), color.GetHeight())
-            self.images[name] = pixels(window)
+            x, y, cw, ch = region
+            self.images[name] = pixels(window).reshape(h, w, 4)[y:y+ch, x:x+cw].copy()
             self.frames.append((name, w, h))
             return True
         def panel_visible(self, handle, visible): self.visibility.append((self.names[handle], visible))
@@ -73,13 +83,19 @@ def run():
 
     sink, now = Sink(), [0.]
     previews = SlicePanels(lm, sink, (0, 0, -1.5), (.65, .65, .65), fps=30, clock=lambda: now[0])
+    previews.refresh()
+    # The one normal Qt refresh after hiding labels must finish before capture.
+    slicer.app.processEvents()
+    for window in windows.values(): window.Render()
     before = {name: pixels(window) for name, window in windows.items()}
+    expected = {name: image_pixels(name) for name in windows}
     before_counts = dict(counts)
     for _ in range(3): previews.tick()
     assert set(sink.images) == set(windows), (previews.status, previews.errors)
     assert counts == before_counts, "Preview caused additional slice rendering"
     for name, window in windows.items():
-        assert np.array_equal(sink.images[name], before[name]), "Initial panel differs from native view"
+        assert np.array_equal(sink.images[name], expected[name]), "Panel differs from the image rectangle"
+        assert not lm.sliceWidget(name).sliceView().cornerAnnotation().GetVisibility()
         assert np.array_equal(pixels(window), before[name]), "Preview changed the desktop"
 
     # Animated image data follows the same Render/EndEvent lifecycle as a
@@ -100,7 +116,7 @@ def run():
         now[0] += .04
         previews.tick()
     assert len(sink.frames) == 3, "Busy receiver accepted a queued frame"
-    latest = {name: pixels(window) for name, window in windows.items()}
+    latest = {name: image_pixels(name) for name in windows}
     sink.ready = True
     now[0] += .1
     before_counts = dict(counts)
@@ -127,12 +143,14 @@ def run():
     assert not previews.errors, previews.errors
     count = len(sink.frames)
     previews.close()
+    for name in windows:
+        assert lm.sliceWidget(name).sliceView().cornerAnnotation().GetVisibility() == annotations[name]
     for name in windows: lm.sliceWidget(name).sliceView().renderWindow().Render()
     now[0] += .5; previews.tick()
     assert len(sink.frames) == count
     assert len(sink.closed) == sink.next, "Panel handles were not retired on Stop"
     for window, observer in observers: window.RemoveObserver(observer)
-    print("PASS: real Red/Yellow/Green GPU source textures; native images and desktop preserved; "
+    print("PASS: real Red/Yellow/Green image-only GPU rectangles; data titles; corner labels restored on Stop; "
           "video/sequence frames coalesced under backpressure; no extra renders; layout hide/restore; stop cleanup", flush=True)
 
 

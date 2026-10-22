@@ -3,6 +3,7 @@
 #include "qarvtk/host_wgl.hpp"
 #include "qarvtk/gl_copy.hpp"
 #include "../apps/wgl_callbacks.hpp"
+#include "../apps/host_panel_config.hpp"
 #if QARVTK_HOST_ONBOARDING_API
 #include "../apps/host_hub.hpp"
 #endif
@@ -126,12 +127,13 @@ struct PanelStream {
     QarPeerId source{};checked(qar_peer_spec_get_id(own.get(),&source),"read panel owner ID");
     const auto common=host_resource_name(source,"panel",panel.index);gui.common_name=common.c_str();
     log("PANEL_CREATE_BEGIN name="+panel.name+" common="+common);
-    checked(qar_gui_panels_get_or_create(session,&gui,&id),"create slice preview panel");
 #else
     log("PANEL_CREATE_BEGIN name="+panel.name);
-    checked(qar_gui_panels_add_panel(session,&gui,&id),"create slice preview panel");
 #endif
-    created=true;
+    checked(register_host_panel(session,gui,id,created),"register slice preview panel and apply physical size");
+    log("PANEL_SIZE_APPLIED name="+panel.name+" width_m="+std::to_string(gui.size.width_meters)+
+        " height_m="+std::to_string(gui.size.height_meters)+" diagonal_inches="+
+        std::to_string(std::hypot(gui.size.width_meters,gui.size.height_meters)/.0254));
     audience=peers;
     for(const auto& peer:audience)log("PANEL_TARGET name="+panel.name+" peer="+id_text(peer));
     log("PANEL_CREATED name="+panel.name+" id="+id_text(id));
@@ -244,7 +246,7 @@ HostPanel* HostPanels::create(const char* name,unsigned w,unsigned h,double x,do
   auto p=std::make_unique<HostPanel>();p->name=name;p->width=w;p->height=h;p->x=x;p->y=y;p->z=z;p->width_meters=width_meters;p->initialize();
   auto* result=p.get();{std::lock_guard<std::mutex> lock(impl_->list_mutex);p->index=impl_->panels.size();impl_->panels.push_back(std::move(p));}return result;
 }
-int HostPanels::capture(HostPanel* handle,unsigned texture,unsigned w,unsigned h){
+int HostPanels::capture(HostPanel* handle,unsigned texture,unsigned w,unsigned h,const ColorRegion* region){
   auto& p=impl_->get(handle);
   if(p.failed)throw std::runtime_error(status(handle));
   if(impl_->stopping||p.closed||!p.visible)return 0;
@@ -252,7 +254,7 @@ int HostPanels::capture(HostPanel* handle,unsigned texture,unsigned w,unsigned h
   if(!texture||!w||!h)throw std::invalid_argument("Empty slice texture");
   std::unique_lock<std::mutex> lock(p.gpu,std::try_to_lock);if(!lock)return 0;
   glFinish(); // Finish only existing host writes; never ask VTK to render again.
-  {WglBinding binding(*p.copying);p.copier->copy_color({texture,0,w,h},p.stage,false,true);p.copier->finish();}
+  {WglBinding binding(*p.copying);p.copier->copy_color({texture,0,w,h},p.stage,false,true,region);p.copier->finish();}
   ++p.generation;return 1;
 }
 void HostPanels::visible(HostPanel* p,bool visible){impl_->get(p).visible=visible;}

@@ -1,11 +1,11 @@
-# Slicer Live r8.2 with installed QAROS dev.2927
+# Slicer Live r8.3 with installed QAROS dev.2927
 
 Supported installation: **0.9.0-dev.2927+f291e404**, normally
-`C:\Program Files\Quaternar\QAROS`. Package: **installed-hub-update-r8.2**,
+`C:\Program Files\Quaternar\QAROS`. Package: **installed-hub-update-r8.3**,
 host ABI 5, `multi_target=1`, `target_discovery=2`, `runtime_handle_only=1`.
-R8.2 retires the separate-renderer Slicer module and supports fresh installation.
-It keeps r8.1 panel defaults and reuses the verified r8 native DLL;
-`Host build` in the native log therefore still reports r8.
+R8.3 uses fixed data axes and image-only panels. It includes a rebuilt native
+DLL, reporting `installed-hub-update-r8.3`, `panel_size_on_start=1` and
+`panel_image_region=1`. R8.2's single-module installation remains in place.
 
 ## Install and start
 
@@ -21,20 +21,42 @@ It keeps r8.1 panel defaults and reuses the verified r8 native DLL;
 4. Open Slicer → **QAROS Live Renderer**. The SDK folder is the installation
    root containing `include` and `bin`. The bridge DLL is
    `package\windows-start\Release\qarvtk-host.dll` in the updated checkout.
+   Check the visible **Live plugin r8.3** label; hover it to see the loaded
+   Python path. Pull alone does not update an already installed plugin.
 5. Select **Stream to**: **Visualizer + headset**, **Visualizer only**, or
    **Headset only**. Click **Start live streaming** and approve Slicer in
    QAROS if prompted. Slice panels start automatically when enabled; the
    manual step-by-step test mode has been removed.
 
-## 2D panel size
+## Image-only 2D panels
 
 Each new slice panel starts with a **14-inch diagonal (35.56 cm)** while
-preserving its initial video aspect ratio: about **31.0 × 17.4 cm** at 16:9,
+preserving its initial image aspect ratio: about **31.0 × 17.4 cm** at 16:9,
 or **25.1 × 25.1 cm** for a square. This replaces the previous 45 cm bounding
 square with a consistent screen diagonal. It is independent of the 3D model
-scale and video pixel resolution. The user can resize the panel in QAROS;
-the plugin only supplies size at creation and does not reset it during frames,
-hide/show or late headset joins. Recreating a panel applies the default again.
+scale and video pixel resolution. R8.1/r8.2 already shipped the correct Python
+calculation. Their native bridge supplied size only in `get_or_create`'s init,
+which need not be applied when the SDK returns an existing panel. R8.3 calls
+`qar_gui_panels_change_size` once after registration, including that reuse case.
+`PANEL_SIZE_APPLIED` records the accepted request in metres and inches. This is
+not a physical measurement of the headset display. Frames, hide/show and late
+headset joins do not reset later manual resizing. Restart reapplies 14 inches.
+
+The GPU copies the visible image rectangle instead of the complete slice
+viewport. Its bounds come from the volume/slice geometry, so black image data
+is retained. Multiple displayed volume layers are included. Nonlinear
+transforms and lightbox views conservatively retain the full viewport. A square
+video starts in a square panel. Later aspect changes are letterboxed inside the
+existing panel to preserve user resizing; restart to adopt a new aspect ratio.
+Initial rows are centered with 2.5 cm gaps between image rectangles. Existing
+panels are not repositioned while streaming, preserving manual placement.
+
+Data names and the slice label are passed as the panel's `display_name`.
+Corner annotations are temporarily hidden in the source Slicer views while
+streaming and restored on Stop, cleanup or panel failure. No persistent Slicer
+setting is changed. One normal Qt refresh removes old text before the first
+capture; capture itself does not render or read pixels back to the CPU.
+QAROS's own window controls remain managed by QAROS.
 
 ## Physical size and centering
 
@@ -42,6 +64,12 @@ hide/show or late headset joins. Recreating a panel applies the default again.
 it. **Model size (at Start)** defaults to **1x (1:1)**: one Slicer RAS millimetre
 is one physical millimetre. The workspace fits the rotated physical bounds;
 there is no automatic enlargement to a 65 cm longest edge.
+
+Data orientation is now fixed: RAS right maps to +X, anterior to -Z, superior
+to +Y. The desktop camera affects neither initial workspace orientation nor
+later streaming. The former **Use Slicer viewing direction at Start** option
+is removed. Rotate the QAROS workspace to turn its model. Actual MRML/actor
+transforms still affect the live data; this change only removes camera coupling.
 
 The slider is logarithmic, from **1/8x to 8x**. Its middle is 1:1, each major
 step halves or doubles the size, and the **1:1** button resets it. All volumes

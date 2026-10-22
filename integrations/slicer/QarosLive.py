@@ -8,6 +8,8 @@ import ctk
 import slicer
 from slicer.ScriptedLoadableModule import ScriptedLoadableModule, ScriptedLoadableModuleWidget
 
+LIVE_VERSION = "r8.3"
+
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 if (Path(__file__).resolve().parent / "QarosVTKLib").is_dir():
     from QarosVTKLib.qarvtk_host_view import create_host_views, workspace_envelope
@@ -45,6 +47,9 @@ class QarosLiveWidget(ScriptedLoadableModuleWidget):
                          "Transfer functions and ROI cropping stay live.")
         label.wordWrap = True
         form.addRow(label)
+        self.versionLabel = qt.QLabel("Live plugin " + LIVE_VERSION + " · Slice panels: 14-inch diagonal at Start")
+        self.versionLabel.toolTip = str(Path(__file__).resolve())
+        form.addRow(self.versionLabel)
         self.separateVolumes = qt.QCheckBox("Separate QAROS workspace for each volume")
         self.separateVolumes.checked = True
         self.separateVolumes.toolTip = "One cube and stereo stream per visible volume, placed side by side. " \
@@ -78,13 +83,16 @@ class QarosLiveWidget(ScriptedLoadableModuleWidget):
         scaleRow.addWidget(self.modelScaleValue)
         scaleRow.addWidget(self.resetScale)
         form.addRow("Model size (at Start)", scaleRow)
-        self.matchView = qt.QCheckBox("Use Slicer viewing direction at Start")
-        self.matchView.checked = True
-        form.addRow(self.matchView)
-        self.slicePreviews = qt.QCheckBox("Show slice views as panels (preview only)")
+        orientation = qt.QLabel("Slicer camera rotation affects only the desktop view. "
+                               "Rotate the workspace in QAROS to turn the streamed model.")
+        orientation.wordWrap = True
+        form.addRow(orientation)
+        self.slicePreviews = qt.QCheckBox("Show image-only slice panels (preview only)")
         self.slicePreviews.checked = True
         self.slicePreviews.toolTip = "Live images of visible slice views, including video/sequences. " \
             "Each panel starts with a 14-inch diagonal, independent of model size; resize it in QAROS. " \
+            "Image bounds remove empty margins; data names appear in the window title. " \
+            "Slice corner annotations are hidden in Slicer while streaming and restored on Stop. " \
             "No remote slice interaction. Applied at Start."
         form.addRow(self.slicePreviews)
         self.sliceFps = qt.QComboBox()
@@ -168,7 +176,7 @@ class QarosLiveWidget(ScriptedLoadableModuleWidget):
                      for node in slicer.util.getNodesByClass("vtkMRMLVolumeNode")] if get_actor else []
             hosts = create_host_views(view, separate=self.separateVolumes.checked,
                 names=lambda actor: next((name for prop, name in names if prop == actor), None),
-                fit=self.fit.checked, match_view=self.matchView.checked,
+                fit=self.fit.checked,
                 size_multiplier=2. ** (self.modelScale.value / 100.),
                 render_scale=(1., .75, .5)[self.renderScale.currentIndex])
             folder = user_directory() / "live-logs" / datetime.now().strftime("%Y%m%d-%H%M%S-%f")
@@ -176,6 +184,8 @@ class QarosLiveWidget(ScriptedLoadableModuleWidget):
             self.transport = HostTransport(self.dll.currentPath, self.sdk.currentPath,
                                             target_mode, folder, hosts)
             created_transport = self.transport
+            self.transport.diagnostics.event("PLUGIN " + json.dumps(dict(
+                version=LIVE_VERSION, path=str(Path(__file__).resolve()), orientation_mode="fixed_ras")))
             if self.slicePreviews.checked:
                 position, size = workspace_envelope(hosts)
                 self.transport.panels = SlicePanels(lm, self.transport, position, size, fps=int(self.sliceFps.currentText))
@@ -245,7 +255,7 @@ class QarosLiveWidget(ScriptedLoadableModuleWidget):
                 self.startButton.enabled = not self.transport.running
                 self.stopButton.enabled = self.transport.running and not self.transport.stopping
                 for control in (self.target, self.separateVolumes, self.fit, self.modelScale, self.resetScale,
-                                self.matchView, self.renderScale, self.slicePreviews, self.sliceFps):
+                                self.renderScale, self.slicePreviews, self.sliceFps):
                     control.enabled = not self.transport.running
         if self.cleaned_up and (not self.transport or not self.transport.running):
             self.timer.stop()

@@ -29,24 +29,6 @@ def _rotate(q, v):
             c + w * tz + x * ty - y * tx)
 
 
-def _unit(vector):
-    norm = math.sqrt(sum(x*x for x in vector))
-    if not math.isfinite(norm) or norm < 1e-12:
-        raise ValueError("Invalid Slicer camera direction or view-up")
-    return tuple(x / norm for x in vector)
-
-
-def _cross(a, b):
-    return (a[1]*b[2] - a[2]*b[1], a[2]*b[0] - a[0]*b[2], a[0]*b[1] - a[1]*b[0])
-
-
-def camera_basis(camera):
-    """App right/up/back axes in the host's world space; a proper rotation."""
-    forward = _unit(tuple(f-p for f, p in zip(camera.GetFocalPoint(), camera.GetPosition())))
-    right = _unit(_cross(forward, camera.GetViewUp()))
-    return right, _cross(right, forward), tuple(-x for x in forward)
-
-
 def projection(fov, near, far):
     if not (0 < near < far) or not all(math.isfinite(x) for x in (*fov, near, far)):
         raise ValueError("Invalid clipping or eye FOV")
@@ -68,7 +50,7 @@ def projection(fov, near, far):
 class HostView:
     """One live Slicer 3D view; all methods run on its GUI/render thread."""
 
-    def __init__(self, view, fit=True, match_view=True, render_scale=1., volume=None, name="Slicer live renderer", size_multiplier=1.):
+    def __init__(self, view, fit=True, render_scale=1., volume=None, name="Slicer live renderer", size_multiplier=1.):
         self.view = view
         self.window = view.renderWindow()
         self.context_creation_time = self.window.GetContextCreationTime()
@@ -84,7 +66,6 @@ class HostView:
             raise ValueError("Model size must be between 1/8x and 8x")
         self.size_multiplier = float(size_multiplier)
         self.render_scale = render_scale
-        self.match_view = match_view
         self.last_render_sizes = []
         self.last_desktop_size = self.window.GetSize()
         self._busy = False
@@ -102,16 +83,11 @@ class HostView:
         self.center = tuple((bounds[2*i] + bounds[2*i+1]) * .5 for i in range(3))
         # App content uses unmodified world RAS coordinates. Axis conversion,
         # placement and scale belong to the SDK, never the per-eye camera.
-        # Rotate the initial Slicer view's right/up/back axes onto app-volume
-        # X/Y/Z. The transpose is the inverse of this orthonormal camera basis.
+        # Fixed RAS -> QAROS axes: right -> +X, anterior -> -Z, superior -> +Y.
+        # Orbiting the desktop camera must never rotate data inside a workspace,
+        # including at Start. Actual live actor/MRML transforms remain intact.
         self.app_orientation = (-math.sqrt(.5), 0., 0., math.sqrt(.5))
-        if match_view:
-            rotation = [list(axis) for axis in camera_basis(self.camera)]
-            q = [0.] * 4  # VTK returns scalar first; QAROS stores scalar last.
-            vtk.vtkMath.Matrix3x3ToQuaternion(rotation, q)
-            self.app_orientation = (*q[1:], q[0])
-        # A world-axis box must be transformed into the actual workspace axes;
-        # swapping width/height alone fails for an oblique starting camera.
+        # Bounds already include live data transforms, independent of the camera.
         corners = [_rotate(self.app_orientation, p)
                    for p in product(bounds[0:2], bounds[2:4], bounds[4:6])]
         extents = tuple(max(p[i] for p in corners) - min(p[i] for p in corners) for i in range(3))

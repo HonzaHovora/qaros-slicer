@@ -25,7 +25,7 @@ hostitelskou pipeline, zejména VTK GPU Composite pro CT/MR.
    z tohoto checkoutu a restartuj Slicer.
 5. Otevři **QAROS → QAROS Live Renderer**.
 
-Aktualizátor nainstaluje balíček **r8.2** pro kompletní
+Aktualizátor nainstaluje balíček **r8.3** pro kompletní
 **QAROS 0.9.0-dev.2927+f291e404**. Instalaci hledá v registru Windows, obvykle
 `C:\Program Files\Quaternar\QAROS`. Ověří SDK i obsah ZIPu, zazálohuje původní
 soubory a odstraní starý modul včetně exportních helperů a Python cache ze
@@ -48,14 +48,19 @@ cestu v Additional module paths. Aktualizátor neprohledává cizí složky.
   **Separate QAROS workspace for each volume** se přenáší společná scéna.
 - Výchozí měřítko je **1:1**. Centrovaní nemění velikost; **Model size (at Start)**
   dovoluje 1/8× až 8×. Rozlišení renderu se nastavuje zvlášť.
-- Náhledy řezů se spouštějí automaticky. Nový panel má úhlopříčku **14″**
-  a zachovává poměr stran; uživatel jej může v QAROS změnit.
+- Kamera Sliceru nemění natočení dat v QAROS ani při Startu. Model otáčej
+  pomocí jeho pracovního prostoru v QAROS; skutečné transformace dat zůstávají živé.
+- Obrazové panely mají při Startu úhlopříčku **14″** a poměr stran skutečného
+  obrazového výřezu. Ořez na GPU vynechá okolí obrazu; černé části dat zachová.
+  Název dat je v titulku okna. Rohové anotace řezů se po dobu streamování skryjí
+  i ve Sliceru a po Stop se obnoví. Velikost panelu lze v QAROS ručně změnit.
 - **Stop** uvolní vlastní runtime handle. Před dalším Startem počkej na dokončení.
   Známý problém dev.2927 po Stop/Start může vyžadovat odebrání a vytvoření nového
-  receiveru ve Visualizeru; r8.2 opravu tohoto problému netvrdí.
+  receiveru ve Visualizeru; r8.3 opravu tohoto problému netvrdí.
 
-R8.2 odstraňuje starý modul a upravuje instalaci. Nativní DLL, GPU capture,
-streaming do brýlí, velikost 1:1 a 14″ panely z r8.1 jsou zachované.
+Po aktualizaci musí modul zobrazovat **Live plugin r8.3**. Samotný Pull
+neaktualizuje nainstalované soubory; spusť instalátor a restartuj Slicer.
+R8.3 obsahuje novou DLL pro výslovné nastavení velikosti a ořez panelů.
 [Brýle](docs/HEADSET_STREAMING.md) · [Více objemů](docs/MULTIPLE_VOLUMES.md) ·
 [Diagnostika FPS](docs/FPS_DIAGNOSTICS.md). Logy zabalíš pomocí `COLLECT-LOGS.cmd`.
 

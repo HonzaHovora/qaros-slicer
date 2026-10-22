@@ -62,6 +62,9 @@ QARVTK_HOST_API int qarvtk_host_panel_create(QarvtkHost*,const char* name,uint32
     double x,double y,double z,double width_meters,QarvtkHostPanel**,char* error,uint32_t error_size);
 QARVTK_HOST_API int qarvtk_host_panel_capture(QarvtkHost*,QarvtkHostPanel*,uint32_t color,uint32_t width,uint32_t height,
     char* error,uint32_t error_size);
+/* Copy only the image area, in bottom-left source pixels; no CPU readback. */
+QARVTK_HOST_API int qarvtk_host_panel_capture_region(QarvtkHost*,QarvtkHostPanel*,uint32_t color,uint32_t width,uint32_t height,
+    uint32_t x,uint32_t y,uint32_t crop_width,uint32_t crop_height,char* error,uint32_t error_size);
 QARVTK_HOST_API int qarvtk_host_panel_visible(QarvtkHost*,QarvtkHostPanel*,uint32_t visible);
 QARVTK_HOST_API void qarvtk_host_panel_close(QarvtkHost*,QarvtkHostPanel*);
 QARVTK_HOST_API void qarvtk_host_panel_status(QarvtkHost*,QarvtkHostPanel*,char* text,uint32_t size);

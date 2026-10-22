@@ -75,8 +75,8 @@ $info = Get-Content -LiteralPath (Join-Path $staging 'HOST_UPDATE_INFO.json') -R
 if ($info.sdk_header_sha256 -ne $expectedSdk -or $info.host_abi -ne 5) {
     throw 'Archive SDK or ABI metadata differs from this updater.'
 }
-if ($info.multi_target -ne 1 -or $info.build -ne 'installed-hub-update-r8.2' -or $info.runtime_teardown -ne 'handle_only' -or $info.target_discovery -ne 2 -or $info.panel_probe -ne 0 -or $info.slice_panel_diagonal_inches -ne 14) {
-    throw 'This updater requires the r8.2 Live-only package with 14-inch slice panels.'
+if ($info.multi_target -ne 1 -or $info.build -ne 'installed-hub-update-r8.3' -or $info.native_build -ne 'installed-hub-update-r8.3' -or $info.runtime_teardown -ne 'handle_only' -or $info.target_discovery -ne 2 -or $info.panel_probe -ne 0 -or $info.slice_panel_diagonal_inches -ne 14 -or $info.panel_size_on_start -ne 1 -or $info.panel_image_region -ne 1 -or $info.orientation_mode -ne 'fixed_ras') {
+    throw 'This updater requires the r8.3 package with fixed data axes and explicit 14-inch panel sizing.'
 }
 foreach ($relative in $files) {
     if ($relative -eq 'HOST_UPDATE_INFO.json') { continue }
@@ -154,7 +154,7 @@ try {
     throw $failure
 }
 Remove-Item -LiteralPath $staging -Recurse
-Write-Host 'QAROS Live Renderer r8.2 installed for QAROS 0.9.0-dev.2927+f291e404 (ABI 5).'
+Write-Host 'QAROS Live Renderer r8.3 installed for QAROS 0.9.0-dev.2927+f291e404 (ABI 5).'
 Write-Host 'The retired QAROS Streaming module and its export helpers were removed from managed plugin folders.'
 Write-Host "Previous plugin saved to: $backup"
 Write-Host "Slicer Additional module paths: $(Join-Path $destination 'plugins\slicer')"

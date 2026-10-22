@@ -122,6 +122,33 @@ int main(){try{
     }
     check(glGetError()==GL_NO_ERROR,"Panel GPU copy left an OpenGL error");
   }
-  std::cout<<"PASS: mono panel GPU staging/upload, letterbox, single vertical conversion, SDK flips and GL state\n";
+  // Crop real source pixels, including black image content. Pixels outside
+  // the image rectangle must not enter the panel or its interpolation border.
+  for(GLenum target:{GL_TEXTURE_2D,GL_TEXTURE_2D_ARRAY})for(bool flipped:{false,true}){
+    renderer.make_current();OwnedTextures owned;glGenTextures(4,owned.ids.data());
+    std::vector<unsigned char> pattern(8*6*4,255);
+    for(unsigned y=2;y<5;++y)for(unsigned x=1;x<5;++x){const auto i=(y*8+x)*4;
+      pattern[i]=(x-1)*40;pattern[i+1]=(y-2)*70;pattern[i+2]=0;}
+    for(int i=0;i<3;++i){const auto type=i==2?target:GL_TEXTURE_2D;
+      glBindTexture(type,owned.ids[i]);glTexParameteri(type,GL_TEXTURE_MIN_FILTER,GL_NEAREST);glTexParameteri(type,GL_TEXTURE_MAG_FILTER,GL_NEAREST);
+      if(type==GL_TEXTURE_2D_ARRAY)glTexImage3D(type,0,GL_RGBA8,4,3,1,0,GL_RGBA,GL_UNSIGNED_BYTE,nullptr);
+      else glTexImage2D(type,0,GL_RGBA8,i==0?8:4,i==0?6:3,0,GL_RGBA,GL_UNSIGNED_BYTE,i==0?pattern.data():nullptr);
+    }
+    Frame stage{{{owned.ids[1],4,3,1}},{{Eye::left,Plane::color,0,0,0,4,3,0}}};
+    Frame output{{{owned.ids[2],4,3,1}},{{Eye::left,Plane::color,0,flipped?4u:0u,flipped?3u:0u,flipped?0u:4u,flipped?0u:3u,0}}};
+    ColorRegion region{1,2,4,3};
+    copy.copy_color({owned.ids[0],0,8,6},stage,false,true,&region);
+    copy.copy_color({owned.ids[1],0,4,3},output,true);copy.finish();
+    std::vector<unsigned char> result(4*3*4);
+    glBindTexture(target,owned.ids[2]);glGetTexImage(target,0,GL_RGBA,GL_UNSIGNED_BYTE,result.data());
+    for(unsigned y=0;y<3;++y)for(unsigned x=0;x<4;++x){
+      const auto src=((flipped?y+2:4-y)*8+(flipped?4-x:x+1))*4;
+      for(unsigned c=0;c<4;++c)check(result[(y*4+x)*4+c]==pattern[src+c],"Image crop lost data or included surrounding text/margins");
+    }
+    bool rejected=false;region={7,0,4,3};
+    try{copy.copy_color({owned.ids[0],0,8,6},stage,false,true,&region);}catch(const std::invalid_argument&){rejected=true;}
+    check(rejected,"Invalid image crop accepted");
+  }
+  std::cout<<"PASS: mono panel GPU staging/upload, image crop, letterbox, single vertical conversion, SDK flips and GL state\n";
   return 0;
 }catch(const std::exception&e){std::cerr<<"ERROR: "<<e.what()<<'\n';return 1;}}
