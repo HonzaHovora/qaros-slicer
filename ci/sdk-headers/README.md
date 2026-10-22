@@ -1,12 +1,20 @@
 # Exact headers used for Live bridge builds
 
+`hub-55e6e3f4/include/qar_streaming.h` is the unmodified 373637-byte header
+from `QAROS.zip`, supplied on 2026-10-22. Its accompanying changelog identifies
+`0.9.0-dev.3008+65dc9aeb`.
+SHA256: `55e6e3f48d940ca29331f0528fe475c1b7230fb19a59c31d5525c6e90b097f6c`.
+The current r8.4 Live update targets these bytes. It uses peer presence for
+target discovery and no longer loads the removed `runtime_destroy` export.
+See [the installed update guide](../../docs/QAROS_DEV3008_UPDATE.md).
+
 `hub-a32cecd4/include/qar_streaming.h` is the unmodified header supplied from
 the installed `C:\Program Files\Quaternar\QAROS` on 2026-10-19. Its accompanying
 changelog identifies `0.9.0-dev.2927+f291e404`.
 SHA256: `a32cecd4137dd3b28e0d5e0c1642a066cbea976f81b90f1f31fbac4d0fba8d4a`.
 It uses local app enrollment into the installed Hub, running target discovery,
-and get-or-create volumes/panels with ASCII common names. The current Live
-update targets these bytes. See [the installed update guide](../../docs/QAROS_DEV2927_UPDATE.md).
+and get-or-create volumes/panels with ASCII common names. The archived r8.3
+Live ZIP targets these bytes. See [its update guide](../../docs/QAROS_DEV2927_UPDATE.md).
 
 `session-c709c479/include/qar_streaming.h` is the unmodified 256428-byte header
 supplied on 2026-10-19 from `QAROS-0.9.0-dev.2540+1ed038e4`.

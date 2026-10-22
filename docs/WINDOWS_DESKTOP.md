@@ -6,7 +6,7 @@ Příklad používá checkout `D:\QAROS_VTK` a nainstalovaný Slicer.
 2. V GitHub Desktop otevři QAROS_VTK a vyber větev **main**.
 3. Klikni **Fetch origin**, potom **Pull origin**.
 4. Spusť `D:\QAROS_VTK\UPDATE-LIVE-PLUGIN.cmd`.
-5. Instalátor ověří QAROS dev.2927, ZIP a jeho soubory. Nainstaluje jediný modul
+5. Instalátor ověří QAROS dev.3008, ZIP a jeho soubory. Nainstaluje jediný modul
    **QAROS Live Renderer** a zazálohuje i odstraní původní exportní modul.
 6. Při první instalaci přidej do Slicer **Edit → Application Settings → Modules →
    Additional module paths** cestu

@@ -12,10 +12,12 @@ if __package__:
 else:
     from qarvtk_host_diagnostics import ForegroundWindow, SystemMonitor
 
-EXPECTED_SDK = "a32cecd4137dd3b28e0d5e0c1642a066cbea976f81b90f1f31fbac4d0fba8d4a"
+EXPECTED_SDK = "55e6e3f48d940ca29331f0528fe475c1b7230fb19a59c31d5525c6e90b097f6c"
+HUB_2927_SDK = "a32cecd4137dd3b28e0d5e0c1642a066cbea976f81b90f1f31fbac4d0fba8d4a"
 SESSION_2540_SDK = "c709c479cc6a1acc0040fb61a071cc7bc16e65bf5acb90d624d9d6b0a6fcd3c1"
 LEGACY_SDK = "022c40b670f87a066664c37daeb06da525db37fffdf5810e72cff8a5b81e677d"
-SUPPORTED_SDKS = {EXPECTED_SDK, SESSION_2540_SDK, LEGACY_SDK}
+HUB_SDKS = {EXPECTED_SDK, HUB_2927_SDK}
+SUPPORTED_SDKS = HUB_SDKS | {SESSION_2540_SDK, LEGACY_SDK}
 DEFAULT_SDK_ROOT = str(Path(os.environ.get("ProgramW6432") or os.environ.get("ProgramFiles") or
                             "C:/Program Files") / "Quaternar" / "QAROS")
 _libraries = {}  # Never unload a DLL while an SDK callback may still use it.
@@ -74,7 +76,7 @@ def validate_sdk(root):
                            ". Select the complete QAROS SDK root (containing include and bin), "
                            "for example " + DEFAULT_SDK_ROOT + ". Do not replace just the header.")
     required = ["bin/qar-streaming-c.dll", "bin/qar-runtime-launcher.exe"]
-    if digest == EXPECTED_SDK:
+    if digest in HUB_SDKS:
         required.append("bin/device-catalog.jsonc")
     for relative in required:
         if not (Path(root) / relative).is_file():
@@ -239,6 +241,8 @@ def library(path):
         raise RuntimeError("Host DLL ABI or SDK fingerprint does not match this plugin. Close Slicer and install the ABI 5 DLL with UPDATE-LIVE-PLUGIN.cmd.")
     if info.get("runtime_handle_only") != 1:
         raise RuntimeError("Host DLL lacks the shared-runtime cleanup fix. Close Slicer and install the current update with UPDATE-LIVE-PLUGIN.cmd.")
+    if info["header_sha256"] == EXPECTED_SDK and info.get("target_discovery") != 3:
+        raise RuntimeError("QAROS dev.3008 requires the r8.4 host bridge with peer presence discovery. Close Slicer and run UPDATE-LIVE-PLUGIN.cmd.")
     signatures = {
         "create": ([c.c_char_p, c.c_char_p, c.c_char_p, c.POINTER(Placement), c.POINTER(c.c_void_p), c.c_char_p, c.c_uint32], c.c_int),
         "create_volumes": ([c.c_char_p, c.c_char_p, c.c_char_p, c.POINTER(Volume), c.c_uint32, c.POINTER(c.c_void_p), c.c_char_p, c.c_uint32], c.c_int),
@@ -270,8 +274,8 @@ def validate_target_mode(dll, target):
     if target not in ("both", "visualizer", "headset", "quest"):
         raise ValueError("Choose Visualizer + headset, Visualizer only or Headset only")
     if target in ("both", "headset") and (dll._qarvtk_info.get("multi_target") != 1
-                                           or dll._qarvtk_info.get("target_discovery") != 2):
-        raise RuntimeError("Headset streaming requires the r8 host bridge and installed QAROS dev.2927. "
+                                           or dll._qarvtk_info.get("target_discovery") not in (2, 3)):
+        raise RuntimeError("Headset streaming requires a current multi-target host bridge and matching installed QAROS. "
                            "Install the Live plugin update and restart Slicer, or select Visualizer only.")
 
 

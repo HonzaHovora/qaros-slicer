@@ -8,7 +8,7 @@ import ctk
 import slicer
 from slicer.ScriptedLoadableModule import ScriptedLoadableModule, ScriptedLoadableModuleWidget
 
-LIVE_VERSION = "r8.3"
+LIVE_VERSION = "r8.4"
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 if (Path(__file__).resolve().parent / "QarosVTKLib").is_dir():
@@ -131,7 +131,7 @@ class QarosLiveWidget(ScriptedLoadableModuleWidget):
         self.target.toolTip = "Supports one Visualizer receiver and one headset. Each has its own stereo view. " \
             "Connect the headset through QAROS; it can join after streaming starts. Applied at Start."
         form.addRow("Stream to", self.target)
-        self.hubHint = qt.QLabel("Connect HoloLens in QAROS and allow Slicer when prompted. Visualizer + headset sends the volumes and slice panels to both; either target may join later. For a replaced receiver, stop and restart streaming. In dev.2927, a stuck Visualizer receiver may need to be removed and created again.")
+        self.hubHint = qt.QLabel("Connect HoloLens in QAROS and allow Slicer when prompted. Visualizer + headset sends the volumes and slice panels to both; either target may join later. Keep QAROS and the headset player on the same version. For a replaced receiver, stop and restart streaming.")
         self.hubHint.wordWrap = True
         form.addRow(self.hubHint)
         self.startButton = qt.QPushButton("Start live streaming")

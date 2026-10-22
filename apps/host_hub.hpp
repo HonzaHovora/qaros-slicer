@@ -16,6 +16,9 @@ struct HostTarget {
   QarAppState state{};
   std::string name;
   std::string device;
+#if QARVTK_HOST_PEER_PRESENCE
+  QarPeerPresence presence = QAR_PEER_PRESENCE_UNKNOWN;
+#endif
 };
 
 // SDK callbacks only update this inbox. Sender creation and graphics work
@@ -46,15 +49,36 @@ public:
   }
 };
 
-// The pinned dev.2927 header predates peer presence. AppState is not a
-// readiness handshake: a target may join before publishing Running. Let
-// sender negotiation wait for its receiver, but exclude peers leaving/gone.
+// Presence describes reachability, not receiver readiness. Negotiation is
+// still the sender's job. Keep the AppState fallback only for pinned SDKs
+// that predate presence; never load the new function into an old runtime.
 inline bool host_target_available(const HostTarget& peer) {
+#if QARVTK_HOST_PEER_PRESENCE
+  if (peer.role != QAR_PEER_ROLE_TARGET) return false;
+  switch (peer.presence) {
+    case QAR_PEER_PRESENCE_OFFLINE:
+    case QAR_PEER_PRESENCE_LEAVING:
+    case QAR_PEER_PRESENCE_RETIRED: return false;
+    default: return true; // Unknown, Online and future values (SDK contract).
+  }
+#else
   return peer.role == QAR_PEER_ROLE_TARGET &&
     (peer.state == QAR_APP_STATE_UNKNOWN || peer.state == QAR_APP_STATE_INITIALIZING ||
      peer.state == QAR_APP_STATE_RUNNING);
+#endif
 }
 
+#if QARVTK_HOST_PEER_PRESENCE
+inline const char* host_peer_presence_name(QarPeerPresence presence) {
+  switch (presence) {
+    case QAR_PEER_PRESENCE_ONLINE: return "Online";
+    case QAR_PEER_PRESENCE_OFFLINE: return "Offline";
+    case QAR_PEER_PRESENCE_LEAVING: return "Leaving";
+    case QAR_PEER_PRESENCE_RETIRED: return "Retired";
+    default: return "Unknown";
+  }
+}
+#else
 inline const char* host_peer_state_name(QarAppState state) {
   switch(state){
     case QAR_APP_STATE_UNKNOWN:return "Unknown";
@@ -65,6 +89,7 @@ inline const char* host_peer_state_name(QarAppState state) {
     default:return "Unsupported";
   }
 }
+#endif
 
 // A Visualizer's control peer is not a receiver. Only the requested category
 // of target is eligible; headset-only must never fall back to a Visualizer.

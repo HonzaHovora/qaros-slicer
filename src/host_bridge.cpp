@@ -185,7 +185,7 @@ struct QarvtkHost {
     std::filesystem::create_directories(std::filesystem::u8path(log_folder));
     log.open(std::filesystem::u8path(log_folder)/"host-bridge.log",std::ios::app);
     if(!log)throw std::runtime_error("Cannot open host bridge log");
-    log<<"Host build: installed-hub-update-r8.3 (ABI 5); SDK header " QARVTK_HOST_SDK_HASH<<std::endl;
+    log<<"Host build: installed-hub-update-r8.4 (ABI 5); SDK header " QARVTK_HOST_SDK_HASH<<std::endl;
     log<<"SDK root: "<<sdk_root<<std::endl;
     log<<"Target mode: "<<target<<"; workspaces="<<volumes.size()<<std::endl;
     copying=std::make_unique<qarvtk::HostSharedWgl>(dc,host_context);
@@ -291,7 +291,7 @@ struct Session {
     if(session)qar_session_destroy(session);
 #endif
     // We own this client handle, not the shared Hub/runtime or its targets.
-    // runtime_destroy shuts down the runtime; Stop must only release our handle.
+    // Use the handle API, which is also the only form in dev.3008.
     if(runtime)qar_runtime_handle_destroy(runtime);
     if(subscription)qar_cancel_token_handle_destroy(subscription);
     {std::lock_guard<std::mutex> lock(host.cancel_mutex);if(host.operation)qar_cancel_token_handle_destroy(host.operation);host.operation=nullptr;}
@@ -360,7 +360,11 @@ struct Session {
     checked(qar_peer_spec_get_id(spec,&peer.id),"read target ID");
     checked(qar_peer_spec_get_role(spec,&peer.role),"read peer role");
     checked(qar_peer_spec_get_category(spec,&peer.category),"read peer category");
+#if QARVTK_HOST_PEER_PRESENCE
+    checked(qar_peer_spec_get_presence(spec,&peer.presence),"read peer presence");
+#else
     checked(qar_peer_spec_get_app_state(spec,&peer.state),"read peer state");
+#endif
     checked(qar_peer_spec_get_display_name(spec,name,sizeof(name)),"read target name");peer.name=name;
     if(qar_result_is_success(qar_peer_spec_get_device_name(spec,device,sizeof(device))))peer.device=device;
     return peer;
@@ -544,7 +548,12 @@ struct Session {
     std::string inventory;
     for(const auto& peer:available)if(peer.role==QAR_PEER_ROLE_TARGET || peer.category==QAR_DEVICE_CATEGORY_HEADSET){
       inventory+="PEER_OBSERVED peer="+id_text(peer.id)+" role="+std::to_string(int(peer.role))+
-        " category="+std::to_string(int(peer.category))+" state="+qarvtk::host_peer_state_name(peer.state)+
+        " category="+std::to_string(int(peer.category))+
+#if QARVTK_HOST_PEER_PRESENCE
+        " presence="+qarvtk::host_peer_presence_name(peer.presence)+
+#else
+        " state="+qarvtk::host_peer_state_name(peer.state)+
+#endif
         " eligible="+(qarvtk::host_target_available(peer)?"yes":"no")+" name="+peer.name+" device="+peer.device+"\n";
     }
     if(inventory.empty())inventory="PEER_DISCOVERY no target peers in this Hub session\n";
@@ -702,7 +711,13 @@ void QarvtkHost::run() noexcept {
 
 extern "C" {
 const char* qarvtk_host_info(){
-  return "{\"host_abi\":5,\"modern_api\":0,\"panel_probe\":0,\"panel_size_on_start\":1,\"panel_image_region\":1,\"target_discovery\":2,\"runtime_handle_only\":1,\"multi_target\":"
+  return "{\"host_abi\":5,\"modern_api\":0,\"panel_probe\":0,\"panel_size_on_start\":1,\"panel_image_region\":1,\"target_discovery\":"
+#if QARVTK_HOST_PEER_PRESENCE
+    "3"
+#else
+    "2"
+#endif
+    ",\"runtime_handle_only\":1,\"multi_target\":"
 #if QARVTK_HOST_ONBOARDING_API
     "1"
 #else

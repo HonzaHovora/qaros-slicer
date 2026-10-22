@@ -9,7 +9,7 @@ import unittest
 from unittest.mock import MagicMock, patch
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "integrations" / "slicer"))
-from qarvtk_host_runtime import (EXPECTED_SDK, SESSION_2540_SDK, LEGACY_SDK, Frame, HostTimingLog,
+from qarvtk_host_runtime import (EXPECTED_SDK, HUB_2927_SDK, HUB_SDKS, SESSION_2540_SDK, LEGACY_SDK, Frame, HostTimingLog,
                                 HostTransport, library, default_sdk_path,
                                 installed_sdk_path, default_host_dll_path,
                                 validate_sdk, validate_host_sdk, validate_target_mode)
@@ -56,21 +56,22 @@ class HostRuntimeTest(unittest.TestCase):
 
     def test_headset_modes_require_current_target_discovery(self):
         for info in ({}, {"multi_target": 0}, {"multi_target": 1},
-                     {"multi_target": 1, "target_discovery": 2}):
+                     {"multi_target": 1, "target_discovery": 2},
+                     {"multi_target": 1, "target_discovery": 3}):
             dll = type("Dll", (), {"_qarvtk_info": info})()
             for mode in ("visualizer", "quest"):
                 validate_target_mode(dll, mode)
             for mode in ("both", "headset"):
-                if info.get("multi_target") == 1 and info.get("target_discovery") == 2:
+                if info.get("multi_target") == 1 and info.get("target_discovery") in (2, 3):
                     validate_target_mode(dll, mode)
                 else:
-                    with self.assertRaisesRegex(RuntimeError, "r8 host bridge"):
+                    with self.assertRaisesRegex(RuntimeError, "multi-target host bridge"):
                         validate_target_mode(dll, mode)
             with self.assertRaises(ValueError):
                 validate_target_mode(dll, "unknown")
 
     def test_sdk_mismatch_is_rejected_before_native_creation(self):
-        for compiled in (EXPECTED_SDK, SESSION_2540_SDK, LEGACY_SDK):
+        for compiled in (EXPECTED_SDK, HUB_2927_SDK, SESSION_2540_SDK, LEGACY_SDK):
             dll = type("Dll", (), {"_qarvtk_info": {"header_sha256": compiled}})()
             validate_host_sdk(dll, compiled)
             other = LEGACY_SDK if compiled == EXPECTED_SDK else EXPECTED_SDK
@@ -79,7 +80,7 @@ class HostRuntimeTest(unittest.TestCase):
 
     def test_sdk_package_requires_header_runtime_and_launcher(self):
         root = Path(__file__).resolve().parents[1]
-        for fixture, expected in (("hub-a32cecd4", EXPECTED_SDK), ("session-c709c479", SESSION_2540_SDK),
+        for fixture, expected in (("hub-55e6e3f4", EXPECTED_SDK), ("hub-a32cecd4", HUB_2927_SDK), ("session-c709c479", SESSION_2540_SDK),
                                   ("session-022c40b6", LEGACY_SDK)):
             with tempfile.TemporaryDirectory() as folder:
                 sdk = Path(folder)
@@ -95,14 +96,14 @@ class HostRuntimeTest(unittest.TestCase):
                 with self.assertRaisesRegex(RuntimeError, "qar-runtime-launcher.exe"):
                     validate_sdk(sdk)
                 (sdk / "bin/qar-runtime-launcher.exe").touch()
-                if expected == EXPECTED_SDK:
+                if expected in HUB_SDKS:
                     with self.assertRaisesRegex(RuntimeError, "device-catalog.jsonc"):
                         validate_sdk(sdk)
                     (sdk / "bin/device-catalog.jsonc").write_text("{}")
                 self.assertEqual(validate_sdk(sdk), expected)
 
     def test_saved_sdk_migration_requires_matching_new_header(self):
-        fingerprints = {"old": LEGACY_SDK, "portable": SESSION_2540_SDK, "new": EXPECTED_SDK,
+        fingerprints = {"old": LEGACY_SDK, "old-hub": HUB_2927_SDK, "portable": SESSION_2540_SDK, "new": EXPECTED_SDK,
                         "custom-new": EXPECTED_SDK, "future": "unsupported-new-header"}
         with patch("qarvtk_host_runtime.sdk_fingerprint", side_effect=fingerprints.get):
             self.assertEqual(default_sdk_path("old", "new"), "new")
@@ -110,6 +111,7 @@ class HostRuntimeTest(unittest.TestCase):
             self.assertEqual(default_sdk_path("old", "missing"), "old")
             self.assertEqual(default_sdk_path(None, "new"), "new")
             self.assertEqual(default_sdk_path("portable", "new"), "new")
+            self.assertEqual(default_sdk_path("old-hub", "new"), "new")
             self.assertEqual(default_sdk_path("old", "future"), "future")
 
     def test_registered_installation_uses_machine_64_bit_registry(self):
@@ -159,6 +161,16 @@ class HostRuntimeTest(unittest.TestCase):
             with patch("qarvtk_host_runtime.c.CDLL", return_value=old_dll):
                 with self.assertRaisesRegex(RuntimeError, "shared-runtime cleanup fix"):
                     library("old-cleanup-host.dll")
+
+    def test_dev3008_requires_presence_discovery_before_binding_create(self):
+        for discovery in (None, 2):
+            info = dict(host_abi=5, header_sha256=EXPECTED_SDK, modern_api=0, multi_target=1,
+                        runtime_handle_only=1, eye_size=104, frame_size=240,
+                        placement_size=112, volume_size=120, target_discovery=discovery)
+            dll = type("Dll", (), {"qarvtk_host_info": staticmethod(lambda: json.dumps(info).encode())})()
+            with patch("qarvtk_host_runtime.c.CDLL", return_value=dll):
+                with self.assertRaisesRegex(RuntimeError, "peer presence discovery"):
+                    library("no-presence-host.dll")
 
     def test_preview_failure_preserves_stereo_and_restores_context(self):
         with tempfile.TemporaryDirectory() as folder:

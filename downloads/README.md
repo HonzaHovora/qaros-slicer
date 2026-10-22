@@ -1,8 +1,8 @@
 # Slicer downloads
 
-Use `qarvtk-live-dev2927.zip` through `UPDATE-LIVE-PLUGIN.cmd` in the repository
-root. The current r8.2 installer supports fresh installation and migration from
-the old Slicer exporter. It requires the complete installed QAROS dev.2927 SDK.
+Use `qarvtk-live-dev3008.zip` through `UPDATE-LIVE-PLUGIN.cmd` in the repository
+root. The current r8.4 installer supports fresh installation and migration from
+the old Slicer exporter. It requires the complete installed QAROS dev.3008 SDK.
 
 The current ZIP contains only QarosLive, its private Python support and
 qarvtk-host.dll. It contains no standalone renderer or QarosVTK module.

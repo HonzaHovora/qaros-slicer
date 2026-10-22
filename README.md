@@ -25,8 +25,8 @@ hostitelskou pipeline, zejména VTK GPU Composite pro CT/MR.
    z tohoto checkoutu a restartuj Slicer.
 5. Otevři **QAROS → QAROS Live Renderer**.
 
-Aktualizátor nainstaluje balíček **r8.3** pro kompletní
-**QAROS 0.9.0-dev.2927+f291e404**. Instalaci hledá v registru Windows, obvykle
+Aktualizátor nainstaluje balíček **r8.4** pro kompletní
+**QAROS 0.9.0-dev.3008+65dc9aeb**. Instalaci hledá v registru Windows, obvykle
 `C:\Program Files\Quaternar\QAROS`. Ověří SDK i obsah ZIPu, zazálohuje původní
 soubory a odstraní starý modul včetně exportních helperů a Python cache ze
 spravovaných složek. Cesta `package/windows-start` zůstává kvůli existujícím
@@ -55,12 +55,16 @@ cestu v Additional module paths. Aktualizátor neprohledává cizí složky.
   Název dat je v titulku okna. Rohové anotace řezů se po dobu streamování skryjí
   i ve Sliceru a po Stop se obnoví. Velikost panelu lze v QAROS ručně změnit.
 - **Stop** uvolní vlastní runtime handle. Před dalším Startem počkej na dokončení.
-  Známý problém dev.2927 po Stop/Start může vyžadovat odebrání a vytvoření nového
-  receiveru ve Visualizeru; r8.3 opravu tohoto problému netvrdí.
+  Po výměně receiveru stream restartuj. Lukáš potvrdil chybu GUI na straně QAROS
+  a pracuje na opravě (zpráva od Jana 22. 10. 2026). R8.4 aktualizuje SDK;
+  oprava GUI přijde z QAROS. Problémy s připojením po Stop/Start je potřeba
+  ověřit zvlášť.
 
-Po aktualizaci musí modul zobrazovat **Live plugin r8.3**. Samotný Pull
+Po aktualizaci musí modul zobrazovat **Live plugin r8.4**. Samotný Pull
 neaktualizuje nainstalované soubory; spusť instalátor a restartuj Slicer.
-R8.3 obsahuje novou DLL pro výslovné nastavení velikosti a ořez panelů.
+R8.4 přidává podporu SDK dev.3008 a výběr přijímačů podle jejich přítomnosti
+v session. QAROS i přehrávač v brýlích musí používat stejnou verzi; po aktualizaci
+může Hub požádat o nové schválení aplikace nebo spárování zařízení.
 [Brýle](docs/HEADSET_STREAMING.md) · [Více objemů](docs/MULTIPLE_VOLUMES.md) ·
 [Diagnostika FPS](docs/FPS_DIAGNOSTICS.md). Logy zabalíš pomocí `COLLECT-LOGS.cmd`.
 

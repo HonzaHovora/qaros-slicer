@@ -1,6 +1,14 @@
 # Panel creation crash: ordinary startup and delayed manual reproduction
 
-## Latest result: manual step 1 also crashes (18:34)
+## Status update, 2026-10-22
+
+Jan reports that Lukas has confirmed the GUI fault is in QAROS and is working
+on its fix. The current Slicer Live plugin keeps ordinary panel startup enabled.
+R8.4 updates compatibility with the supplied dev.3008 SDK; it does not contain
+the QAROS GUI fix. The mixer/receiver connection failures described in the
+linked report remain separate until tested or diagnosed further.
+
+## Historical result: manual step 1 also crashes (18:34)
 
 The requested delayed experiment is now complete. **A single new stream panel
 crashes the already running QAROS GUI with panel video disabled.** Both volume

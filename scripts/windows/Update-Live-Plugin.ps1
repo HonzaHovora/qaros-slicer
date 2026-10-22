@@ -5,7 +5,7 @@ param(
 )
 $ErrorActionPreference = 'Stop'
 $RepoRoot = (Resolve-Path -LiteralPath $RepoRoot).Path
-$expectedSdk = 'a32cecd4137dd3b28e0d5e0c1642a066cbea976f81b90f1f31fbac4d0fba8d4a'
+$expectedSdk = '55e6e3f48d940ca29331f0528fe475c1b7230fb19a59c31d5525c6e90b097f6c'
 if (-not $SdkRoot) {
     $machine = $null
     $key = $null
@@ -25,7 +25,7 @@ if (-not $SdkRoot) {
     }
 }
 $destination = Join-Path $RepoRoot 'package\windows-start'
-$archive = if ($ArchivePath) { $ArchivePath } else { Join-Path $RepoRoot 'downloads\qarvtk-live-dev2927.zip' }
+$archive = if ($ArchivePath) { $ArchivePath } else { Join-Path $RepoRoot 'downloads\qarvtk-live-dev3008.zip' }
 
 if (Get-Process -Name 'Slicer', 'SlicerApp-real' -ErrorAction SilentlyContinue) {
     throw 'Close Slicer before updating its plugin.'
@@ -36,7 +36,7 @@ foreach ($name in @('include\qar_streaming.h', 'bin\qar-streaming-c.dll', 'bin\q
     }
 }
 if ((Get-FileHash -LiteralPath (Join-Path $SdkRoot 'include\qar_streaming.h') -Algorithm SHA256).Hash -ine $expectedSdk) {
-    throw 'This update requires the installed dev.2927 SDK header a32cecd4. Do not replace individual SDK files.'
+    throw 'This update requires the installed dev.3008 SDK header 55e6e3f4. Do not replace individual SDK files.'
 }
 $expected = (Get-Content -LiteralPath ($archive + '.sha256') -Raw).Trim().Split(' ')[0]
 if ((Get-FileHash -LiteralPath $archive -Algorithm SHA256).Hash -ine $expected) {
@@ -75,8 +75,8 @@ $info = Get-Content -LiteralPath (Join-Path $staging 'HOST_UPDATE_INFO.json') -R
 if ($info.sdk_header_sha256 -ne $expectedSdk -or $info.host_abi -ne 5) {
     throw 'Archive SDK or ABI metadata differs from this updater.'
 }
-if ($info.multi_target -ne 1 -or $info.build -ne 'installed-hub-update-r8.3' -or $info.native_build -ne 'installed-hub-update-r8.3' -or $info.runtime_teardown -ne 'handle_only' -or $info.target_discovery -ne 2 -or $info.panel_probe -ne 0 -or $info.slice_panel_diagonal_inches -ne 14 -or $info.panel_size_on_start -ne 1 -or $info.panel_image_region -ne 1 -or $info.orientation_mode -ne 'fixed_ras') {
-    throw 'This updater requires the r8.3 package with fixed data axes and explicit 14-inch panel sizing.'
+if ($info.multi_target -ne 1 -or $info.build -ne 'installed-hub-update-r8.4' -or $info.native_build -ne 'installed-hub-update-r8.4' -or $info.runtime_teardown -ne 'handle_only' -or $info.target_discovery -ne 3 -or $info.panel_probe -ne 0 -or $info.slice_panel_diagonal_inches -ne 14 -or $info.panel_size_on_start -ne 1 -or $info.panel_image_region -ne 1 -or $info.orientation_mode -ne 'fixed_ras') {
+    throw 'This updater requires the r8.4 package with peer presence discovery and image-only 14-inch panels.'
 }
 foreach ($relative in $files) {
     if ($relative -eq 'HOST_UPDATE_INFO.json') { continue }
@@ -154,7 +154,7 @@ try {
     throw $failure
 }
 Remove-Item -LiteralPath $staging -Recurse
-Write-Host 'QAROS Live Renderer r8.3 installed for QAROS 0.9.0-dev.2927+f291e404 (ABI 5).'
+Write-Host 'QAROS Live Renderer r8.4 installed for QAROS 0.9.0-dev.3008+65dc9aeb (ABI 5).'
 Write-Host 'The retired QAROS Streaming module and its export helpers were removed from managed plugin folders.'
 Write-Host "Previous plugin saved to: $backup"
 Write-Host "Slicer Additional module paths: $(Join-Path $destination 'plugins\slicer')"
@@ -166,4 +166,4 @@ Write-Host 'Slice panels start automatically. The step-by-step test mode has bee
 Write-Host 'Each slice panel starts at a 14-inch diagonal, preserving aspect ratio. Resize it in QAROS as needed.'
 Write-Host 'Model size defaults to 1:1. Use the 1/8x to 8x slider before Start; centering preserves size.'
 Write-Host 'Stop now releases the Slicer runtime handle without requesting shared QAROS runtime shutdown.'
-Write-Host 'Known dev.2927 receiver issue: if Stop/Start leaves no image, remove the receiver in Visualizer and create a new one.'
+Write-Host 'Keep QAROS and headset players on the same version; approve or pair again if QAROS requests it.'

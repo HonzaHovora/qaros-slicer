@@ -42,7 +42,7 @@ SDK/vieweru ale ze starého ZIPu není prokázaná: oprava blokování neprokazu
    každá pouze se svými daty. Vyzkoušej přesun/natočení jedné v QAROS,
    změnu presetu a ROI pouze jednoho objemu ve Sliceru a Stop/Start.
 
-Použij kompletní instalované QAROS dev.2927, obvykle `C:/Program Files/Quaternar/QAROS`. Nový plugin vyžaduje přibalenou DLL ABI 5;
+Použij kompletní instalované QAROS dev.3008, obvykle `C:/Program Files/Quaternar/QAROS`. Nový plugin vyžaduje přibalenou DLL ABI 5;
 starou DLL odmítne s vysvětlením. Pokud máš v poli **Host bridge DLL** vlastní
 cestu, vyber aktualizovanou DLL z `package/windows-start/Release`.
 

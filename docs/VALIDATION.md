@@ -1,5 +1,50 @@
 # Validation and next work
 
+## Slicer Live r8.4: supplied QAROS dev.3008 SDK, 2026-10-22
+
+The user supplied the full `QAROS.zip` installation. Its changelog identifies
+`0.9.0-dev.3008+65dc9aeb`; the unmodified header is pinned as `hub-55e6e3f4`.
+The current Windows update ZIP is `downloads/qarvtk-live-dev3008.zip`.
+
+Completed locally:
+
+- The supplied ZIP passed CRC checks. The header's 199 dynamically loaded
+  symbols were compared with the exports of its `bin/qar-streaming-c.dll`;
+  none is missing. `peer_spec_get_presence` is present and the removed
+  `runtime_destroy` export is absent. This is a static compatibility check,
+  not a Windows runtime launch.
+- The Windows x64 native bridge compiled against all four pinned headers
+  with MinGW-w64 GCC 13.2.0-posix. The shipped build uses dev.3008 and reports
+  ABI 5, `target_discovery=3`, `multi_target=1` and the retained panel features.
+  Only standard Windows DLL imports remain; the C++ runtime is linked statically.
+- All 13 CTest suites passed, including the new presence fixture, existing
+  startup/cancellation/ownership tests, 17 Python host-runtime cases and panel
+  sizing with the new header. Presence cases cover online/unknown/future values,
+  offline peers with stale Running state, leaving/retired peers, category
+  filtering, stale snapshot races and a receiver returning under the same id.
+  The dev.2927 fallback is tested separately with its own header.
+- The package CRC, SDK fingerprint, native capability metadata, archive SHA256
+  and all ten entries were checked. The packaged DLL and Python files match
+  the current source/build. No QAROS runtime DLL is redistributed.
+- The updater passed fresh installation, old-module removal, preservation of
+  unrelated content, backup, injected-failure rollback and SDK-mismatch rejection
+  under PowerShell 7.4.6 on Linux. Native Windows DLL loading is explicitly
+  skipped there; the Windows CI fixture covers it when a runner is available.
+- Changed Python files passed compilation checks. The panel crop/shaders,
+  placement math and frame-copy code are unchanged from r8.3.
+
+Not exercised here: Windows SDK onboarding, NVIDIA transport, Slicer Qt UI or
+physical HoloLens output. The required field check is r8.4 with the complete
+dev.3008 installation and matching headset player: Visualizer-only,
+headset-only, combined two-volume streaming with panels, then repeated Stop/Start.
+On 2026-10-22 Jan reported that Lukas confirmed the GUI fault is in QAROS and
+is working on the fix. This package retains normal panel startup; it does not
+contain that upstream fix. Receiver restart failures need a separate field check.
+
+The selected target remains pinned until Stop, as before. Presence changes
+selection and diagnostics; it does not add automatic peer replacement or change
+the SDK sender's existing automatic reconnect behavior.
+
 ## Slicer Live r8.3: stable orientation and compact panels, 2026-10-22
 
 The desktop camera no longer initializes the model's orientation. Fixed RAS

@@ -1,5 +1,9 @@
 # Slicer Live r8.3 with installed QAROS dev.2927
 
+This is the archived dev.2927 procedure. The current updater installs
+[r8.4 for dev.3008](QAROS_DEV3008_UPDATE.md); it rejects a dev.2927 installation.
+Use matching complete SDK and plugin versions.
+
 Supported installation: **0.9.0-dev.2927+f291e404**, normally
 `C:\Program Files\Quaternar\QAROS`. Package: **installed-hub-update-r8.3**,
 host ABI 5, `multi_target=1`, `target_discovery=2`, `runtime_handle_only=1`.
